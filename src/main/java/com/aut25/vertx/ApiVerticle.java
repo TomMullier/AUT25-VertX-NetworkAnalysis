@@ -27,5 +27,12 @@ public class ApiVerticle extends AbstractVerticle {
                                 System.err.println("[ API VERTICLE ] Failed to start HTTP server: " + ar.cause());
                         }
                 });
+
         }
+
+        @Override
+        public void stop() {
+                System.out.println("[ API VERTICLE ] API Verticle stopped!");
+        }
+
 }

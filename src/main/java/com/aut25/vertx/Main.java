@@ -35,4 +35,9 @@ public class Main extends AbstractVerticle {
         startPromise.complete(); // Signale que le MainVerticle est prêt
     }
 
+    @Override
+    public void stop() {
+        System.out.println("[ MAIN VERTICLE ] MainVerticle stopped!");
+
+    }
 }
