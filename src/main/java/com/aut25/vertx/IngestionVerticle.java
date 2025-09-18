@@ -21,8 +21,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 public class IngestionVerticle extends AbstractVerticle {
 
-        // !public EventBus eb;
-
         private KafkaProducer<String, String> producer;
 
         @Override
@@ -39,10 +37,6 @@ public class IngestionVerticle extends AbstractVerticle {
                  * - realtime
                  */
                 String mode = config.getString("mode", "json");
-
-                /* ------------------------ Creation of the event bus ----------------------- */
-                // !Not need anymore
-                // eb = vertx.eventBus();
 
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
