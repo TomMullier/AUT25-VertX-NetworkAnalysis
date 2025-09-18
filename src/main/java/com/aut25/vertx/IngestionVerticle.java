@@ -7,15 +7,23 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
+import java.io.ObjectInputFilter.Config;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 public class IngestionVerticle extends AbstractVerticle {
 
-        public EventBus eb;
+        // !public EventBus eb;
+
+        private KafkaProducer<String, String> producer;
 
         @Override
         public void start() throws Exception {
@@ -32,8 +40,12 @@ public class IngestionVerticle extends AbstractVerticle {
                  */
                 String mode = config.getString("mode", "json");
 
-                // Creation of the event bus
-                eb = vertx.eventBus();
+                /* ------------------------ Creation of the event bus ----------------------- */
+                // !Not need anymore
+                // eb = vertx.eventBus();
+
+                /* ----------------------- Creation of Kafka producer ----------------------- */
+                configureKafkaProducer();
 
                 System.out.println("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode);
                 switch (mode) {
@@ -83,7 +95,24 @@ public class IngestionVerticle extends AbstractVerticle {
                                         }
                                         // Publication of the next record
                                         JsonObject record = it.next();
-                                        eb.publish("network.data", record);
+                                        // Publish record on Kafka topic "network-data"
+                                        ProducerRecord<String, String> kafkaRecord = new ProducerRecord<>(
+                                                        "network-data", record.encode());
+                                        producer.send(kafkaRecord, (metadata, exception) -> {
+                                                if (exception != null) {
+                                                        System.err.println(
+                                                                        "[ INGESTION VERTICLE ] Failed to send record to Kafka: "
+                                                                                        + exception.getMessage());
+                                                } else {
+                                                        System.out.println(
+                                                                        "[ INGESTION VERTICLE ] Record sent to Kafka topic "
+                                                                                        + metadata.topic()
+                                                                                        + " partition "
+                                                                                        + metadata.partition()
+                                                                                        + " offset "
+                                                                                        + metadata.offset());
+                                                }
+                                        });
                                         System.out.println("[ INGESTION VERTICLE ] Published record from file: \n"
                                                         + record.encodePrettily());
                                 });
@@ -94,7 +123,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 // TODO : implement Kafka ingestion
                                 System.out.println("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
                                 break;
-                                
+
                         case "realtime":
                                 // TODO : implement real-time ingestion
                                 vertx.setPeriodic(1000, id -> ingestInRealTime());
@@ -108,6 +137,22 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 System.out.println("[ INGESTION VERTICLE ] IngestionVerticle started!");
 
+        }
+
+        /* ------------------- Configuration of the Kafka producer ------------------ */
+        private void configureKafkaProducer() {
+                // Config Kafka Producer
+                Properties props = new Properties();
+                props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"); // ton broker Kafka
+                props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+                producer = new KafkaProducer<>(props);
+
+                System.out.println("[ INGESTION VERTICLE ] Kafka Producer initialized.");
+                
+                System.out.println("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
+                                + props.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG) );
         }
 
         /* ------------------------------- Mode Kafka ------------------------------- */
@@ -124,6 +169,10 @@ public class IngestionVerticle extends AbstractVerticle {
         /* -------------------------------------------------------------------------- */
         @Override
         public void stop() {
+                if (producer != null) {
+                        producer.close();
+                        System.out.println("[ INGESTION VERTICLE ] Kafka Producer closed.");
+                }
                 System.out.println("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
         }
 }
