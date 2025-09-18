@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
+import java.io.EOFException;
 import java.io.ObjectInputFilter.Config;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -20,6 +21,14 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.pcap4j.core.PcapHandle;
+import org.pcap4j.core.PcapNativeException;
+import org.pcap4j.core.Pcaps;
+import org.pcap4j.core.NotOpenException;
+import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.namednumber.DataLinkType;
+import org.pcap4j.core.PacketListener;
+import java.sql.Timestamp;
 
 public class IngestionVerticle extends AbstractVerticle {
 
@@ -117,8 +126,14 @@ public class IngestionVerticle extends AbstractVerticle {
                                 break;
 
                         case "pcap":
-                                // TODO : implement Kafka ingestion
-                                logger.info("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
+                                // TODO : implement pcap replay for ingestion
+                                JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject());
+                                String pcapFilePath = pcapConfig.getString("file-path",
+                                                "src/main/resources/datapcap-sample.pcap");
+                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] PCAP File path: " + pcapFilePath);
+
+                                ingestFromPcap(pcapFilePath);
+
                                 break;
 
                         case "realtime":
@@ -137,6 +152,9 @@ public class IngestionVerticle extends AbstractVerticle {
         }
 
         /* ------------------- Configuration of the Kafka producer ------------------ */
+        /**
+         * Configure Kafka producer with necessary properties
+         */
         private void configureKafkaProducer() {
                 // Config Kafka Producer
                 Properties props = new Properties();
@@ -148,22 +166,129 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 logger.info("[ INGESTION VERTICLE ] Kafka Producer initialized.");
 
-                logger.info("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
+                logger.debug("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
                                 + props.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        }
-
-        /* ------------------------------- Mode Kafka ------------------------------- */
-        // TODO : implement Kafka ingestion
-        private void ingestFromKafka(JsonObject kafkaConfig) {
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
         // TODO : implement real-time ingestion
+        /**
+         * Ingest packets in real-time (e.g., from a network interface) and publish them
+         * to Kafka.
+         */
         private void ingestInRealTime() {
                 // Placeholder for real-time ingestion logic
         }
 
+        /* -------------------------------- Mode pcap ------------------------------- */
+        /**
+         * Ingest packets from a pcap file and publish them to Kafka, maintaining the
+         * original
+         * timing between packets.
+         * 
+         * @param pcapFilePath Path to the pcap file
+         */
+        private void ingestFromPcap(String pcapFilePath) {
+                PcapHandle handle;
+                try {
+                        handle = Pcaps.openOffline(pcapFilePath, PcapHandle.TimestampPrecision.NANO);
+                } catch (PcapNativeException e) {
+                        logger.error("[ INGESTION VERTICLE ] Failed to open pcap file: " + e.getMessage());
+                        return;
+                }
+                logger.info("[ INGESTION VERTICLE ] PCAP file opened successfully: {}", pcapFilePath);
+                DataLinkType dlt = handle.getDlt();
+                logger.debug("[ INGESTION VERTICLE ] Data Link Type: {}", dlt);
+
+                try {
+                        Packet firstPacket = handle.getNextPacketEx();
+                        if (firstPacket == null) {
+                                logger.warn("[ INGESTION VERTICLE ] No packets found in file {}", pcapFilePath);
+                                return;
+                        }
+
+                        // Reference timestamp and time tracking
+                        Timestamp firstTimestamp = handle.getTimestamp();
+                        long startTime = System.nanoTime();
+
+                        logger.info("[ INGESTION VERTICLE ] Starting replay of packets...");
+
+                        // Process the first packet
+                        processPacket(firstPacket, 0);
+
+                        // Process remaining packets
+                        while (true) {
+                                try {
+                                        Packet packet = handle.getNextPacketEx();
+                                        if (packet == null)
+                                                break;
+
+                                        Timestamp currentTs = handle.getTimestamp();
+
+                                        // Calculate delay relative to the first packet
+                                        long expectedDelta = (currentTs.getTime() - firstTimestamp.getTime());
+                                        long realDelta = (System.nanoTime() - startTime) / 1_000_000; // in ms
+                                        long delay = expectedDelta - realDelta;
+                                        if (expectedDelta > realDelta) {
+                                                Thread.sleep(delay); // wait to maintain original pace
+
+                                        }
+
+                                        processPacket(packet, delay);
+
+                                } catch (EOFException e) {
+                                        logger.info("[ INGESTION VERTICLE ] End of PCAP file reached.");
+                                        break;
+                                }
+                        }
+
+                } catch (Exception e) {
+                        logger.error("[ INGESTION VERTICLE ] Error reading packets: {}", e.getMessage());
+                } finally {
+                        handle.close();
+                        logger.info("[ INGESTION VERTICLE ] PCAP handle closed.");
+                }
+        }
+
+        /**
+         * Process and send a packet to Kafka
+         *
+         * @param packet The packet to process
+         */
+        private void processPacket(Packet packet, long delay) {
+                if (packet == null)
+                        return;
+
+                JsonObject record = new JsonObject()
+                                .put("timestamp", System.currentTimeMillis())
+                                .put("raw", packet.toString()); // tu peux extraire IP src/dst etc. avec Pcap4J
+
+                // Publish record on Kafka topic "network-data"
+                ProducerRecord<String, String> kafkaRecord = new ProducerRecord<>(
+                                "network-data", record.encode());
+                producer.send(kafkaRecord, (metadata, exception) -> {
+                        if (exception != null) {
+                                logger.error(
+                                                "[ INGESTION VERTICLE ] Failed to send packet record to Kafka: "
+                                                                + exception.getMessage());
+                        } else {
+                                logger.debug(
+                                                "[ INGESTION VERTICLE ] Packet record sent to Kafka topic "
+                                                                + metadata.topic()
+                                                                + " partition "
+                                                                + metadata.partition()
+                                                                + " offset "
+                                                                + metadata.offset()
+                                                                + (delay > 0 ? " (delayed by " + delay + " ms)" : ""));
+                        }
+                });
+                logger.debug("[ INGESTION VERTICLE ] Published packet: \n{}", record.encodePrettily());
+        }
+
         /* -------------------------------------------------------------------------- */
+        /**
+         * Cleanup resources on verticle stop
+         */
         @Override
         public void stop() {
                 if (producer != null) {

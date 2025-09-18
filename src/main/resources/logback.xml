@@ -28,5 +28,5 @@
         </root>
 
         <!-- Niveau spécifique à ton package -->
-        <logger name="com.aut25.vertx" level="DEBUG"/>
+        <logger name="com.aut25.vertx" level="INFO"/>
 </configuration>
