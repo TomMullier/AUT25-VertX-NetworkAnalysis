@@ -5,8 +5,12 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.json.JsonObject;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ApiVerticle extends AbstractVerticle {
+
+        private static final Logger logger = LoggerFactory.getLogger(ApiVerticle.class);
 
         @Override
         public void start() throws Exception {
@@ -14,7 +18,7 @@ public class ApiVerticle extends AbstractVerticle {
                 JsonObject config = new JsonObject(
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
                 int port = config.getInteger("http.port", 8888);
-                System.out.println("[ API VERTICLE ] API Verticle starting on port: " + port);
+                logger.info("[ API VERTICLE ] API Verticle starting on port: " + port);
 
                 HttpServer server = vertx.createHttpServer();
 
@@ -22,9 +26,9 @@ public class ApiVerticle extends AbstractVerticle {
                         req.response().end("Vert.x API is running!");
                 }).listen(port, ar -> {
                         if (ar.succeeded()) {
-                                System.out.println("[ API VERTICLE ] HTTP server started on port " + port);
+                                logger.info("[ API VERTICLE ] HTTP server started on port " + port);
                         } else {
-                                System.err.println("[ API VERTICLE ] Failed to start HTTP server: " + ar.cause());
+                                logger.error("[ API VERTICLE ] Failed to start HTTP server: " + ar.cause());
                         }
                 });
 
@@ -32,7 +36,7 @@ public class ApiVerticle extends AbstractVerticle {
 
         @Override
         public void stop() {
-                System.out.println("[ API VERTICLE ] API Verticle stopped!");
+                logger.info("[ API VERTICLE ] API Verticle stopped!");
         }
 
 }

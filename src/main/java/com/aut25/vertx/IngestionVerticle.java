@@ -18,9 +18,12 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class IngestionVerticle extends AbstractVerticle {
 
+        private static final Logger logger = LoggerFactory.getLogger(IngestionVerticle.class);
         private KafkaProducer<String, String> producer;
 
         @Override
@@ -41,7 +44,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
 
-                System.out.println("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode);
+                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode);
                 switch (mode) {
                         case "json":
                                 /* ------------------------ Parameters for json mode ------------------------ */
@@ -49,8 +52,8 @@ public class IngestionVerticle extends AbstractVerticle {
                                 // Get path and ingestion interval from config file
                                 String filePath = fileConfig.getString("file-path", "data/sample_data.json");
                                 int interval = fileConfig.getInteger("ingestion-interval-ms", 1000);
-                                System.out.println("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
-                                System.out.println("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): "
+                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
+                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): "
                                                 + interval);
 
                                 /* ------------------------ READ FILE AND PARSE JSON ------------------------ */
@@ -68,7 +71,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         .toList();
 
                                 } catch (Exception e) {
-                                        System.err.println("[ INGESTION VERTICLE ] Failed to read or parse file: "
+                                        logger.error("[ INGESTION VERTICLE ] Failed to read or parse file: "
                                                         + e.getMessage());
                                         return;
                                 }
@@ -84,7 +87,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 // Reset iterator if end of list is reached to loop
                                                 it = records.iterator();
                                                 iteratorRef.set(it);
-                                                System.out.println(
+                                                logger.info(
                                                                 "[ INGESTION VERTICLE ] End of file reached. Looping again...");
                                         }
                                         // Publication of the next record
@@ -94,11 +97,11 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         "network-data", record.encode());
                                         producer.send(kafkaRecord, (metadata, exception) -> {
                                                 if (exception != null) {
-                                                        System.err.println(
+                                                        logger.error(
                                                                         "[ INGESTION VERTICLE ] Failed to send record to Kafka: "
                                                                                         + exception.getMessage());
                                                 } else {
-                                                        System.out.println(
+                                                        logger.info(
                                                                         "[ INGESTION VERTICLE ] Record sent to Kafka topic "
                                                                                         + metadata.topic()
                                                                                         + " partition "
@@ -107,7 +110,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                                                         + metadata.offset());
                                                 }
                                         });
-                                        System.out.println("[ INGESTION VERTICLE ] Published record from file: \n"
+                                        logger.debug("[ INGESTION VERTICLE ] Published record from file: \n"
                                                         + record.encodePrettily());
                                 });
 
@@ -115,21 +118,21 @@ public class IngestionVerticle extends AbstractVerticle {
 
                         case "pcap":
                                 // TODO : implement Kafka ingestion
-                                System.out.println("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
+                                logger.info("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
                                 break;
 
                         case "realtime":
                                 // TODO : implement real-time ingestion
                                 vertx.setPeriodic(1000, id -> ingestInRealTime());
-                                System.out.println("[ INGESTION VERTICLE ] Real-time ingestion not implemented yet.");
+                                logger.info("[ INGESTION VERTICLE ] Real-time ingestion not implemented yet.");
                                 break;
                         default:
-                                System.out.println(
+                                logger.error(
                                                 "[ INGESTION VERTICLE ] Unknown mode. No ingestion will be performed.");
                                 break;
                 }
 
-                System.out.println("[ INGESTION VERTICLE ] IngestionVerticle started!");
+                logger.info("[ INGESTION VERTICLE ] IngestionVerticle started!");
 
         }
 
@@ -143,10 +146,10 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 producer = new KafkaProducer<>(props);
 
-                System.out.println("[ INGESTION VERTICLE ] Kafka Producer initialized.");
-                
-                System.out.println("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
-                                + props.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG) );
+                logger.info("[ INGESTION VERTICLE ] Kafka Producer initialized.");
+
+                logger.info("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
+                                + props.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         }
 
         /* ------------------------------- Mode Kafka ------------------------------- */
@@ -165,8 +168,8 @@ public class IngestionVerticle extends AbstractVerticle {
         public void stop() {
                 if (producer != null) {
                         producer.close();
-                        System.out.println("[ INGESTION VERTICLE ] Kafka Producer closed.");
+                        logger.info("[ INGESTION VERTICLE ] Kafka Producer closed.");
                 }
-                System.out.println("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
+                logger.info("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
         }
 }
