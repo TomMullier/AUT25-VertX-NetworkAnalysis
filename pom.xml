@@ -67,6 +67,8 @@
             <artifactId>kafka-clients</artifactId>
             <version>3.7.0</version>
         </dependency>
+       
+
         <!-- SLF4J API -->
         <dependency>
             <groupId>org.slf4j</groupId>
