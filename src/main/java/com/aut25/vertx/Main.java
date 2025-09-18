@@ -8,44 +8,47 @@ import java.nio.file.Paths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public class Main extends AbstractVerticle {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
-        logger.info("[ MAIN VERTICLE ] Starting MainVerticle...");
+        logger.info(Colors.GREEN + "[ MAIN VERTICLE ] Starting MainVerticle..." + Colors.RESET);
 
         /* ---------------------- Load configuration from file ---------------------- */
         JsonObject config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
-        logger.info("[ MAIN VERTICLE ] Loaded configuration: " + config.encodePrettily());
+        logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + config.encodePrettily());
 
         /* ---------------------- Deploy the IngestionVerticle ---------------------- */
         vertx.deployVerticle(new IngestionVerticle(), res -> {
             if (res.succeeded()) {
-                logger.info("[ MAIN VERTICLE ] IngestionVerticle deployed successfully!");
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] IngestionVerticle deployed successfully!" + Colors.RESET);
             } else {
-                logger.error("[ MAIN VERTICLE ] Failed to deploy IngestionVerticle: " + res.cause());
+                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy IngestionVerticle: " + res.cause()
+                        + Colors.RESET);
             }
         });
 
         /* ---------------------- Deploy the AnalyseVerticle ---------------------- */
         vertx.deployVerticle(new AnalyseVerticle(), res -> {
             if (res.succeeded()) {
-                logger.info("[ MAIN VERTICLE ] AnalyseVerticle deployed successfully!");
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] AnalyseVerticle deployed successfully!" + Colors.RESET);
             } else {
-                logger.error("[ MAIN VERTICLE ] Failed to deploy AnalyseVerticle: " + res.cause());
+                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy AnalyseVerticle: " + res.cause()
+                        + Colors.RESET);
             }
         });
 
         /* ------------------------ Deploy the ApiVerticle ------------------------- */
         // vertx.deployVerticle(new ApiVerticle(), res -> {
-        //     if (res.succeeded()) {
-        //         logger.info("[ MAIN VERTICLE ] ApiVerticle deployed successfully!");
-        //     } else {
-        //         logger.error("[ MAIN VERTICLE ] Failed to deploy ApiVerticle: " + res.cause());
-        //     }
+        // if (res.succeeded()) {
+        // logger.info(Colors.GREEN + "[ MAIN VERTICLE ] ApiVerticle deployed
+        // successfully!" + Colors.RESET);
+        // } else {
+        // logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy ApiVerticle: "
+        // + res.cause() + Colors.RESET);
+        // }
         // });
 
         startPromise.complete(); // Signale que le MainVerticle est prêt
@@ -53,7 +56,7 @@ public class Main extends AbstractVerticle {
 
     @Override
     public void stop() {
-        logger.info("[ MAIN VERTICLE ] MainVerticle stopped!");
+        logger.info(Colors.RED + "[ MAIN VERTICLE ] MainVerticle stopped!" + Colors.RESET);
 
     }
 }

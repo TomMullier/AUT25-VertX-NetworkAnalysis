@@ -37,6 +37,7 @@ public class IngestionVerticle extends AbstractVerticle {
 
         @Override
         public void start() throws Exception {
+                logger.info(Colors.GREEN + "[ INGESTION VERTICLE ] Starting IngestionVerticle..." + Colors.RESET);
                 // Config file : get debug mode
                 JsonObject config = new JsonObject(
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
@@ -53,7 +54,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
 
-                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode);
+                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode.toUpperCase());
                 switch (mode) {
                         case "json":
                                 /* ------------------------ Parameters for json mode ------------------------ */
@@ -130,7 +131,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject());
                                 String pcapFilePath = pcapConfig.getString("file-path",
                                                 "src/main/resources/datapcap-sample.pcap");
-                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] PCAP File path: " + pcapFilePath);
+                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] PCAP File path: " + pcapFilePath);
 
                                 ingestFromPcap(pcapFilePath);
 
@@ -295,6 +296,6 @@ public class IngestionVerticle extends AbstractVerticle {
                         producer.close();
                         logger.info("[ INGESTION VERTICLE ] Kafka Producer closed.");
                 }
-                logger.info("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
+                logger.info(Colors.RED + "[ INGESTION VERTICLE ] IngestionVerticle stopped!" + Colors.RESET);
         }
 }

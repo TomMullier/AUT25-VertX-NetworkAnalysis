@@ -1,7 +1,8 @@
 <configuration>
         <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
                 <encoder>
-                        <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) - %msg%n</pattern>
+                        <!-- <pattern>%red(%-5level) %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern> -->
+                        <pattern>[ %blue(%-5level)] - %msg%n</pattern>
                 </encoder>
 
 
@@ -16,7 +17,8 @@
 
         <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
                 <encoder>
-                        <pattern>%d{HH:mm:ss.SSS} %red(%-5level) - %red(%msg%n)</pattern>
+                        <pattern>[%red(%-5level)] - %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern>
+                        <!-- <pattern>%red(%-5level) %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern> -->
                 </encoder>
                 <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
                         <level>ERROR</level>
