@@ -23,34 +23,31 @@ public class IngestionVerticle extends AbstractVerticle {
                 JsonObject config = new JsonObject(
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
 
-                // Get parameters from config file with default values
-                String mode = config.getString("mode", "debug");
+                /*
+                 * Get mode from config file.
+                 * Can be :
+                 * - json (default for debug)
+                 * - pcap
+                 * - realtime
+                 */
+                String mode = config.getString("mode", "json");
 
                 // Creation of the event bus
                 eb = vertx.eventBus();
 
                 System.out.println("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode);
                 switch (mode) {
-                        case "debug":
-                                vertx.setPeriodic(5000, id -> simulateNetworkData());
-                                break;
-                        case "kafka":
-                                // TODO : implement Kafka ingestion
-                                System.out.println("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
-                                break;
-                        case "realtime":
-                                // TODO : implement real-time ingestion
-                                vertx.setPeriodic(1000, id -> ingestInRealTime());
-                                System.out.println("[ INGESTION VERTICLE ] Real-time ingestion not implemented yet.");
-                                break;
-                        case "from-file":
-                                JsonObject fileConfig = config.getJsonObject("from-file", new JsonObject());
-                                String filePath = fileConfig.getString("file-path", "data/sample_data.txt");
+                        case "json":
+                                /* ------------------------ Parameters for json mode ------------------------ */
+                                JsonObject fileConfig = config.getJsonObject("json", new JsonObject());
+                                // Get path and ingestion interval from config file
+                                String filePath = fileConfig.getString("file-path", "data/sample_data.json");
                                 int interval = fileConfig.getInteger("ingestion-interval-ms", 1000);
                                 System.out.println("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
                                 System.out.println("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): "
                                                 + interval);
 
+                                /* ------------------------ READ FILE AND PARSE JSON ------------------------ */
                                 List<JsonObject> records;
                                 try {
                                         String content = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
@@ -69,23 +66,39 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         + e.getMessage());
                                         return;
                                 }
+
+                                /* --------------- Publication of records at regular intervals -------------- */
+                                // AtomicReference to keep track of the iterator state
                                 AtomicReference<Iterator<JsonObject>> iteratorRef = new AtomicReference<>(
                                                 records.iterator());
 
                                 vertx.setPeriodic(interval, id -> {
                                         Iterator<JsonObject> it = iteratorRef.get();
                                         if (!it.hasNext()) {
-                                                it = records.iterator(); // recrée iterator
-                                                iteratorRef.set(it); // met à jour la référence
+                                                // Reset iterator if end of list is reached to loop
+                                                it = records.iterator();
+                                                iteratorRef.set(it);
                                                 System.out.println(
                                                                 "[ INGESTION VERTICLE ] End of file reached. Looping again...");
                                         }
+                                        // Publication of the next record
                                         JsonObject record = it.next();
                                         eb.publish("network.data", record);
                                         System.out.println("[ INGESTION VERTICLE ] Published record from file: \n"
                                                         + record.encodePrettily());
                                 });
 
+                                break;
+
+                        case "pcap":
+                                // TODO : implement Kafka ingestion
+                                System.out.println("[ INGESTION VERTICLE ] Kafka ingestion not implemented yet.");
+                                break;
+                                
+                        case "realtime":
+                                // TODO : implement real-time ingestion
+                                vertx.setPeriodic(1000, id -> ingestInRealTime());
+                                System.out.println("[ INGESTION VERTICLE ] Real-time ingestion not implemented yet.");
                                 break;
                         default:
                                 System.out.println(
@@ -97,30 +110,9 @@ public class IngestionVerticle extends AbstractVerticle {
 
         }
 
-        /* ------------------------------- Mode DEBUG ------------------------------- */
-        private void simulateNetworkData() {
-                JsonObject networkData = new JsonObject()
-                                .put("srcIp", "10.0.0.1")
-                                .put("dstIp", "10.0.0.2")
-                                .put("protocol", "TCP")
-                                .put("bytes", 1000);
-                eb.publish("network.data", networkData);
-                System.out.println("[ INGESTION VERTICLE ] Published simulated network data: \n"
-                                + networkData.encodePrettily());
-        }
-
         /* ------------------------------- Mode Kafka ------------------------------- */
         // TODO : implement Kafka ingestion
         private void ingestFromKafka(JsonObject kafkaConfig) {
-        }
-
-        private JsonObject captureRealNetworkData() {
-                // Ici tu mettrais la logique de capture réseau réelle
-                return new JsonObject()
-                                .put("srcIp", "10.0.0.3")
-                                .put("dstIp", "10.0.0.4")
-                                .put("protocol", "UDP")
-                                .put("bytes", 2000);
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
@@ -128,8 +120,6 @@ public class IngestionVerticle extends AbstractVerticle {
         private void ingestInRealTime() {
                 // Placeholder for real-time ingestion logic
         }
-
-        /* ----------------------------- Mode From-File ----------------------------- */
 
         /* -------------------------------------------------------------------------- */
         @Override

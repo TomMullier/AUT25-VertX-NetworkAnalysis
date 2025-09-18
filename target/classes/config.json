@@ -1,7 +1,7 @@
 {
         "http.port": 8080,
-        "mode": "from-file",
-        "from-file": {
+        "mode": "json",
+        "json": {
                 "file-path": "src/main/resources/data/network-data.json",
                 "ingestion-interval-ms": 1000
         }
