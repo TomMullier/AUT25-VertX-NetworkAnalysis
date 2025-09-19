@@ -3,14 +3,31 @@ package com.aut25.vertx;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.json.JsonObject;
 import org.apache.kafka.clients.consumer.*;
+import org.pcap4j.packet.IcmpV4CommonPacket;
+import org.pcap4j.packet.IcmpV6CommonPacket;
+import org.pcap4j.packet.IpPacket;
+import org.pcap4j.packet.TcpPacket;
+import org.pcap4j.packet.UdpPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.JsonSerializable.Base;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import static java.lang.Thread.sleep;
+import org.pcap4j.packet.Packet;
+import java.util.Base64;
+import org.pcap4j.core.Pcaps.*;
+import org.pcap4j.core.Pcaps;
+import org.pcap4j.core.PcapNetworkInterface;
+import org.pcap4j.core.PcapHandle;
+import org.pcap4j.core.NotOpenException;
+import org.pcap4j.core.PcapNativeException;
+import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.EthernetPacket;
 
 public class AnalyseVerticle extends AbstractVerticle {
 
@@ -55,18 +72,66 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         ConsumerRecords<String, String> records = consumer
                                                         .poll(java.time.Duration.ofMillis(100));
                                         for (ConsumerRecord<String, String> record : records) {
-                                                try{
+                                                try {
                                                         JsonObject json = new JsonObject(record.value());
-                                                logger.info(Colors.YELLOW + "[ ANALYSE VERTICLE ] Received record: "
-                                                                + json.encodePrettily() + Colors.RESET);
+                                                        try {
+                                                                String srcIp = "";
+                                                                String dstIp = "";
+                                                                String protocol = "UNKNOWN";
+
+                                                                // Parse the raw packet data
+                                                                String rawPacketBase64 = json.getString("rawPacket");
+                                                                if (rawPacketBase64 == null) {
+                                                                        logger.warn("[ ANALYSE VERTICLE ] No rawPacket field in JSON.");
+                                                                        continue;
+                                                                }
+                                                                byte[] rawData = Base64.getDecoder()
+                                                                                .decode(rawPacketBase64);
+                                                                Packet packet = EthernetPacket.newPacket(rawData, 0,
+                                                                                rawData.length);
+                                                                // Vérifie si c’est un paquet IP
+                                                                if (packet.contains(IpPacket.class)) {
+                                                                        IpPacket ipPacket = packet.get(IpPacket.class);
+                                                                        srcIp = ipPacket.getHeader().getSrcAddr()
+                                                                                        .getHostAddress();
+                                                                        dstIp = ipPacket.getHeader().getDstAddr()
+                                                                                        .getHostAddress();
+                                                                        if (ipPacket.getHeader()
+                                                                                        .getProtocol() != null) {
+                                                                                protocol = ipPacket.getHeader()
+                                                                                                .getProtocol().name();
+                                                                        } else {
+                                                                                protocol = "UNKNOWN";
+                                                                        }
+                                                                }
+                                                                // Add parsed fields to JSON
+                                                                json.put("srcIp", srcIp);
+                                                                json.put("dstIp", dstIp);
+                                                                json.put("protocol", protocol);
+                                                                json.put("bytes", packet.length());
+                                                                // Decode base64 to raw packet string
+                                                                json.put("rawPacket", packet.toString());
+                                                        } catch (Exception e) {
+                                                                logger.warn("[ INGESTION VERTICLE ] Could not parse IP/transport layer: {}",
+                                                                                e.getMessage());
+                                                        }
+
+                                                        // Log the parsed data
+                                                        logger.info(Colors.CYAN
+                                                                        + "[ ANALYSE VERTICLE ] Received record: "
+                                                                        + json.encodePrettily() + Colors.RESET);
                                                 } catch (Exception e) {
-                                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
+                                                        logger.error(Colors.RED
+                                                                        + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
                                                                         + e.getMessage() + Colors.RESET);
-                                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Original record: "
+                                                        logger.error(Colors.RED
+                                                                        + "[ ANALYSE VERTICLE ] Original record: "
                                                                         + record.value() + Colors.RESET);
                                                 }
                                                 // TODO Process the JSON data as needed
-                                                sleep(delay); // Attendre avant de lire à nouveau
+
+                                                // Wait before printing the next record
+                                                sleep(delay);
 
                                         }
                                         if (!records.isEmpty()) {

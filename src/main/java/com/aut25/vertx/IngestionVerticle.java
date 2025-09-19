@@ -34,6 +34,7 @@ import org.pcap4j.packet.UdpPacket;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import org.pcap4j.core.PacketListener;
 import java.sql.Timestamp;
+import java.util.Base64;
 
 public class IngestionVerticle extends AbstractVerticle {
 
@@ -273,42 +274,14 @@ public class IngestionVerticle extends AbstractVerticle {
         private void processPacket(Packet packet, long delay) {
                 if (packet == null)
                         return;
-                String srcIp = "";
-                String dstIp = "";
-                String protocol = "UNKNOWN";
-                try {
-                        // Vérifie si c’est un paquet IP
-                        IpPacket ipPacket = packet.get(IpPacket.class);
-                        if (ipPacket != null) {
-                                srcIp = ipPacket.getHeader().getSrcAddr().toString();
-                                dstIp = ipPacket.getHeader().getDstAddr().toString();
-
-                                // Détection du protocole transport
-                                if (ipPacket.getPayload() instanceof TcpPacket) {
-                                        protocol = "TCP";
-                                } else if (ipPacket.getPayload() instanceof UdpPacket) {
-                                        protocol = "UDP";
-                                } else if (ipPacket.getPayload() instanceof IcmpV4CommonPacket) {
-                                        protocol = "ICMPv4";
-                                } else if (ipPacket.getPayload() instanceof IcmpV6CommonPacket) {
-                                        protocol = "ICMPv6";
-                                } else {
-                                        protocol = ipPacket.getHeader().getProtocol().name();
-                                }
-                        }
-                } catch (Exception e) {
-                        logger.warn("[ INGESTION VERTICLE ] Could not parse IP/transport layer: {}", e.getMessage());
-                }
-
+                byte[] rawData = packet.getRawData();
+                // Convert raw data to hex string for JSON representation
+                String base64Packet = Base64.getEncoder().encodeToString(rawData);
                 // Construire l'objet JSON enrichi
                 JsonObject record = new JsonObject()
                                 .put("timestamp", System.currentTimeMillis())
-                                .put("srcIp", srcIp)
-                                .put("dstIp", dstIp)
-                                .put("protocol", protocol)
-                                .put("bytes", packet.length())
                                 .put("delay", delay)
-                                .put("rawPacket", packet.toString());
+                                .put("rawPacket", base64Packet);
 
                 logger.debug("[ INGESTION VERTICLE ] Processed packet: \n{}", record.encodePrettily());
 

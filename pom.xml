@@ -47,6 +47,11 @@
             <version>1.8.2</version>
         </dependency>
         <dependency>
+            <groupId>org.pcap4j</groupId>
+            <artifactId>pcap4j-packetfactory-static</artifactId>
+            <version>1.8.2</version>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
@@ -67,7 +72,8 @@
             <artifactId>kafka-clients</artifactId>
             <version>3.7.0</version>
         </dependency>
-       
+
+
 
         <!-- SLF4J API -->
         <dependency>
