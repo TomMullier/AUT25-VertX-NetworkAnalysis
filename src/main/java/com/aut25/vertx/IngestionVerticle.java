@@ -126,7 +126,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                                         "[ INGESTION VERTICLE ] Failed to send record to Kafka: "
                                                                                         + exception.getMessage());
                                                 } else {
-                                                        logger.info(
+                                                        logger.debug(
                                                                         "[ INGESTION VERTICLE ] Record sent to Kafka topic "
                                                                                         + metadata.topic()
                                                                                         + " partition "
