@@ -35,6 +35,12 @@ public class AnalyseVerticle extends AbstractVerticle {
                 readFromKafkaActionEveryDelay("network-data", 2000);
         }
 
+        /**
+         * Reads messages from a Kafka topic at regular intervals.
+         * 
+         * @param topic the Kafka topic to subscribe to
+         * @param delay the delay in milliseconds between reads
+         */
         private void readFromKafkaActionEveryDelay(String topic, long delay) {
                 logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: " + topic + Colors.RESET);
 
@@ -49,8 +55,17 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         ConsumerRecords<String, String> records = consumer
                                                         .poll(java.time.Duration.ofMillis(100));
                                         for (ConsumerRecord<String, String> record : records) {
+                                                try{
+                                                        JsonObject json = new JsonObject(record.value());
                                                 logger.info(Colors.YELLOW + "[ ANALYSE VERTICLE ] Received record: "
-                                                                + record.value() + Colors.RESET);
+                                                                + json.encodePrettily() + Colors.RESET);
+                                                } catch (Exception e) {
+                                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
+                                                                        + e.getMessage() + Colors.RESET);
+                                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Original record: "
+                                                                        + record.value() + Colors.RESET);
+                                                }
+                                                // TODO Process the JSON data as needed
                                                 sleep(delay); // Attendre avant de lire à nouveau
 
                                         }

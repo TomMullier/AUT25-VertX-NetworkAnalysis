@@ -12,6 +12,8 @@ else
     sleep 5
 fi
 
+# sudo docker rm -v kafka zookeeper
+
 TOPIC_NAME="network-data"
 
 echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
