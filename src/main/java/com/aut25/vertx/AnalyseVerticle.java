@@ -42,15 +42,13 @@ public class AnalyseVerticle extends AbstractVerticle {
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
                 switch (mode) {
                         case "pcap":
-                                readFromKafkaActionEveryDelay_PCAP("network-data", 2000);
+                                readFromKafka_ActionEveryDelay("network-data", 2000);
                                 break;
                         case "json":
-                                readFromKafkaActionEveryDelay_JSON("network-data", 2000);
+                                readFromKafka_ActionEveryDelay("network-data", 2000);
                                 break;
                         case "realtime":
-                                logger.info(Colors.GREEN
-                                                + "[ ANALYSE VERTICLE ] Mode set to REALTIME. No action defined yet."
-                                                + Colors.RESET);
+                                readFromKafka_ActionEveryDelay("network-data", 2000);
                                 break;
 
                         default:
@@ -68,7 +66,7 @@ public class AnalyseVerticle extends AbstractVerticle {
          * @param topic the Kafka topic to subscribe to
          * @param delay the delay in milliseconds between reads
          */
-        private void readFromKafkaActionEveryDelay_PCAP(String topic, long delay) {
+        private void readFromKafka_ActionEveryDelay(String topic, long delay) {
                 logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: " + topic + Colors.RESET);
 
                 // Subscribe to the topic
@@ -82,6 +80,11 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         ConsumerRecords<String, String> records = consumer
                                                         .poll(java.time.Duration.ofMillis(100));
                                         for (ConsumerRecord<String, String> record : records) {
+                                                if (record.value() == null || record.value().isEmpty()
+                                                                || record.value().equals("reset")) {
+                                                        logger.warn("[ ANALYSE VERTICLE ] Received empty record, skipping.");
+                                                        continue;
+                                                }
                                                 try {
                                                         JsonObject json = new JsonObject(record.value());
                                                         try {
@@ -120,7 +123,11 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                                 json.put("protocol", protocol);
                                                                 json.put("bytes", packet.length());
                                                                 // Decode base64 to raw packet string
-                                                                json.put("rawPacket", packet.toString());
+                                                                String ltab = "\t";
+                                                                json.put("rawPacket",
+                                                                                ltab.concat(packet.toString().replace(
+                                                                                                "\n",
+                                                                                                "\n\t\t")));
                                                         } catch (Exception e) {
                                                                 logger.warn("[ INGESTION VERTICLE ] Could not parse IP/transport layer: {}",
                                                                                 e.getMessage());
@@ -128,8 +135,22 @@ public class AnalyseVerticle extends AbstractVerticle {
 
                                                         // Log the parsed data
                                                         logger.info(Colors.CYAN
-                                                                        + "[ ANALYSE VERTICLE ] Received record: "
-                                                                        + json.encodePrettily() + Colors.RESET);
+                                                                        + "[ ANALYSE VERTICLE ] Received record:"
+                                                                        + Colors.RESET);
+                                                        Object rawPacket = json.getValue("rawPacket");
+
+                                                        // Remove rawpacket from json copy
+                                                        JsonObject temp = json.copy();
+                                                        temp.remove("rawPacket");
+                                                        logger.info(Colors.CYAN
+                                                                        + "[ ANALYSE VERTICLE ] Parsed JSON data: "
+                                                                        + temp.encodePrettily() + Colors.RESET);
+                                                        logger.info(Colors.YELLOW
+                                                                        + "[ ANALYSE VERTICLE ] Raw Packet Data: "
+                                                                        + Colors.RESET);
+                                                        logger.info(Colors.YELLOW + rawPacket.toString()
+                                                                        + Colors.RESET);
+
                                                 } catch (Exception e) {
                                                         logger.error(Colors.RED
                                                                         + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
@@ -184,72 +205,74 @@ public class AnalyseVerticle extends AbstractVerticle {
          * @param topic the Kafka topic to subscribe to
          * @param delay the delay between message reads in milliseconds
          */
-        private void readFromKafkaActionEveryDelay_JSON(String topic, long delay) {
-                logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: " + topic + Colors.RESET);
+        // private void readFromKafkaActionEveryDelay_JSON(String topic, long delay) {
+        // logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: "
+        // + topic + Colors.RESET);
 
-                // Subscribe to the topic
-                consumer.subscribe(Arrays.asList(topic));
+        // // Subscribe to the topic
+        // consumer.subscribe(Arrays.asList(topic));
 
-                // Use executeBlocking to avoid blocking the event loop
-                // Read messages in a loop with the specified delay
-                vertx.executeBlocking(promise -> {
-                        try {
-                                while (true) {
-                                        ConsumerRecords<String, String> records = consumer
-                                                        .poll(java.time.Duration.ofMillis(100));
-                                        for (ConsumerRecord<String, String> record : records) {
-                                                try {
-                                                        JsonObject json = new JsonObject(record.value());
+        // // Use executeBlocking to avoid blocking the event loop
+        // // Read messages in a loop with the specified delay
+        // vertx.executeBlocking(promise -> {
+        // try {
+        // while (true) {
+        // ConsumerRecords<String, String> records = consumer
+        // .poll(java.time.Duration.ofMillis(100));
+        // for (ConsumerRecord<String, String> record : records) {
+        // try {
+        // JsonObject json = new JsonObject(record.value());
 
-                                                        // Log the received JSON data
-                                                        logger.info(Colors.CYAN
-                                                                        + "[ ANALYSE VERTICLE ] Received record: "
-                                                                        + json.encodePrettily() + Colors.RESET);
-                                                } catch (Exception e) {
-                                                        logger.error(Colors.RED
-                                                                        + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
-                                                                        + e.getMessage() + Colors.RESET);
-                                                        logger.error(Colors.RED
-                                                                        + "[ ANALYSE VERTICLE ] Original record: "
-                                                                        + record.value() + Colors.RESET);
-                                                }
-                                                // TODO Process the JSON data as needed
+        // // Log the received JSON data
+        // logger.info(Colors.CYAN
+        // + "[ ANALYSE VERTICLE ] Received record: "
+        // + json.encodePrettily() + Colors.RESET);
+        // } catch (Exception e) {
+        // logger.error(Colors.RED
+        // + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
+        // + e.getMessage() + Colors.RESET);
+        // logger.error(Colors.RED
+        // + "[ ANALYSE VERTICLE ] Original record: "
+        // + record.value() + Colors.RESET);
+        // }
+        // // TODO Process the JSON data as needed
 
-                                                // Wait before printing the next record
-                                                sleep(delay);
+        // // Wait before printing the next record
+        // sleep(delay);
 
-                                        }
-                                        if (!records.isEmpty()) {
-                                                consumer.commitSync();
-                                                logger.debug("[ ANALYSE VERTICLE ] Offsets committed.");
-                                        }
-                                }
-                        } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Consumer interrupted: " + e.getMessage()
-                                                + Colors.RESET);
-                        } catch (Exception e) {
-                                logger.error("[ ANALYSE VERTICLE ] Error in consumer loop: "
-                                                + e.getMessage());
-                        } finally {
-                                consumer.close();
-                                logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
-                        }
-                }, res -> {
-                        if (res.succeeded()) {
-                                logger.info("[ ANALYSE VERTICLE ] Finished processing Kafka messages.");
-                        } else {
-                                logger.error("[ ANALYSE VERTICLE ] Failed to process Kafka messages: "
-                                                + res.cause());
-                        }
-                });
+        // }
+        // if (!records.isEmpty()) {
+        // consumer.commitSync();
+        // logger.debug("[ ANALYSE VERTICLE ] Offsets committed.");
+        // }
+        // }
+        // } catch (InterruptedException e) {
+        // Thread.currentThread().interrupt();
+        // logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Consumer interrupted: " +
+        // e.getMessage()
+        // + Colors.RESET);
+        // } catch (Exception e) {
+        // logger.error("[ ANALYSE VERTICLE ] Error in consumer loop: "
+        // + e.getMessage());
+        // } finally {
+        // consumer.close();
+        // logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
+        // }
+        // }, res -> {
+        // if (res.succeeded()) {
+        // logger.info("[ ANALYSE VERTICLE ] Finished processing Kafka messages.");
+        // } else {
+        // logger.error("[ ANALYSE VERTICLE ] Failed to process Kafka messages: "
+        // + res.cause());
+        // }
+        // });
 
-                logger.info("[ ANALYSE VERTICLE ] Kafka consumer setup complete.");
-                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                        consumer.close();
-                        logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
-                }));
-        }
+        // logger.info("[ ANALYSE VERTICLE ] Kafka consumer setup complete.");
+        // Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        // consumer.close();
+        // logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
+        // }));
+        // }
 
         @Override
         public void stop() {
