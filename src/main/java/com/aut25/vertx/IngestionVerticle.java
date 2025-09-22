@@ -1,17 +1,16 @@
 package com.aut25.vertx;
 
 import io.vertx.core.AbstractVerticle;
-import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.json.JsonObject;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.io.EOFException;
-import java.io.ObjectInputFilter.Config;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,20 +20,16 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.pcap4j.core.PacketListener;
 import org.pcap4j.core.PcapHandle;
 import org.pcap4j.core.PcapNativeException;
+import org.pcap4j.core.PcapNetworkInterface;
 import org.pcap4j.core.Pcaps;
-import org.pcap4j.core.NotOpenException;
-import org.pcap4j.packet.IcmpV4CommonPacket;
-import org.pcap4j.packet.IcmpV6CommonPacket;
-import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
-import org.pcap4j.packet.TcpPacket;
-import org.pcap4j.packet.UdpPacket;
 import org.pcap4j.packet.namednumber.DataLinkType;
-import org.pcap4j.core.PacketListener;
 import java.sql.Timestamp;
 import java.util.Base64;
+import java.util.concurrent.Executors;
 
 public class IngestionVerticle extends AbstractVerticle {
 
@@ -153,9 +148,11 @@ public class IngestionVerticle extends AbstractVerticle {
                                 break;
 
                         case "realtime":
-                                // TODO : implement real-time ingestion
-                                vertx.setPeriodic(1000, id -> ingestInRealTime());
-                                logger.info("[ INGESTION VERTICLE ] Real-time ingestion not implemented yet.");
+                                JsonObject rtConfig = config.getJsonObject("realtime", new JsonObject());
+                                String networkInterface = rtConfig.getString("interface", "eth0");
+                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] Network Interface: "
+                                                + networkInterface);
+                                ingestInRealTime(networkInterface);
                                 break;
                         default:
                                 logger.error(
@@ -187,13 +184,76 @@ public class IngestionVerticle extends AbstractVerticle {
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
-        // TODO : implement real-time ingestion
+        static class Task implements Runnable {
+                private final PcapHandle handle;
+                private final PacketListener listener;
+
+                Task(PcapHandle handle, PacketListener listener) {
+                        this.handle = handle;
+                        this.listener = listener;
+                }
+
+                @Override
+                public void run() {
+                        try {
+                                handle.loop(-1, listener); // -1 = capture infinie
+                        } catch (Exception e) {
+                                e.printStackTrace();
+                        } finally {
+                                try {
+                                        handle.close();
+                                } catch (Exception ignored) {
+                                }
+                        }
+                }
+        }
+
         /**
          * Ingest packets in real-time (e.g., from a network interface) and publish them
          * to Kafka.
          */
-        private void ingestInRealTime() {
-                // Placeholder for real-time ingestion logic
+        private void ingestInRealTime(String networkInterface) {
+                PcapNetworkInterface nif;
+                if (networkInterface == null) {
+                        logger.error("[ INGESTION VERTICLE ] No network interface specified.");
+                        return;
+                }
+                try {
+                        nif = Pcaps.getDevByName(networkInterface);
+                        if (nif == null) {
+                                logger.error("[ INGESTION VERTICLE ] Network interface not found: " + networkInterface);
+                                return;
+                        }
+
+                        logger.info("[ INGESTION VERTICLE ] Capturing packets from network interface: "
+                                        + networkInterface);
+                        final int snapLen = 65536; // Capture all packets, no truncation
+                        final int timeout = 10; // 10 ms
+                        final PcapHandle handle = nif.openLive(snapLen,
+                                        PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, timeout);
+                        AtomicReference<Long> timestamp = new AtomicReference<>(System.currentTimeMillis());
+                        PacketListener listener = packet -> {
+                                long packetTimestamp = System.currentTimeMillis();
+                                long delay = packetTimestamp - timestamp.get();
+                                timestamp.set(packetTimestamp);
+                                processPacket(packet, delay);
+                        };
+
+                        ExecutorService pool = Executors.newSingleThreadExecutor();
+                        Task t = new Task(handle, listener);
+                        pool.execute(t);
+
+                } catch (PcapNativeException e) {
+                        logger.error("[ INGESTION VERTICLE ] Error accessing network interface: " + e.getMessage());
+                        logger.error("[ INGESTION VERTICLE ] Please check if the interface name is correct and if the necessary permissions are granted.");
+                        return;
+                } catch (Exception e) {
+                        logger.error("[ INGESTION VERTICLE ] Unexpected error: " + e.getMessage());
+                        return;
+                } finally {
+                        logger.info("[ INGESTION VERTICLE ] Exiting ingestInRealTime method.");
+                }
+
         }
 
         /* -------------------------------- Mode pcap ------------------------------- */

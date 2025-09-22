@@ -178,6 +178,12 @@ public class AnalyseVerticle extends AbstractVerticle {
 
         }
 
+        /**
+         * Reads messages from a Kafka topic at regular intervals if mode is "json".
+         * 
+         * @param topic the Kafka topic to subscribe to
+         * @param delay the delay between message reads in milliseconds
+         */
         private void readFromKafkaActionEveryDelay_JSON(String topic, long delay) {
                 logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: " + topic + Colors.RESET);
 

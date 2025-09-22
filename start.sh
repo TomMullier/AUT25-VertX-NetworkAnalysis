@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear # Clear the terminal for better readability
 echo "=== Checking if Kafka and Zookeeper are running ==="
 
 if docker ps --format '{{.Names}}' | grep -qE '(^kafka$|^zookeeper$)'; then

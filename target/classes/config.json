@@ -1,11 +1,14 @@
 {
         "http.port": 8080,
-        "mode": "json",
+        "mode": "realtime",
         "json": {
                 "file-path": "src/main/resources/data/network-data.json",
                 "ingestion-interval-ms": 1000
         },
         "pcap": {
                 "file-path": "src/main/resources/data/ping-flood-ddos.pcap"
+        },
+        "realtime": {
+                "interface": "ens160"
         }
 }
