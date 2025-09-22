@@ -46,22 +46,8 @@ docker exec kafka \
 echo "=== ✅ Topic $TOPIC_NAME has been reset. ==="
 
 echo "=== Ensuring ClickHouse database exists ==="
-docker exec clickhouse clickhouse-client --query="CREATE DATABASE IF NOT EXISTS network_analysis;"
-docker exec clickhouse clickhouse-client --query="USE network_analysis;"
-docker exec clickhouse clickhouse-client --query="CREATE TABLE IF NOT EXISTS network_analysis.network_data (
-    id String,
-    timestamp DateTime64(3, 'UTC') DEFAULT now64(3),
-    rawPacket String,
-    srcIp String,
-    dstIp String,
-    protocol String,
-    bytes UInt32
-) ENGINE = MergeTree()
-ORDER BY timestamp;"
-echo "=== ✅ ClickHouse database and table are set up. ==="
-docker exec clickhouse clickhouse-client --query="CREATE USER IF NOT EXISTS admin IDENTIFIED WITH plaintext_password BY 'admin';"
-docker exec clickhouse clickhouse-client --query="GRANT ALL ON network_data.* TO admin;" 
-echo "=== ✅ ClickHouse database and user are set up. ==="
+docker exec -i clickhouse clickhouse-client --multiquery < src/main/resources/clickhouse-init/init.sql
+echo "=== ✅ ClickHouse database, users and table are set up. ==="
 
 echo "=== Starting the application ==="
 mvn compile vertx:run
