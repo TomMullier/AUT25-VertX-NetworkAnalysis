@@ -40,6 +40,17 @@ public class Main extends AbstractVerticle {
             }
         });
 
+        /* ----------------- Deploy the ClickHouseIngestionVerticle ----------------- */
+        vertx.deployVerticle(new ClickHouseIngestionVerticle(), res -> {
+            if (res.succeeded()) {
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] ClickHouseIngestionVerticle deployed successfully!"
+                        + Colors.RESET);
+            } else {
+                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy ClickHouseIngestionVerticle: "
+                        + res.cause() + Colors.RESET);
+            }
+        });
+
         /* ------------------------ Deploy the ApiVerticle ------------------------- */
         // vertx.deployVerticle(new ApiVerticle(), res -> {
         // if (res.succeeded()) {

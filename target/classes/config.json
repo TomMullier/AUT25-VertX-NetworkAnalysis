@@ -1,6 +1,6 @@
 {
         "http.port": 8080,
-        "mode": "none",
+        "mode": "realtime",
         "json": {
                 "file-path": "src/main/resources/data/network-data.json",
                 "ingestion-interval-ms": 1000

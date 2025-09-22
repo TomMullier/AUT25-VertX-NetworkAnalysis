@@ -1,5 +1,7 @@
 #!/bin/bash
 clear
+# Remove dockers
+# sudo docker-compose -f src/main/resources/kafka-docker-compose.yml down -v
 echo "=== Checking if Zookeeper is running ==="
 if docker ps --format '{{.Names}}' | grep -q '^zookeeper$' ; then
     echo "=== ✅ Zookeeper is already running."
@@ -45,8 +47,20 @@ echo "=== ✅ Topic $TOPIC_NAME has been reset. ==="
 
 echo "=== Ensuring ClickHouse database exists ==="
 docker exec clickhouse clickhouse-client --query="CREATE DATABASE IF NOT EXISTS network_analysis;"
-docker exec clickhouse clickhouse-client --query="CREATE USER admin IDENTIFIED WITH PLAINTEXT_PASSWORD BY 'admin';"
-docker exec clickhouse clickhouse-client --query="GRANT ALL ON network_analysis.* TO admin;" 
+docker exec clickhouse clickhouse-client --query="USE network_analysis;"
+docker exec clickhouse clickhouse-client --query="CREATE TABLE IF NOT EXISTS network_analysis.network_data (
+    id String,
+    timestamp DateTime64(3, 'UTC') DEFAULT now64(3),
+    rawPacket String,
+    srcIp String,
+    dstIp String,
+    protocol String,
+    bytes UInt32
+) ENGINE = MergeTree()
+ORDER BY timestamp;"
+echo "=== ✅ ClickHouse database and table are set up. ==="
+docker exec clickhouse clickhouse-client --query="CREATE USER IF NOT EXISTS admin IDENTIFIED WITH plaintext_password BY 'admin';"
+docker exec clickhouse clickhouse-client --query="GRANT ALL ON network_data.* TO admin;" 
 echo "=== ✅ ClickHouse database and user are set up. ==="
 
 echo "=== Starting the application ==="
