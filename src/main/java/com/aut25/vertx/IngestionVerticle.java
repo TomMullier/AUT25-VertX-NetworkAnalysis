@@ -107,8 +107,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 // Reset iterator if end of list is reached to loop
                                                 it = records.iterator();
                                                 iteratorRef.set(it);
-                                                logger.info(
-                                                                "[ INGESTION VERTICLE ] End of file reached. Looping again...");
+                                                logger.debug("[ INGESTION VERTICLE ] End of file reached. Looping again...");
                                         }
                                         // Publication of the next record
                                         JsonObject record = it.next();
@@ -255,8 +254,6 @@ public class IngestionVerticle extends AbstractVerticle {
                 } catch (Exception e) {
                         logger.error("[ INGESTION VERTICLE ] Unexpected error: " + e.getMessage());
                         return;
-                } finally {
-                        logger.info("[ INGESTION VERTICLE ] Exiting ingestInRealTime method.");
                 }
 
         }
@@ -347,7 +344,6 @@ public class IngestionVerticle extends AbstractVerticle {
                                 .put("timestamp", System.currentTimeMillis())
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
-
                 logger.debug("[ INGESTION VERTICLE ] Processed packet: \n{}", record.encodePrettily());
 
                 // Publish record on Kafka topic "network-data"

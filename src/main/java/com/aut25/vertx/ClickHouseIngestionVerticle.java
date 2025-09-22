@@ -97,7 +97,7 @@ public class ClickHouseIngestionVerticle extends AbstractVerticle {
                                         json.put("bytes", packet.length());
 
                                         int bytes = packet.length();
-                                        logger.info(Colors.YELLOW
+                                        logger.debug(Colors.YELLOW
                                                         + "[ CLICKHOUSE INGESTION VERTICLE ] Packet to insert: "
                                                         + json.encodePrettily() + Colors.RESET);
 
@@ -114,13 +114,15 @@ public class ClickHouseIngestionVerticle extends AbstractVerticle {
                                                 pstmt.setString(7, rawPacket);
                                                 pstmt.executeUpdate();
 
-                                                logger.info(Colors.YELLOW
+                                                logger.debug(Colors.YELLOW
                                                                 + "[ CLICKHOUSE INGESTION VERTICLE ] Packet inserted into ClickHouse"
                                                                 + Colors.RESET);
                                         }
 
                                 } catch (Exception e) {
-                                        e.printStackTrace();
+                                        logger.error(Colors.RED
+                                                        + "[ CLICKHOUSE INGESTION VERTICLE ] Error processing record: "
+                                                        + e.getMessage() + Colors.RESET);
                                 }
                         }
                         consumer.commitSync();

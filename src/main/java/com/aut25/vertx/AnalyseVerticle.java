@@ -138,7 +138,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                         }
 
                                                         // Log the parsed data
-                                                        logger.info(Colors.CYAN
+                                                        logger.debug(Colors.CYAN
                                                                         + "[ ANALYSE VERTICLE ] Received record:"
                                                                         + Colors.RESET);
                                                         Object rawPacket = json.getValue("rawPacket");
@@ -146,13 +146,13 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                         // Remove rawpacket from json copy
                                                         JsonObject temp = json.copy();
                                                         temp.remove("rawPacket");
-                                                        logger.info(Colors.CYAN
+                                                        logger.debug(Colors.CYAN
                                                                         + "[ ANALYSE VERTICLE ] Parsed JSON data: "
                                                                         + temp.encodePrettily() + Colors.RESET);
-                                                        logger.info(Colors.YELLOW
+                                                        logger.debug(Colors.YELLOW
                                                                         + "[ ANALYSE VERTICLE ] Raw Packet Data: "
                                                                         + Colors.RESET);
-                                                        logger.info(Colors.YELLOW + rawPacket.toString()
+                                                        logger.debug(Colors.YELLOW + rawPacket.toString()
                                                                         + Colors.RESET);
 
                                                 } catch (Exception e) {
