@@ -50,7 +50,11 @@ public class AnalyseVerticle extends AbstractVerticle {
                         case "realtime":
                                 readFromKafka_ActionEveryDelay("network-data", 2000);
                                 break;
-
+                        case "none":
+                                logger.warn(Colors.YELLOW
+                                                + "[ ANALYSE VERTICLE ] Mode is set to 'none', no analysis will be performed."
+                                                + Colors.RESET);
+                                return;
                         default:
                                 logger.warn(Colors.YELLOW
                                                 + "[ ANALYSE VERTICLE ] Unknown mode '{}', defaulting to PCAP."

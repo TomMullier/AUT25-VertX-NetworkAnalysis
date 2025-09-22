@@ -154,6 +154,11 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 + networkInterface);
                                 ingestInRealTime(networkInterface);
                                 break;
+                        case "none":
+                                logger.warn(Colors.YELLOW
+                                                + "[ INGESTION VERTICLE ] Mode is set to 'none', no ingestion will be performed."
+                                                + Colors.RESET);
+                                return;
                         default:
                                 logger.error(
                                                 "[ INGESTION VERTICLE ] Unknown mode. No ingestion will be performed.");
