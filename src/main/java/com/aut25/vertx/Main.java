@@ -43,6 +43,17 @@ public class Main extends AbstractVerticle {
             }
         });
 
+        /* -------------------- Deploy the FlowAggregatorVerticle ------------------- */
+        vertx.deployVerticle(new FlowAggregatorVerticle(), res -> {
+            if (res.succeeded()) {
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] FlowAggregatorVerticle deployed successfully!"
+                        + Colors.RESET);
+            } else {
+                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy FlowAggregatorVerticle: " + res.cause()
+                        + Colors.RESET);
+            }
+        });
+
         /* ----------------- Deploy the ClickHousePacketVerticle ----------------- */
         if (store) {
             vertx.deployVerticle(new ClickHousePacketVerticle(), res -> {
@@ -56,16 +67,18 @@ public class Main extends AbstractVerticle {
             });
         }
 
-        /* -------------------- Deploy the FlowAggregatorVerticle ------------------- */
-        vertx.deployVerticle(new FlowAggregatorVerticle(), res -> {
-            if (res.succeeded()) {
-                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] FlowAggregatorVerticle deployed successfully!"
-                        + Colors.RESET);
-            } else {
-                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy FlowAggregatorVerticle: " + res.cause()
-                        + Colors.RESET);
-            }
-        });
+        /* ------------------ Deploy the ClickHouseFlowsVerticle ------------------ */
+        if (store) {
+            vertx.deployVerticle(new ClickHouseFlowsVerticle(), res -> {
+                if (res.succeeded()) {
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] ClickHouseFlowsVerticle deployed successfully!"
+                            + Colors.RESET);
+                } else {
+                    logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy ClickHouseFlowsVerticle: "
+                            + res.cause() + Colors.RESET);
+                }
+            });
+        }
 
         /* ------------------------ Deploy the ApiVerticle ------------------------- */
         // vertx.deployVerticle(new ApiVerticle(), res -> {

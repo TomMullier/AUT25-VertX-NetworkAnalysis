@@ -29,7 +29,8 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
         public void start() throws Exception {
                 // Logger setup
                 Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
-                logger.info(Colors.GREEN + "[ CLICKHOUSE INGESTION VERTICLE ] Starting ClickHousePacketVerticle..."
+                logger.info(Colors.GREEN
+                                + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] Starting ClickHousePacketVerticle..."
                                 + Colors.RESET);
 
                 // Connect to ClickHouse
@@ -98,7 +99,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
 
                                         int bytes = packet.length();
                                         logger.debug(Colors.YELLOW
-                                                        + "[ CLICKHOUSE INGESTION VERTICLE ] Packet to insert: "
+                                                        + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] Packet to insert: "
                                                         + json.encodePrettily() + Colors.RESET);
 
                                         // Insert into ClickHouse
@@ -115,13 +116,13 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                                 pstmt.executeUpdate();
 
                                                 logger.debug(Colors.YELLOW
-                                                                + "[ CLICKHOUSE INGESTION VERTICLE ] Packet inserted into ClickHouse"
+                                                                + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] Packet inserted into ClickHouse"
                                                                 + Colors.RESET);
                                         }
 
                                 } catch (Exception e) {
                                         logger.error(Colors.RED
-                                                        + "[ CLICKHOUSE INGESTION VERTICLE ] Error processing record: "
+                                                        + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] Error processing record: "
                                                         + e.getMessage() + Colors.RESET);
                                 }
                         }
@@ -129,7 +130,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 });
 
                 logger.info(Colors.GREEN
-                                + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHousePacketVerticle deployed successfully!"
+                                + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] ClickHousePacketVerticle deployed successfully!"
                                 + Colors.RESET);
         }
 
@@ -140,7 +141,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 if (clickhouseConn != null)
                         clickhouseConn.close();
                 Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHousePacketVerticle stopped."
+                logger.info(Colors.RED + "[ CLICKHOUSE PACKET  INGESTION VERTICLE ] ClickHousePacketVerticle stopped."
                                 + Colors.RESET);
                 super.stop();
         }
