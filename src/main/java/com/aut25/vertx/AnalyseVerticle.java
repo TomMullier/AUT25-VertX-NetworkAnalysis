@@ -37,6 +37,9 @@ public class AnalyseVerticle extends AbstractVerticle {
                 props.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 props.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 props.setProperty("auto.offset.reset", "earliest");
+                props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "600000"); // 10 minutes
+                props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000"); // 30s
+                props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000"); // 10s
                 consumer = new KafkaConsumer<>(props);
 
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
@@ -83,6 +86,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                                 while (true) {
                                         ConsumerRecords<String, String> records = consumer
                                                         .poll(java.time.Duration.ofMillis(100));
+
                                         for (ConsumerRecord<String, String> record : records) {
                                                 if (record.value() == null || record.value().isEmpty()
                                                                 || record.value().equals("reset")) {
@@ -173,7 +177,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                 consumer.commitSync();
                                                 logger.debug("[ ANALYSE VERTICLE ] Offsets committed.");
                                         }
-                                }
+                                        
+                        }
                         } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                                 logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Consumer interrupted: " + e.getMessage()
