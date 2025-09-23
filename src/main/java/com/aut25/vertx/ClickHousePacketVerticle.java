@@ -19,7 +19,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ClickHouseIngestionVerticle extends AbstractVerticle {
+public class ClickHousePacketVerticle extends AbstractVerticle {
 
         private Connection clickhouseConn;
         private Consumer<String, String> consumer;
@@ -28,8 +28,8 @@ public class ClickHouseIngestionVerticle extends AbstractVerticle {
         @Override
         public void start() throws Exception {
                 // Logger setup
-                Logger logger = LoggerFactory.getLogger(ClickHouseIngestionVerticle.class);
-                logger.info(Colors.GREEN + "[ CLICKHOUSE INGESTION VERTICLE ] Starting ClickHouseIngestionVerticle..."
+                Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
+                logger.info(Colors.GREEN + "[ CLICKHOUSE INGESTION VERTICLE ] Starting ClickHousePacketVerticle..."
                                 + Colors.RESET);
 
                 // Connect to ClickHouse
@@ -129,7 +129,7 @@ public class ClickHouseIngestionVerticle extends AbstractVerticle {
                 });
 
                 logger.info(Colors.GREEN
-                                + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHouseIngestionVerticle deployed successfully!"
+                                + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHousePacketVerticle deployed successfully!"
                                 + Colors.RESET);
         }
 
@@ -139,8 +139,8 @@ public class ClickHouseIngestionVerticle extends AbstractVerticle {
                         consumer.close();
                 if (clickhouseConn != null)
                         clickhouseConn.close();
-                Logger logger = LoggerFactory.getLogger(ClickHouseIngestionVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHouseIngestionVerticle stopped."
+                Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
+                logger.info(Colors.RED + "[ CLICKHOUSE INGESTION VERTICLE ] ClickHousePacketVerticle stopped."
                                 + Colors.RESET);
                 super.stop();
         }

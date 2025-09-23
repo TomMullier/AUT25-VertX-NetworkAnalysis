@@ -43,14 +43,14 @@ public class Main extends AbstractVerticle {
             }
         });
 
-        /* ----------------- Deploy the ClickHouseIngestionVerticle ----------------- */
+        /* ----------------- Deploy the ClickHousePacketVerticle ----------------- */
         if (store) {
-            vertx.deployVerticle(new ClickHouseIngestionVerticle(), res -> {
+            vertx.deployVerticle(new ClickHousePacketVerticle(), res -> {
                 if (res.succeeded()) {
-                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] ClickHouseIngestionVerticle deployed successfully!"
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] ClickHousePacketVerticle deployed successfully!"
                             + Colors.RESET);
                 } else {
-                    logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy ClickHouseIngestionVerticle: "
+                    logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy ClickHousePacketVerticle: "
                             + res.cause() + Colors.RESET);
                 }
             });
