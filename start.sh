@@ -33,6 +33,7 @@ else
 fi
 
 TOPIC_NAME="network-data"
+TOPIC_NAME2="network-flows"
 
 echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
 docker exec kafka \
@@ -44,6 +45,17 @@ docker exec kafka \
   --create --topic $TOPIC_NAME --partitions 1 --replication-factor 1
 
 echo "=== ✅ Topic $TOPIC_NAME has been reset. ==="
+
+echo "=== Resetting Kafka topic: $TOPIC_NAME2 ==="
+docker exec kafka \
+  kafka-topics --bootstrap-server localhost:9092 \
+  --delete --topic $TOPIC_NAME2 2>/dev/null
+
+docker exec kafka \
+  kafka-topics --bootstrap-server localhost:9092 \
+  --create --topic $TOPIC_NAME2 --partitions 1 --replication-factor 1
+
+echo "=== ✅ Topic $TOPIC_NAME2 has been reset. ==="
 
 echo "=== Ensuring ClickHouse database exists ==="
 docker exec -i clickhouse clickhouse-client --multiquery < src/main/resources/clickhouse-init/init.sql
