@@ -208,6 +208,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 rawData, 0,
                                 rawData.length);
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Parsed packet: " + packet);
+                if (!packet.contains(IpPacket.class))
+                        return; // not IP, ignore packet
+
                 IpPacket ipPacket = packet.get(IpPacket.class);
 
                 String srcIp = ipPacket.getHeader().getSrcAddr()

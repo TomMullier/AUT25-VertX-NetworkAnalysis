@@ -28,9 +28,10 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     dstPort UInt16,
     protocol String,
     bytes UInt32,
-    packets UInt32;
-    durationMs UInt32,
+    packets UInt32,
+    durationMs UInt32
 ) ENGINE = MergeTree()
+ORDER BY (flowKey, firstSeen);
 
 CREATE USER IF NOT EXISTS admin IDENTIFIED WITH plaintext_password BY 'admin';
 GRANT ALL ON network_analysis.* TO admin;
