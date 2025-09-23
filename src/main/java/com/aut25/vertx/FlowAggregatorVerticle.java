@@ -296,6 +296,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 jo.put("bytes", f.bytes);
                 jo.put("packetCount", f.packetCount);
                 jo.put("durationMs", f.lastSeen - f.firstSeen);
+                jo.put("flowKey", f.key);
 
                 String value = jo.encode();
 

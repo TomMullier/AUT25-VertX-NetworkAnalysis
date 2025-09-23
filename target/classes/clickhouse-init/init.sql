@@ -15,6 +15,23 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_data (
 ) ENGINE = MergeTree()
 ORDER BY timestamp;
 
+DROP TABLE IF EXISTS network_analysis.network_flows;
+
+CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
+    id String,
+    flowKey String,
+    firstSeen DateTime64(3, 'UTC'),
+    lastSeen DateTime64(3, 'UTC'),
+    srcIp String,
+    dstIp String,
+    srcPort UInt16,
+    dstPort UInt16,
+    protocol String,
+    bytes UInt32,
+    packets UInt32;
+    durationMs UInt32,
+) ENGINE = MergeTree()
+
 CREATE USER IF NOT EXISTS admin IDENTIFIED WITH plaintext_password BY 'admin';
 GRANT ALL ON network_analysis.* TO admin;
 GRANT ALL ON network_analysis.network_data TO admin;
