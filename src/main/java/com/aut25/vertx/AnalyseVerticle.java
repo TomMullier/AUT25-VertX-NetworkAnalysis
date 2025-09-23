@@ -40,7 +40,10 @@ public class AnalyseVerticle extends AbstractVerticle {
                 props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "600000"); // 10 minutes
                 props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000"); // 30s
                 props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000"); // 10s
+                props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
                 consumer = new KafkaConsumer<>(props);
+                logger.info("[ ANALYSE VERTICLE ] Kafka consumer initialized.");
 
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
                 switch (mode) {
@@ -177,8 +180,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                 consumer.commitSync();
                                                 logger.debug("[ ANALYSE VERTICLE ] Offsets committed.");
                                         }
-                                        
-                        }
+
+                                }
                         } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                                 logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Consumer interrupted: " + e.getMessage()

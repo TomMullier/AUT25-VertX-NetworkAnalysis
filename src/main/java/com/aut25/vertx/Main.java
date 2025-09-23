@@ -20,7 +20,7 @@ public class Main extends AbstractVerticle {
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
         logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + config.encodePrettily());
 
-        boolean store = config.getBoolean("store", false);
+        boolean store = config.getString("store", "false").equalsIgnoreCase("true");
         logger.info("[ MAIN VERTICLE ] Store configuration: " + store);
 
         /* ---------------------- Deploy the IngestionVerticle ---------------------- */
@@ -55,6 +55,17 @@ public class Main extends AbstractVerticle {
                 }
             });
         }
+
+        /* -------------------- Deploy the FlowAggregatorVerticle ------------------- */
+        vertx.deployVerticle(new FlowAggregatorVerticle(), res -> {
+            if (res.succeeded()) {
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] FlowAggregatorVerticle deployed successfully!"
+                        + Colors.RESET);
+            } else {
+                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy FlowAggregatorVerticle: " + res.cause()
+                        + Colors.RESET);
+            }
+        });
 
         /* ------------------------ Deploy the ApiVerticle ------------------------- */
         // vertx.deployVerticle(new ApiVerticle(), res -> {
