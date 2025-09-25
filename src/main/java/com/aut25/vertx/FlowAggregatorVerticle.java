@@ -32,8 +32,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String GROUP_ID = "flow-aggregator-group";
 
         // Flow timing (ms) - à ajuster
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS = 30_000; // flush si inactif 30s
-        private static final long FLOW_MAX_AGE_MS = 300_000; // flush si age > 5min
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS = 60_000; // flush si inactif > 1min
+        private static final long FLOW_MAX_AGE_MS = 600_000; // flush si age > 10min
         private static final long KAFKA_POLL_MS = 200; // durée poll Kafka
         private static final long FLOW_CLEAN_PERIOD_MS = 5_000; // vérification périodique flows
 
@@ -166,6 +166,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
 
                         logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed " + toFlush.size() + " flows.");
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Active flows count: " + flows.size());
 
                         logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow cleanup completed at "
                                         + System.currentTimeMillis());
@@ -196,42 +197,53 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         private void processRecord(JsonObject json) throws Exception {
                 // Parse the raw packet data
-                String rawPacketBase64 = json
-                                .getString("rawPacket");
+                String rawPacketBase64 = json.getString("rawPacket");
                 if (rawPacketBase64 == null) {
                         logger.warn("[ FLOWAGGREGATOR VERTICLE ] No rawPacket field in JSON.");
                         return;
                 }
-                byte[] rawData = Base64.getDecoder()
-                                .decode(rawPacketBase64);
-                Packet packet = EthernetPacket.newPacket(
-                                rawData, 0,
-                                rawData.length);
+
+                byte[] rawData = Base64.getDecoder().decode(rawPacketBase64);
+                Packet packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Parsed packet: " + packet);
+
                 if (!packet.contains(IpPacket.class))
                         return; // not IP, ignore packet
 
                 IpPacket ipPacket = packet.get(IpPacket.class);
 
-                String srcIp = ipPacket.getHeader().getSrcAddr()
-                                .getHostAddress();
-                String dstIp = ipPacket.getHeader().getDstAddr()
-                                .getHostAddress();
+                String srcIp = ipPacket.getHeader().getSrcAddr().getHostAddress();
+                String dstIp = ipPacket.getHeader().getDstAddr().getHostAddress();
                 String protocol = ipPacket.getHeader().getProtocol().name();
 
                 Long ts = json.getLong("timestamp", System.currentTimeMillis());
                 Long bytes = json.getLong("length", (long) rawData.length);
+
                 Ports ports = extractPorts(ipPacket);
                 Integer srcPort = ports.src;
                 Integer dstPort = ports.dst;
 
+                // Check for TCP FIN/RST to end flow early
+                AtomicBoolean flowEnded = new AtomicBoolean(false);
+
+                if (ipPacket.contains(TcpPacket.class)) {
+                        TcpPacket tcp = ipPacket.get(TcpPacket.class);
+                        TcpPacket.TcpHeader tcpHeader = tcp.getHeader();
+
+                        if (tcpHeader.getFin() || tcpHeader.getRst()) {
+                                flowEnded.set(true);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] TCP termination detected (FIN/RST). Will flush early.");
+                        }
+                }
+
                 logger.debug(String.format(
                                 "[ FLOWAGGREGATOR VERTICLE ] Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
-                                srcIp, srcPort == null ? 0 : srcPort, dstIp, dstPort == null ? 0 : dstPort, protocol,
-                                bytes, ts));
+                                srcIp, srcPort == null ? 0 : srcPort,
+                                dstIp, dstPort == null ? 0 : dstPort,
+                                protocol, bytes, ts, flowEnded));
 
-                // build 5-tuple key (order canonical)
-                String key = buildFlowKey(srcIp, dstIp, srcPort, dstPort, protocol);
+                // === Bilatéral : rendre la clé canonique ===
+                String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
 
                 flows.compute(key, (k, f) -> {
                         if (f == null) {
@@ -242,11 +254,18 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.firstSeen = Math.min(f.firstSeen, ts);
                         f.packetCount++;
                         f.bytes += bytes != null ? bytes : 0;
-                        // more features here (flags, tcp flags counts, etc.)
-
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow updated: \n\t" + f.key + "\n\t firstSeen="
-                                        + f.firstSeen + " lastSeen=" + f.lastSeen + " bytes=" + f.bytes
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow updated: \n\t" + f.key
+                                        + "\n\t firstSeen=" + f.firstSeen
+                                        + " lastSeen=" + f.lastSeen
+                                        + " bytes=" + f.bytes
                                         + " packets=" + f.packetCount);
+                        // if flow ended (TCP FIN/RST), flush immediately
+                        if (flowEnded.get()) {
+                                publishFlow(f);
+                                flows.remove(k);
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Flow flushed early due to FIN/RST: " + f.key);
+                                return null; // remove from map
+                        }
 
                         return f;
                 });
@@ -283,6 +302,30 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         }
 
         /**
+         * Build a bilateral flow key from 5-tuple
+         * 
+         * @param srcIp    the source IP address
+         * @param dstIp    the destination IP address
+         * @param srcPort  the source port
+         * @param dstPort  the destination port
+         * @param protocol the protocol used
+         * @return the constructed bilateral flow key
+         */
+        private String buildBilateralFlowKey(String srcIp, Integer srcPort,
+                        String dstIp, Integer dstPort,
+                        String protocol) {
+                String a = srcIp + ":" + (srcPort == null ? 0 : srcPort);
+                String b = dstIp + ":" + (dstPort == null ? 0 : dstPort);
+
+                // On met toujours la "plus petite" paire en premier
+                if (a.compareTo(b) <= 0) {
+                        return a + "-" + b + "-" + protocol;
+                } else {
+                        return b + "-" + a + "-" + protocol;
+                }
+        }
+
+        /**
          * Publish flow to Kafka topic as JSON
          * 
          * @param f Flow to publish
@@ -308,7 +351,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (ex != null) {
                                 ex.printStackTrace();
                         } else {
-                                logger.info(String.format(
+                                logger.debug(String.format(
                                                 "[ FLOWAGGREGATOR VERTICLE ] Published flow: key=%s bytes=%d packets=%d durationMs=%d",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen)));
                         }
