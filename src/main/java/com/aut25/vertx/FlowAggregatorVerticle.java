@@ -11,6 +11,8 @@ import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.TcpPacket;
 import org.pcap4j.packet.UdpPacket;
+import org.pcap4j.packet.factory.PacketFactories;
+import org.pcap4j.packet.namednumber.DataLinkType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,8 +34,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String GROUP_ID = "flow-aggregator-group";
 
         // Flow timing (ms) - à ajuster
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS = 60_000; // flush si inactif > 1min
-        private static final long FLOW_MAX_AGE_MS = 600_000; // flush si age > 10min
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS = 5_000; // flush si inactif > 5s
+        private static final long FLOW_MAX_AGE_MS = 300_000; // flush si age > 5min
         private static final long KAFKA_POLL_MS = 200; // durée poll Kafka
         private static final long FLOW_CLEAN_PERIOD_MS = 5_000; // vérification périodique flows
 
@@ -104,7 +106,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                                                                                         + json.encodePrettily());
                                                                         processRecord(json);
                                                                 } catch (Exception e) {
-                                                                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not parse IP/transport layer: {}",
+                                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Could not parse IP/transport layer: {}",
                                                                                         e.getMessage());
                                                                 }
                                                         } catch (Exception e) {
@@ -204,13 +206,22 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 }
 
                 byte[] rawData = Base64.getDecoder().decode(rawPacketBase64);
-                Packet packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
+                Packet packet;
+                try {
+                        packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
+                } catch (Throwable t) {
+                        logger.error("[ FLOWAGGREGATOR ] Cannot create Packet from raw bytes: {}",
+                                        t.getMessage());
+                        return; // skip this record
+                }
+
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Parsed packet: " + packet);
 
-                if (!packet.contains(IpPacket.class))
-                        return; // not IP, ignore packet
-
                 IpPacket ipPacket = packet.get(IpPacket.class);
+                if (ipPacket == null) {
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Not an IP packet, skipping.");
+                        return;
+                }
 
                 String srcIp = getPacketSrcIp(ipPacket);
                 String dstIp = getPacketDstIp(ipPacket);
@@ -250,25 +261,27 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
                         }
                         // update
-                        f.lastSeen = ts;
+                        f.lastSeen = Math.max(f.lastSeen, ts);
                         f.firstSeen = Math.min(f.firstSeen, ts);
                         f.packetCount++;
                         f.bytes += bytes != null ? bytes : 0;
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow updated: \n\t" + f.key
-                                        + "\n\t firstSeen=" + f.firstSeen
-                                        + " lastSeen=" + f.lastSeen
-                                        + " bytes=" + f.bytes
-                                        + " packets=" + f.packetCount);
-                        // if flow ended (TCP FIN/RST), flush immediately
-                        if (flowEnded.get()) {
-                                publishFlow(f);
-                                flows.remove(k);
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Flow flushed early due to FIN/RST: " + f.key);
-                                return null; // remove from map
-                        }
 
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow updated: {} firstSeen={} lastSeen={} bytes={} packets={}",
+                                        f.key, f.firstSeen, f.lastSeen, f.bytes, f.packetCount);
+
+                        // return f normally; do not flush inside compute
                         return f;
                 });
+
+                // after compute, check if the flow should be flushed
+                if (flowEnded.get()) {
+                        Flow endedFlow = flows.remove(key);
+                        if (endedFlow != null) {
+                                publishFlow(endedFlow);
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Flow flushed early due to FIN/RST: "
+                                                + endedFlow.key);
+                        }
+                }
         }
 
         /**
