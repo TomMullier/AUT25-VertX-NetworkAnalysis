@@ -212,14 +212,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 IpPacket ipPacket = packet.get(IpPacket.class);
 
-                String srcIp = ipPacket.getHeader().getSrcAddr().getHostAddress();
-                String dstIp = ipPacket.getHeader().getDstAddr().getHostAddress();
-                String protocol = ipPacket.getHeader().getProtocol().name();
+                String srcIp = getPacketSrcIp(ipPacket);
+                String dstIp = getPacketDstIp(ipPacket);
+                String protocol = getPacketProtocol(ipPacket);
 
                 Long ts = json.getLong("timestamp", System.currentTimeMillis());
                 Long bytes = json.getLong("length", (long) rawData.length);
 
-                Ports ports = extractPorts(ipPacket);
+                Ports ports = getPacketPorts(ipPacket);
                 Integer srcPort = ports.src;
                 Integer dstPort = ports.dst;
 
@@ -271,10 +271,62 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
         }
 
+        /**
+         * Extract source IP address from packet
+         * 
+         * @param packet the packet to extract the source IP from
+         * @return the source IP address as a String, or null if not found
+         */
+        String getPacketSrcIp(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getSrcAddr().getHostAddress();
+                }
+                return null;
+        }
+
+        /**
+         * Extract destination IP address from packet
+         * 
+         * @param packet the packet to extract the destination IP from
+         * @return the destination IP address as a String, or null if not found
+         */
+        String getPacketDstIp(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getDstAddr().getHostAddress();
+                }
+                return null;
+        }
+
+        /**
+         * Extract protocol from packet
+         * 
+         * @param packet the packet to extract the protocol from
+         * @return the protocol as a String, or null if not found
+         */
+        String getPacketProtocol(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getProtocol().name();
+                }
+                return null;
+        }
+
+        /**
+         * Helper class to hold source and destination ports
+         */
         record Ports(Integer src, Integer dst) {
         }
 
-        private Ports extractPorts(Packet ipPacket) {
+        /**
+         * Helper class to hold source and destination ports
+         * 
+         * @param ipPacket the IP packet to extract ports from
+         * @return a Ports object containing source and destination ports, or null if
+         *         not applicable
+         */
+        private Ports getPacketPorts(Packet ipPacket) {
                 if (ipPacket.getPayload() instanceof TcpPacket tcp) {
                         return new Ports(tcp.getHeader().getSrcPort().valueAsInt(),
                                         tcp.getHeader().getDstPort().valueAsInt());
@@ -388,4 +440,5 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         this.bytes = 0;
                 }
         }
+
 }
