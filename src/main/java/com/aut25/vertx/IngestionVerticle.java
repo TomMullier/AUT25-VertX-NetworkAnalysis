@@ -315,7 +315,9 @@ public class IngestionVerticle extends AbstractVerticle {
                                         processPacket(packet, delay);
 
                                 } catch (EOFException e) {
-                                        logger.info("[ INGESTION VERTICLE ] End of PCAP file reached.");
+                                        logger.info(Colors.CYAN
+                                                        + "[ INGESTION VERTICLE ] End of pcap file reached."
+                                                        + Colors.RESET);
                                         try {
                                                 Thread.sleep(1000000); // Wait a bit before closing
                                         } catch (InterruptedException ie) {

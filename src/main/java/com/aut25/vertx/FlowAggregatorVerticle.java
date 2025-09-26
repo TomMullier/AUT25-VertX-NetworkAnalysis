@@ -33,9 +33,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        // Flow timing (ms) - à ajuster
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS = 5_000; // flush si inactif > 5s
-        private static final long FLOW_MAX_AGE_MS = 300_000; // flush si age > 5min
+        // Flow timeouts (ms)
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500; // flush si inactif > 4.5s
+        private static final long FLOW_MAX_AGE_MS_TCP = 300_000; // flush si age > 5min
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // flush si inactif > 30s
+        private static final long FLOW_MAX_AGE_MS_UDP = 120_000; // flush si age > 2min
+
         private static final long KAFKA_POLL_MS = 200; // durée poll Kafka
         private static final long FLOW_CLEAN_PERIOD_MS = 5_000; // vérification périodique flows
 
@@ -148,30 +151,49 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 vertx.setPeriodic(FLOW_CLEAN_PERIOD_MS, id -> {
                         if (!running.get())
                                 return;
+
                         long now = System.currentTimeMillis();
                         List<Flow> toFlush = new ArrayList<>();
+
                         for (Flow f : flows.values()) {
-                                if (now - f.lastSeen >= FLOW_INACTIVITY_TIMEOUT_MS
-                                                || now - f.firstSeen >= FLOW_MAX_AGE_MS) {
-                                        // Move to flush list and remove from map
+                                long inactivityTimeout;
+                                long maxAge;
+
+                                // Choix des paramètres selon le protocole
+                                if (f.protocol == "TCP") {
+                                        inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_TCP;
+                                        maxAge = FLOW_MAX_AGE_MS_TCP;
+                                } else if (f.protocol == "UDP") {
+                                        inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_UDP;
+                                        maxAge = FLOW_MAX_AGE_MS_UDP;
+                                } else {
+                                        // fallback pour d'autres protocoles éventuels
+                                        inactivityTimeout = 10_000; // 10s
+                                        maxAge = 120_000; // 2min
+                                }
+
+                                // Vérifie si le flux doit être flush
+                                if (now - f.lastSeen >= inactivityTimeout || now - f.firstSeen >= maxAge) {
                                         if (flows.remove(f.key) != null) {
                                                 toFlush.add(f);
                                         }
                                 }
                         }
-                        // publish flushed flows
+
+                        // Publie les flows flushés
                         for (Flow f : toFlush) {
                                 logger.debug(String.format(
                                                 "[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key=%s bytes=%d packets=%d durationMs=%d",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen)));
                                 publishFlow(f);
                         }
-
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed " + toFlush.size() + " flows.");
+                        long udpToFlush = toFlush.stream().filter(f -> "UDP".equals(f.protocol)).count();
+                        long tcpToFlush = toFlush.size() - udpToFlush;
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed " + toFlush.size() + " flows (TCP="
+                                        + tcpToFlush
+                                        + " UDP=" + udpToFlush + ")");
                         logger.info("[ FLOWAGGREGATOR VERTICLE ] Active flows count: " + flows.size());
-
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow cleanup completed at "
-                                        + System.currentTimeMillis());
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow cleanup completed at " + now);
                 });
 
                 logger.info("[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle started.");
