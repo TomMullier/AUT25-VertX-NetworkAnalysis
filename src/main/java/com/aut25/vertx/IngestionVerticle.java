@@ -45,7 +45,8 @@ public class IngestionVerticle extends AbstractVerticle {
 
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ INGESTION VERTICLE ] Starting IngestionVerticle..." + Colors.RESET);
+                logger.info(Colors.GREEN + "[ INGESTION VERTICLE ]            Starting IngestionVerticle..."
+                                + Colors.RESET);
 
                 // Config file : get debug mode
                 JsonObject config = new JsonObject(
@@ -65,14 +66,14 @@ public class IngestionVerticle extends AbstractVerticle {
                 KafkaProducerRecord<String, String> resetRecord = KafkaProducerRecord.create("network-data", "reset");
                 producer.send(resetRecord, ar -> {
                         if (ar.succeeded()) {
-                                logger.info("[ INGESTION VERTICLE ] Kafka topic 'network-data' reset successfully.");
+                                logger.info(Colors.CYAN + "[ INGESTION VERTICLE ]            Kafka topic 'network-data' reset successfully." + Colors.RESET);
                         } else {
-                                logger.error("[ INGESTION VERTICLE ] Failed to reset Kafka topic: "
+                                logger.error("[ INGESTION VERTICLE ]            Failed to reset Kafka topic: "
                                                 + ar.cause().getMessage());
                         }
                 });
 
-                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode.toUpperCase());
+                logger.info(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase() + Colors.RESET);
                 switch (mode) {
                         case "json":
                                 JsonObject fileConfig = config.getJsonObject("json", new JsonObject());
@@ -93,7 +94,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         .map(JsonObject::mapFrom)
                                                         .toList();
                                 } catch (Exception e) {
-                                        logger.error("[ INGESTION VERTICLE ] Failed to read or parse file: "
+                                        logger.error("[ INGESTION VERTICLE ]            Failed to read or parse file: "
                                                         + e.getMessage());
                                         return;
                                 }
@@ -108,7 +109,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                         if (!it.hasNext()) {
                                                 it = records.iterator();
                                                 iteratorRef.set(it);
-                                                logger.debug("[ INGESTION VERTICLE ] End of file reached. Looping again...");
+                                                logger.debug("[ INGESTION VERTICLE ]            End of file reached. Looping again...");
                                         }
 
                                         JsonObject record = it.next();
@@ -116,9 +117,9 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         .create("network-data", record.encode());
                                         producer.send(kafkaRecord, ar -> {
                                                 if (ar.succeeded()) {
-                                                        logger.debug("[ INGESTION VERTICLE ] Record sent to Kafka.");
+                                                        logger.debug("[ INGESTION VERTICLE ]            Record sent to Kafka.");
                                                 } else {
-                                                        logger.error("[ INGESTION VERTICLE ] Failed to send record to Kafka: "
+                                                        logger.error("[ INGESTION VERTICLE ]            Failed to send record to Kafka: "
                                                                         + ar.cause().getMessage());
                                                 }
                                         });
@@ -145,16 +146,16 @@ public class IngestionVerticle extends AbstractVerticle {
                                 break;
                         case "none":
                                 logger.warn(Colors.YELLOW
-                                                + "[ INGESTION VERTICLE ] Mode is set to 'none', no ingestion will be performed."
+                                                + "[ INGESTION VERTICLE ]            Mode is set to 'none', no ingestion will be performed."
                                                 + Colors.RESET);
                                 return;
                         default:
                                 logger.error(
-                                                "[ INGESTION VERTICLE ] Unknown mode. No ingestion will be performed.");
+                                                "[ INGESTION VERTICLE ]            Unknown mode. No ingestion will be performed.");
                                 break;
                 }
 
-                logger.info("[ INGESTION VERTICLE ] IngestionVerticle started!");
+                logger.info("[ INGESTION VERTICLE ]            IngestionVerticle started!");
 
         }
 
@@ -170,7 +171,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 props.put("acks", "1");
 
                 producer = KafkaProducer.create(vertx, props);
-                logger.info("[ INGESTION VERTICLE ] Kafka Producer (Vert.x) initialized.");
+                logger.info("[ INGESTION VERTICLE ]            Kafka Producer (Vert.x) initialized.");
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
@@ -206,7 +207,8 @@ public class IngestionVerticle extends AbstractVerticle {
                 try {
                         PcapNetworkInterface nif = Pcaps.getDevByName(networkInterface);
                         if (nif == null) {
-                                logger.error("[ INGESTION VERTICLE ] Network interface not found: " + networkInterface);
+                                logger.error("[ INGESTION VERTICLE ]            Network interface not found: "
+                                                + networkInterface);
                                 return;
                         }
 
@@ -233,7 +235,8 @@ public class IngestionVerticle extends AbstractVerticle {
                         });
 
                 } catch (PcapNativeException e) {
-                        logger.error("[ INGESTION VERTICLE ] Error accessing network interface: " + e.getMessage());
+                        logger.error("[ INGESTION VERTICLE ]            Error accessing network interface: "
+                                        + e.getMessage());
                 }
         }
 
@@ -250,13 +253,13 @@ public class IngestionVerticle extends AbstractVerticle {
                 try {
                         handle = Pcaps.openOffline(pcapFilePath, PcapHandle.TimestampPrecision.NANO);
                 } catch (PcapNativeException e) {
-                        logger.error("[ INGESTION VERTICLE ] Failed to open pcap file: " + e.getMessage());
+                        logger.error("[ INGESTION VERTICLE ]            Failed to open pcap file: " + e.getMessage());
                         return;
                 }
 
-                logger.info("[ INGESTION VERTICLE ] PCAP file opened successfully: {}", pcapFilePath);
+                logger.info("[ INGESTION VERTICLE ]            PCAP file opened successfully: {}", pcapFilePath);
                 DataLinkType dlt = handle.getDlt();
-                logger.debug("[ INGESTION VERTICLE ] Data Link Type: {}", dlt);
+                logger.debug("[ INGESTION VERTICLE ]            Data Link Type: {}", dlt);
 
                 vertx.executeBlocking(promise -> {
                         try {
@@ -266,7 +269,8 @@ public class IngestionVerticle extends AbstractVerticle {
 
                                 Packet firstPacket = handle.getNextPacketEx();
                                 if (firstPacket == null) {
-                                        logger.warn("[ INGESTION VERTICLE ] No packets found in file {}", pcapFilePath);
+                                        logger.warn("[ INGESTION VERTICLE ]            No packets found in file {}",
+                                                        pcapFilePath);
                                         promise.complete();
                                         return;
                                 }
@@ -296,7 +300,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 handle.close();
                                 promise.complete(List.of(packets, deltas));
                         } catch (Exception e) {
-                                logger.error("[ INGESTION VERTICLE ] Error reading pcap: " + e.getMessage());
+                                logger.error("[ INGESTION VERTICLE ]            Error reading pcap: " + e.getMessage());
                                 handle.close();
                                 promise.fail(e);
                         }
@@ -313,26 +317,26 @@ public class IngestionVerticle extends AbstractVerticle {
                                 AtomicInteger index = new AtomicInteger(0);
                                 publishNextPacket(packets, deltas, index);
                         } else {
-                                logger.error("[ INGESTION VERTICLE ] Failed to process pcap file: "
+                                logger.error("[ INGESTION VERTICLE ]            Failed to process pcap file: "
                                                 + res.cause().getMessage());
                         }
                 });
         }
 
         private void publishNextPacket(List<Packet> packets, List<Long> deltas, AtomicInteger index) {
-                if (index.get() >= packets.size() || !running.get()) return;
-            
+                if (index.get() >= packets.size() || !running.get())
+                        return;
+
                 Packet packet = packets.get(index.get());
                 long rawDelay = deltas.get(index.getAndIncrement());
                 final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms
-            
+
                 vertx.setTimer(safeDelay, id -> {
-                    processPacket(packet, safeDelay);
-                    // Appel récursif pour le paquet suivant
-                    publishNextPacket(packets, deltas, index);
+                        processPacket(packet, safeDelay);
+                        // Appel récursif pour le paquet suivant
+                        publishNextPacket(packets, deltas, index);
                 });
-            }
-            
+        }
 
         /**
          * Process and send a packet to Kafka
@@ -353,7 +357,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 record.encode());
                 producer.send(kafkaRecord, ar -> {
                         if (ar.failed()) {
-                                logger.error("[ INGESTION VERTICLE ] Failed to send packet record: "
+                                logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "
                                                 + ar.cause().getMessage());
                         }
                 });
@@ -369,6 +373,6 @@ public class IngestionVerticle extends AbstractVerticle {
                 if (producer != null) {
                         producer.close();
                 }
-                logger.info("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
+                logger.info("[ INGESTION VERTICLE ]            IngestionVerticle stopped!");
         }
 }

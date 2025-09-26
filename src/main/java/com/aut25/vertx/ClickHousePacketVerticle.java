@@ -28,7 +28,8 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
         @Override
         public void start() throws Exception {
                 Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
-                logger.info("[ CLICKHOUSE PACKET VERTICLE ] Starting ClickHousePacketVerticle...");
+                logger.info(Colors.GREEN + "[ CLICKHOUSE PACKET VERTICLE ]    Starting ClickHousePacketVerticle..."
+                                + Colors.RESET);
 
                 // Connect to ClickHouse
                 String jdbcUrl = "jdbc:clickhouse://localhost:8123/network_analysis";
@@ -94,7 +95,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
 
                                 }
                         } catch (Exception e) {
-                                logger.error("[ CLICKHOUSE PACKET VERTICLE ] Error processing record: {}",
+                                logger.error("[ CLICKHOUSE PACKET VERTICLE ]    Error processing record: {}",
                                                 e.getMessage());
                         }
 
@@ -103,7 +104,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                 if (ar.failed()) {
                                         if (ar.cause().getMessage() != null) {
                                                 logger.error(
-                                                                "[ CLICKHOUSE PACKET VERTICLE ] Commit failed: "
+                                                                "[ CLICKHOUSE PACKET VERTICLE ]    Commit failed: "
                                                                                 + ar.cause().getMessage());
                                         }
                                 }
@@ -113,14 +114,14 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 // Subscribe au topic
                 consumer.subscribe("network-data", ar -> {
                         if (ar.succeeded()) {
-                                logger.info("[ CLICKHOUSE PACKET VERTICLE ] Subscribed to topic network-data");
+                                logger.info(Colors.CYAN + "[ CLICKHOUSE PACKET VERTICLE ]    Subscribed to topic network-data" + Colors.RESET);
                         } else {
-                                logger.error("[ CLICKHOUSE PACKET VERTICLE ] Failed to subscribe: {}",
+                                logger.error("[ CLICKHOUSE PACKET VERTICLE ]    Failed to subscribe: {}",
                                                 ar.cause().getMessage());
                         }
                 });
 
-                logger.info("[ CLICKHOUSE PACKET VERTICLE ] ClickHousePacketVerticle deployed successfully!");
+                logger.info("[ CLICKHOUSE PACKET VERTICLE ]    ClickHousePacketVerticle deployed successfully!");
         }
 
         @Override
@@ -131,6 +132,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 if (clickhouseConn != null)
                         clickhouseConn.close();
                 Logger logger = LoggerFactory.getLogger(ClickHousePacketVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE PACKET VERTICLE ] ClickHousePacketVerticle stopped!" + Colors.RESET);
+                logger.info(Colors.RED + "[ CLICKHOUSE PACKET VERTICLE ]    ClickHousePacketVerticle stopped!"
+                                + Colors.RESET);
         }
 }

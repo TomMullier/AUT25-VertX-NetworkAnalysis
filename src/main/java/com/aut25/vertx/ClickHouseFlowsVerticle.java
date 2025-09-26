@@ -32,7 +32,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
         @Override
         public void start() throws Exception {
                 Logger logger = LoggerFactory.getLogger(ClickHouseFlowsVerticle.class);
-                logger.info("[ CLICKHOUSE FLOWS VERTICLE ] Starting ClickHouseFlowsVerticle...");
+                logger.info(Colors.GREEN + "[ CLICKHOUSE FLOWS VERTICLE ]     Starting ClickHouseFlowsVerticle..."
+                                + Colors.RESET);
 
                 // Connect to ClickHouse
                 String jdbcUrl = "jdbc:clickhouse://localhost:8123/network_analysis";
@@ -96,7 +97,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 }
 
                         } catch (Exception e) {
-                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ] Error processing record: {}",
+                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Error processing record: {}",
                                                 e.getMessage());
                         }
 
@@ -106,7 +107,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
                                         if (ar.cause().getMessage() != null) {
                                                 logger.error(
-                                                                "[ CLICKHOUSE FLOWS VERTICLE ] Commit failed: "
+                                                                "[ CLICKHOUSE FLOWS VERTICLE ]     Commit failed: "
                                                                                 + ar.cause().getMessage());
                                         }
 
@@ -117,14 +118,14 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 // Subscribe to topic
                 consumer.subscribe("network-flows", ar -> {
                         if (ar.succeeded()) {
-                                logger.info("[ CLICKHOUSE FLOWS VERTICLE ] Subscribed to topic network-flows");
+                                logger.info(Colors.CYAN + "[ CLICKHOUSE FLOWS VERTICLE ]     Subscribed to topic network-flows" + Colors.RESET);
                         } else {
-                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ] Failed to subscribe: {}",
+                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Failed to subscribe: {}",
                                                 ar.cause().getMessage());
                         }
                 });
 
-                logger.info("[ CLICKHOUSE FLOWS VERTICLE ] ClickHouseFlowsVerticle deployed successfully!");
+                logger.info("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
         }
 
         @Override
@@ -135,7 +136,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 if (clickhouseConn != null)
                         clickhouseConn.close();
                 Logger logger = LoggerFactory.getLogger(ClickHouseFlowsVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ] ClickHouseFlowsVerticle stopped."
+                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle stopped."
                                 + Colors.RESET);
         }
 }

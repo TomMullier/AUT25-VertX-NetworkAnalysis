@@ -53,7 +53,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         @Override
         public void start() throws Exception {
-                logger.info("[ FLOWAGGREGATOR VERTICLE ] Starting FlowAggregatorVerticle...");
+                logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
+                                + Colors.RESET);
 
                 // Kafka consumer config
                 Map<String, String> consumerConfig = new HashMap<>();
@@ -78,9 +79,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 // Subscribe to input topic
                 consumer.subscribe(IN_TOPIC, ar -> {
                         if (ar.succeeded()) {
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Subscribed to topic {}", IN_TOPIC);
+                                logger.info(Colors.CYAN + "[ FLOWAGGREGATOR VERTICLE ]       Subscribed to topic {}",
+                                                IN_TOPIC + Colors.RESET);
                         } else {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to subscribe: {}",
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to subscribe: {}",
                                                 ar.cause().getMessage());
                         }
                 });
@@ -96,13 +98,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         try {
                                 JsonObject json = new JsonObject(value);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Processing record: {}",
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Processing record: {}",
                                                 json.encodePrettily());
 
                                 processRecord(json);
 
                         } catch (Exception e) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Error processing record: {}", e.getMessage());
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                                                e.getMessage());
                         }
 
                         // Commit offsets manually
@@ -110,7 +113,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 if (ar.failed()) {
                                         if (ar.cause().getMessage() != null) {
                                                 logger.error(
-                                                                "[ FLOWAGGREGATOR VERTICLE ] Commit failed: "
+                                                                "[ FLOWAGGREGATOR VERTICLE ]       Commit failed: "
                                                                                 + ar.cause().getMessage());
                                         }
                                 }
@@ -147,16 +150,17 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
 
                         for (Flow f : toFlush) {
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
                                 publishFlow(f);
                         }
 
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows, active flows: {}", toFlush.size(),
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows, active flows: {}",
+                                        toFlush.size(),
                                         flows.size());
                 });
 
-                logger.info("[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle started.");
+                logger.info("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
         }
 
         /**
@@ -171,7 +175,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         consumer.close();
                 if (producer != null)
                         producer.close();
-                logger.info(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle stopped!" + Colors.RESET);
+                logger.info(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle stopped!"
+                                + Colors.RESET);
         }
 
         /**
@@ -183,7 +188,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 // Parse the raw packet data
                 String rawPacketBase64 = json.getString("rawPacket");
                 if (rawPacketBase64 == null) {
-                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] No rawPacket field in JSON.");
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       No rawPacket field in JSON.");
                         return;
                 }
 
@@ -197,11 +202,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return; // skip this record
                 }
 
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Parsed packet: " + packet);
+                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Parsed packet: " + packet);
 
                 IpPacket ipPacket = packet.get(IpPacket.class);
                 if (ipPacket == null) {
-                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Not an IP packet, skipping.");
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Not an IP packet, skipping.");
                         return;
                 }
 
@@ -225,12 +230,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         if (tcpHeader.getFin() || tcpHeader.getRst()) {
                                 flowEnded.set(true);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] TCP termination detected (FIN/RST). Will flush early.");
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (FIN/RST). Will flush early.");
                         }
                 }
 
                 logger.debug(String.format(
-                                "[ FLOWAGGREGATOR VERTICLE ] Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
+                                "[ FLOWAGGREGATOR VERTICLE ]       Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
                                 srcIp, srcPort == null ? 0 : srcPort,
                                 dstIp, dstPort == null ? 0 : dstPort,
                                 protocol, bytes, ts, flowEnded));
@@ -248,7 +253,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.packetCount++;
                         f.bytes += bytes != null ? bytes : 0;
 
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow updated: {} firstSeen={} lastSeen={} bytes={} packets={}",
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow updated: {} firstSeen={} lastSeen={} bytes={} packets={}",
                                         f.key, f.firstSeen, f.lastSeen, f.bytes, f.packetCount);
 
                         // return f normally; do not flush inside compute
@@ -260,7 +265,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Flow endedFlow = flows.remove(key);
                         if (endedFlow != null) {
                                 publishFlow(endedFlow);
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Flow flushed early due to FIN/RST: "
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
                                                 + endedFlow.key);
                         }
                 }
@@ -397,7 +402,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 producer.write(record, ar -> {
                         if (ar.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {}: {}", f.key,
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}", f.key,
                                                 ar.cause().getMessage());
                         }
                 });

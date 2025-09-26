@@ -18,7 +18,7 @@ public class Main extends AbstractVerticle {
 
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
-        logger.info(Colors.GREEN + "[ MAIN VERTICLE ] Starting MainVerticle..." + Colors.RESET);
+        logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Starting MainVerticle..." + Colors.RESET);
 
         // Load configuration from JSON file
         JsonObject config = new JsonObject(
@@ -26,7 +26,7 @@ public class Main extends AbstractVerticle {
         logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + config.encodePrettily());
 
         boolean store = config.getString("store", "false").equalsIgnoreCase("true");
-        logger.info("[ MAIN VERTICLE ] Store configuration: " + store);
+        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Store configuration: " + store + Colors.RESET);
 
         // Deploy verticles based on configuration
         deployAndTrack(new IngestionVerticle());
@@ -37,6 +37,10 @@ public class Main extends AbstractVerticle {
         if (store) {
             deployAndTrack(new ClickHousePacketVerticle());
             deployAndTrack(new ClickHouseFlowsVerticle());
+        } else {
+            logger.info(Colors.YELLOW
+                    + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."
+                    + Colors.RESET);
         }
 
         startPromise.complete();
@@ -52,10 +56,10 @@ public class Main extends AbstractVerticle {
             if (res.succeeded()) {
                 String id = res.result();
                 deploymentIds.add(id);
-                logger.info(Colors.GREEN + "[ MAIN VERTICLE ] " + verticle.getClass().getSimpleName()
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 " + verticle.getClass().getSimpleName()
                         + " deployed successfully! id=" + id + Colors.RESET);
             } else {
-                logger.error(Colors.RED + "[ MAIN VERTICLE ] Failed to deploy "
+                logger.error(Colors.RED + "[ MAIN VERTICLE ]                 Failed to deploy "
                         + verticle.getClass().getSimpleName() + ": " + res.cause() + Colors.RESET);
             }
         });
@@ -69,11 +73,11 @@ public class Main extends AbstractVerticle {
      */
     @Override
     public void stop(Promise<Void> stopPromise) throws Exception {
-        logger.info(Colors.RED + "[ MAIN VERTICLE ] Stopping MainVerticle..." + Colors.RESET);
+        logger.info(Colors.RED + "[ MAIN VERTICLE ]                 Stopping MainVerticle..." + Colors.RESET);
 
         // Stopper tous les verticles explicitement
         if (deploymentIds.isEmpty()) {
-            logger.info("[ MAIN VERTICLE ] No verticles to undeploy.");
+            logger.info(Colors.RED + "[ MAIN VERTICLE ]                 No verticles to undeploy." + Colors.RESET);
             stopPromise.complete();
             return;
         }

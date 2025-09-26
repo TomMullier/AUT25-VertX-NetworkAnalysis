@@ -32,7 +32,7 @@ public class AnalyseVerticle extends AbstractVerticle {
 
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ] Starting AnalyseVerticle..." + Colors.RESET);
+                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..." + Colors.RESET);
                 // Get mode from config, default to "pcap"
                 JsonObject config = new JsonObject(
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
@@ -51,12 +51,12 @@ public class AnalyseVerticle extends AbstractVerticle {
                                 break;
                         case "none":
                                 logger.warn(Colors.YELLOW
-                                                + "[ ANALYSE VERTICLE ] Mode is set to 'none', no analysis will be performed."
+                                                + "[ ANALYSE VERTICLE ]              Mode is set to 'none', no analysis will be performed."
                                                 + Colors.RESET);
                                 return;
                         default:
                                 logger.warn(Colors.YELLOW
-                                                + "[ ANALYSE VERTICLE ] Unknown mode '{}', defaulting to PCAP."
+                                                + "[ ANALYSE VERTICLE ]              Unknown mode '{}', defaulting to PCAP."
                                                 + Colors.RESET,
                                                 mode);
                                 mode = "pcap";
@@ -70,7 +70,8 @@ public class AnalyseVerticle extends AbstractVerticle {
          * @param delay the delay in milliseconds between reads
          */
         private void readFromKafka_ActionEveryDelay(String topic, long delay) {
-                logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ] Subscribing to Kafka topic: " + topic + Colors.RESET);
+                logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribing to Kafka topic: " + topic
+                                + Colors.RESET);
 
                 // Config Kafka
                 Map<String, String> config = new HashMap<>();
@@ -89,9 +90,10 @@ public class AnalyseVerticle extends AbstractVerticle {
                 KafkaConsumer<String, String> consumer = KafkaConsumer.create(vertx, config);
 
                 consumer.subscribe(topic)
-                                .onSuccess(v -> logger.info("[ ANALYSE VERTICLE ] Subscribed to " + topic))
+                                .onSuccess(v -> logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to " + topic
+                                                + Colors.RESET))
                                 .onFailure(err -> logger.error(
-                                                "[ ANALYSE VERTICLE ] Failed to subscribe: " + err.getMessage()));
+                                                "[ ANALYSE VERTICLE ]              Failed to subscribe: " + err.getMessage()));
 
                 // Use executeBlocking to avoid blocking the event loop
                 // Read messages in a loop with the specified delay
@@ -229,7 +231,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                                 try {
                                         String value = record.value();
                                         if (value == null || value.isEmpty() || value.equals("reset")) {
-                                                logger.warn("[ ANALYSE VERTICLE ] Received empty record, skipping.");
+                                                logger.warn("[ ANALYSE VERTICLE ]              Received empty record, skipping.");
                                                 return;
                                         }
 
@@ -243,7 +245,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                 // Parse le paquet brut
                                                 String rawPacketBase64 = json.getString("rawPacket");
                                                 if (rawPacketBase64 == null) {
-                                                        logger.warn("[ ANALYSE VERTICLE ] No rawPacket field in JSON.");
+                                                        logger.warn("[ ANALYSE VERTICLE ]              No rawPacket field in JSON.");
                                                         return;
                                                 }
                                                 byte[] rawData = Base64.getDecoder().decode(rawPacketBase64);
@@ -272,10 +274,10 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         }
 
                                         // Log le paquet
-                                        logger.debug(Colors.CYAN + "[ ANALYSE VERTICLE ] Parsed JSON: " +
+                                        logger.debug(Colors.CYAN + "[ ANALYSE VERTICLE ]              Parsed JSON: " +
                                                         json.encodePrettily() + Colors.RESET);
 
-                                        logger.debug(Colors.YELLOW + "[ ANALYSE VERTICLE ] Raw Packet Data: "
+                                        logger.debug(Colors.YELLOW + "[ ANALYSE VERTICLE ]              Raw Packet Data: "
                                                         + Colors.RESET);
                                         logger.debug(Colors.YELLOW + json.getValue("rawPacket").toString()
                                                         + Colors.RESET);
@@ -283,19 +285,19 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         // Commit manuel (async)
                                         consumer.commit()
                                                         .onSuccess(v -> logger.debug(
-                                                                        "[ ANALYSE VERTICLE ] Offsets committed."))
+                                                                        "[ ANALYSE VERTICLE ]              Offsets committed."))
                                                         .onFailure(err -> {
                                                                 if (err.getMessage() != null) {
                                                                         logger.error(
-                                                                                        "[ ANALYSE VERTICLE ] Commit failed: "
-                                                                                                + err.getMessage());
+                                                                                        "[ ANALYSE VERTICLE ]              Commit failed: "
+                                                                                                        + err.getMessage());
                                                                 }
                                                         });
 
                                 } catch (Exception e) {
-                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
+                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ]              Failed to parse JSON: "
                                                         + e.getMessage() + Colors.RESET);
-                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Original record: "
+                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ]              Original record: "
                                                         + record.value() + Colors.RESET);
                                 }
                         });
@@ -303,9 +305,10 @@ public class AnalyseVerticle extends AbstractVerticle {
 
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                         consumer.close()
-                                        .onSuccess(v -> logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed."))
+                                        .onSuccess(v -> logger
+                                                        .info("[ ANALYSE VERTICLE ]              Kafka consumer closed."))
                                         .onFailure(err -> logger
-                                                        .error("[ ANALYSE VERTICLE ] Error closing Kafka consumer: "
+                                                        .error("[ ANALYSE VERTICLE ]              Error closing Kafka consumer: "
                                                                         + err.getMessage()));
                 }));
         }
@@ -315,11 +318,12 @@ public class AnalyseVerticle extends AbstractVerticle {
                 if (consumer != null) {
                         consumer.close()
                                         .onSuccess(v -> logger.info(
-                                                        "[ ANALYSE VERTICLE ] Kafka consumer closed proprement ✅"))
-                                        .onFailure(err -> logger.error("[ ANALYSE VERTICLE ] Error closing consumer",
+                                                        "[ ANALYSE VERTICLE ]              Kafka consumer closed proprement ✅"))
+                                        .onFailure(err -> logger.error(
+                                                        "[ ANALYSE VERTICLE ]              Error closing consumer",
                                                         err));
                 }
-                logger.info(Colors.RED + "[ ANALYSE VERTICLE ] AnalyseVerticle stopped!" + Colors.RESET);
+                logger.info(Colors.RED + "[ ANALYSE VERTICLE ]              AnalyseVerticle stopped!" + Colors.RESET);
         }
 
 }
