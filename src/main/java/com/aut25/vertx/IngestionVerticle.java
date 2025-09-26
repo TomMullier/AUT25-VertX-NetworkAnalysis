@@ -8,13 +8,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.io.EOFException;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -28,13 +29,19 @@ import org.pcap4j.core.Pcaps;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.concurrent.Executors;
+import io.vertx.kafka.client.producer.KafkaProducer;
+import io.vertx.kafka.client.producer.KafkaProducerRecord;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
 
 public class IngestionVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(IngestionVerticle.class);
         private KafkaProducer<String, String> producer;
+        private final AtomicBoolean running = new AtomicBoolean(true);
 
         @Override
         public void start() throws Exception {
@@ -55,84 +62,67 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
-                producer.send(new ProducerRecord<>("network-data", "reset"), (metadata, exception) -> {
-                        if (exception != null) {
-                                logger.error("[ INGESTION VERTICLE ] Failed to reset Kafka topic: "
-                                                + exception.getMessage());
-                        } else {
+                KafkaProducerRecord<String, String> resetRecord = KafkaProducerRecord.create("network-data", "reset");
+                producer.send(resetRecord, ar -> {
+                        if (ar.succeeded()) {
                                 logger.info("[ INGESTION VERTICLE ] Kafka topic 'network-data' reset successfully.");
+                        } else {
+                                logger.error("[ INGESTION VERTICLE ] Failed to reset Kafka topic: "
+                                                + ar.cause().getMessage());
                         }
                 });
 
                 logger.info("[ INGESTION VERTICLE ][ CONFIG ] Mode: " + mode.toUpperCase());
                 switch (mode) {
                         case "json":
-                                /* ------------------------ Parameters for json mode ------------------------ */
                                 JsonObject fileConfig = config.getJsonObject("json", new JsonObject());
-                                // Get path and ingestion interval from config file
                                 String filePath = fileConfig.getString("file-path", "data/sample_data.json");
                                 int interval = fileConfig.getInteger("ingestion-interval-ms", 1000);
-                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
-                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): "
-                                                + interval);
 
-                                /* ------------------------ READ FILE AND PARSE JSON ------------------------ */
+                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
+                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): " + interval);
+
                                 List<JsonObject> records;
                                 try {
                                         String content = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
                                         ObjectMapper mapper = new ObjectMapper();
-
                                         List<Map<String, Object>> listOfMaps = mapper.readValue(
                                                         content, new TypeReference<List<Map<String, Object>>>() {
                                                         });
-
                                         records = listOfMaps.stream()
                                                         .map(JsonObject::mapFrom)
                                                         .toList();
-
                                 } catch (Exception e) {
                                         logger.error("[ INGESTION VERTICLE ] Failed to read or parse file: "
                                                         + e.getMessage());
                                         return;
                                 }
 
-                                /* --------------- Publication of records at regular intervals -------------- */
-                                // AtomicReference to keep track of the iterator state
                                 AtomicReference<Iterator<JsonObject>> iteratorRef = new AtomicReference<>(
                                                 records.iterator());
-
                                 vertx.setPeriodic(interval, id -> {
+                                        if (!running.get())
+                                                return;
+
                                         Iterator<JsonObject> it = iteratorRef.get();
                                         if (!it.hasNext()) {
-                                                // Reset iterator if end of list is reached to loop
                                                 it = records.iterator();
                                                 iteratorRef.set(it);
                                                 logger.debug("[ INGESTION VERTICLE ] End of file reached. Looping again...");
                                         }
-                                        // Publication of the next record
+
                                         JsonObject record = it.next();
-                                        // Publish record on Kafka topic "network-data"
-                                        ProducerRecord<String, String> kafkaRecord = new ProducerRecord<>(
-                                                        "network-data", record.encode());
-                                        producer.send(kafkaRecord, (metadata, exception) -> {
-                                                if (exception != null) {
-                                                        logger.error(
-                                                                        "[ INGESTION VERTICLE ] Failed to send record to Kafka: "
-                                                                                        + exception.getMessage());
+                                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord
+                                                        .create("network-data", record.encode());
+                                        producer.send(kafkaRecord, ar -> {
+                                                if (ar.succeeded()) {
+                                                        logger.debug("[ INGESTION VERTICLE ] Record sent to Kafka.");
                                                 } else {
-                                                        logger.debug(
-                                                                        "[ INGESTION VERTICLE ] Record sent to Kafka topic "
-                                                                                        + metadata.topic()
-                                                                                        + " partition "
-                                                                                        + metadata.partition()
-                                                                                        + " offset "
-                                                                                        + metadata.offset());
+                                                        logger.error("[ INGESTION VERTICLE ] Failed to send record to Kafka: "
+                                                                        + ar.cause().getMessage());
                                                 }
                                         });
-                                        logger.debug("[ INGESTION VERTICLE ] Published record from file: \n"
-                                                        + record.encodePrettily());
                                 });
-
                                 break;
 
                         case "pcap":
@@ -173,18 +163,14 @@ public class IngestionVerticle extends AbstractVerticle {
          * Configure Kafka producer with necessary properties
          */
         private void configureKafkaProducer() {
-                // Config Kafka Producer
                 Properties props = new Properties();
-                props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"); // ton broker Kafka
-                props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+                props.put("bootstrap.servers", "localhost:9092");
+                props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+                props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+                props.put("acks", "1");
 
-                producer = new KafkaProducer<>(props);
-
-                logger.info("[ INGESTION VERTICLE ] Kafka Producer initialized.");
-
-                logger.debug("[ INGESTION VERTICLE ] Kafka producer configured with bootstrap servers: "
-                                + props.getProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+                producer = KafkaProducer.create(vertx, props);
+                logger.info("[ INGESTION VERTICLE ] Kafka Producer (Vert.x) initialized.");
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
@@ -217,24 +203,18 @@ public class IngestionVerticle extends AbstractVerticle {
          * to Kafka.
          */
         private void ingestInRealTime(String networkInterface) {
-                PcapNetworkInterface nif;
-                if (networkInterface == null) {
-                        logger.error("[ INGESTION VERTICLE ] No network interface specified.");
-                        return;
-                }
                 try {
-                        nif = Pcaps.getDevByName(networkInterface);
+                        PcapNetworkInterface nif = Pcaps.getDevByName(networkInterface);
                         if (nif == null) {
                                 logger.error("[ INGESTION VERTICLE ] Network interface not found: " + networkInterface);
                                 return;
                         }
 
-                        logger.info("[ INGESTION VERTICLE ] Capturing packets from network interface: "
-                                        + networkInterface);
-                        final int snapLen = 65536; // Capture all packets, no truncation
-                        final int timeout = 10; // 10 ms
-                        final PcapHandle handle = nif.openLive(snapLen,
-                                        PcapNetworkInterface.PromiscuousMode.PROMISCUOUS, timeout);
+                        final int snapLen = 65536;
+                        final int timeout = 10;
+                        PcapHandle handle = nif.openLive(snapLen, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS,
+                                        timeout);
+
                         AtomicReference<Long> timestamp = new AtomicReference<>(System.currentTimeMillis());
                         PacketListener listener = packet -> {
                                 long packetTimestamp = System.currentTimeMillis();
@@ -244,18 +224,17 @@ public class IngestionVerticle extends AbstractVerticle {
                         };
 
                         ExecutorService pool = Executors.newSingleThreadExecutor();
-                        Task t = new Task(handle, listener);
-                        pool.execute(t);
+                        pool.execute(() -> {
+                                try {
+                                        handle.loop(-1, listener);
+                                } catch (Exception e) {
+                                        e.printStackTrace();
+                                }
+                        });
 
                 } catch (PcapNativeException e) {
                         logger.error("[ INGESTION VERTICLE ] Error accessing network interface: " + e.getMessage());
-                        logger.error("[ INGESTION VERTICLE ] Please check if the interface name is correct and if the necessary permissions are granted.");
-                        return;
-                } catch (Exception e) {
-                        logger.error("[ INGESTION VERTICLE ] Unexpected error: " + e.getMessage());
-                        return;
                 }
-
         }
 
         /* -------------------------------- Mode pcap ------------------------------- */
@@ -274,66 +253,86 @@ public class IngestionVerticle extends AbstractVerticle {
                         logger.error("[ INGESTION VERTICLE ] Failed to open pcap file: " + e.getMessage());
                         return;
                 }
+
                 logger.info("[ INGESTION VERTICLE ] PCAP file opened successfully: {}", pcapFilePath);
                 DataLinkType dlt = handle.getDlt();
                 logger.debug("[ INGESTION VERTICLE ] Data Link Type: {}", dlt);
 
-                try {
-                        Packet firstPacket = handle.getNextPacketEx();
-                        if (firstPacket == null) {
-                                logger.warn("[ INGESTION VERTICLE ] No packets found in file {}", pcapFilePath);
-                                return;
-                        }
+                vertx.executeBlocking(promise -> {
+                        try {
+                                // Lire tous les paquets et calculer les deltas de temps
+                                List<Packet> packets = new ArrayList<>();
+                                List<Long> deltas = new ArrayList<>();
 
-                        // Reference timestamp and time tracking
-                        Timestamp firstTimestamp = handle.getTimestamp();
-                        long startTime = System.nanoTime();
-
-                        logger.info("[ INGESTION VERTICLE ] Starting replay of packets...");
-
-                        // Process the first packet
-                        processPacket(firstPacket, 0);
-
-                        // Process remaining packets
-                        while (true) {
-                                try {
-                                        Packet packet = handle.getNextPacketEx();
-                                        if (packet == null)
-                                                break;
-
-                                        Timestamp currentTs = handle.getTimestamp();
-
-                                        // Calculate delay relative to the first packet
-                                        long expectedDelta = (currentTs.getTime() - firstTimestamp.getTime());
-                                        long realDelta = (System.nanoTime() - startTime) / 1_000_000; // in ms
-                                        long delay = expectedDelta - realDelta;
-                                        if (expectedDelta > realDelta) {
-                                                Thread.sleep(delay); // wait to maintain original pace
-
-                                        }
-
-                                        processPacket(packet, delay);
-
-                                } catch (EOFException e) {
-                                        logger.info(Colors.CYAN
-                                                        + "[ INGESTION VERTICLE ] End of pcap file reached."
-                                                        + Colors.RESET);
-                                        try {
-                                                Thread.sleep(1000000); // Wait a bit before closing
-                                        } catch (InterruptedException ie) {
-                                                Thread.currentThread().interrupt();
-                                        }
-                                        break;
+                                Packet firstPacket = handle.getNextPacketEx();
+                                if (firstPacket == null) {
+                                        logger.warn("[ INGESTION VERTICLE ] No packets found in file {}", pcapFilePath);
+                                        promise.complete();
+                                        return;
                                 }
-                        }
 
-                } catch (Exception e) {
-                        logger.error("[ INGESTION VERTICLE ] Error reading packets: {}", e.getMessage());
-                } finally {
-                        handle.close();
-                        logger.info("[ INGESTION VERTICLE ] PCAP handle closed.");
-                }
+                                Timestamp firstTimestamp = handle.getTimestamp();
+                                long previousTime = firstTimestamp.getTime();
+                                packets.add(firstPacket);
+                                deltas.add(0L);
+
+                                while (true) {
+                                        try {
+                                                Packet packet = handle.getNextPacketEx();
+                                                if (packet == null)
+                                                        break;
+
+                                                Timestamp currentTs = handle.getTimestamp();
+                                                long delta = currentTs.getTime() - previousTime;
+                                                previousTime = currentTs.getTime();
+
+                                                packets.add(packet);
+                                                deltas.add(delta);
+                                        } catch (EOFException e) {
+                                                break;
+                                        }
+                                }
+
+                                handle.close();
+                                promise.complete(List.of(packets, deltas));
+                        } catch (Exception e) {
+                                logger.error("[ INGESTION VERTICLE ] Error reading pcap: " + e.getMessage());
+                                handle.close();
+                                promise.fail(e);
+                        }
+                }, false, res -> {
+                        if (res.succeeded()) {
+                                @SuppressWarnings("unchecked")
+                                List<Object> result = (List<Object>) res.result();
+                                @SuppressWarnings("unchecked")
+                                List<Packet> packets = (List<Packet>) result.get(0);
+                                @SuppressWarnings("unchecked")
+                                List<Long> deltas = (List<Long>) result.get(1);
+
+                                // Publier les paquets sur Kafka en respectant les délais
+                                AtomicInteger index = new AtomicInteger(0);
+                                publishNextPacket(packets, deltas, index);
+                        } else {
+                                logger.error("[ INGESTION VERTICLE ] Failed to process pcap file: "
+                                                + res.cause().getMessage());
+                        }
+                });
         }
+
+        private void publishNextPacket(List<Packet> packets, List<Long> deltas, AtomicInteger index) {
+                if (index.get() >= packets.size() || !running.get()) return;
+            
+                Packet packet = packets.get(index.get());
+                long rawDelay = deltas.get(index.getAndIncrement());
+                final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms
+            
+                vertx.setTimer(safeDelay, id -> {
+                    processPacket(packet, safeDelay);
+                    // Appel récursif pour le paquet suivant
+                    publishNextPacket(packets, deltas, index);
+                });
+            }
+            
 
         /**
          * Process and send a packet to Kafka
@@ -343,36 +342,21 @@ public class IngestionVerticle extends AbstractVerticle {
         private void processPacket(Packet packet, long delay) {
                 if (packet == null)
                         return;
-                byte[] rawData = packet.getRawData();
-                // Convert raw data to hex string for JSON representation
-                String base64Packet = Base64.getEncoder().encodeToString(rawData);
-                // Construire l'objet JSON enrichi
+
+                String base64Packet = Base64.getEncoder().encodeToString(packet.getRawData());
                 JsonObject record = new JsonObject()
                                 .put("timestamp", System.currentTimeMillis())
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
-                logger.debug("[ INGESTION VERTICLE ] Processed packet: \n{}", record.encodePrettily());
 
-                // Publish record on Kafka topic "network-data"
-                ProducerRecord<String, String> kafkaRecord = new ProducerRecord<>(
-                                "network-data", record.encode());
-                producer.send(kafkaRecord, (metadata, exception) -> {
-                        if (exception != null) {
-                                logger.error(
-                                                "[ INGESTION VERTICLE ] Failed to send packet record to Kafka: "
-                                                                + exception.getMessage());
-                        } else {
-                                logger.debug(
-                                                "[ INGESTION VERTICLE ] Packet record sent to Kafka topic "
-                                                                + metadata.topic()
-                                                                + " partition "
-                                                                + metadata.partition()
-                                                                + " offset "
-                                                                + metadata.offset()
-                                                                + (delay > 0 ? " (delayed by " + delay + " ms)" : ""));
+                KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
+                                record.encode());
+                producer.send(kafkaRecord, ar -> {
+                        if (ar.failed()) {
+                                logger.error("[ INGESTION VERTICLE ] Failed to send packet record: "
+                                                + ar.cause().getMessage());
                         }
                 });
-                logger.debug("[ INGESTION VERTICLE ] Published packet: \n{}", record.encodePrettily());
         }
 
         /* -------------------------------------------------------------------------- */
@@ -380,11 +364,11 @@ public class IngestionVerticle extends AbstractVerticle {
          * Cleanup resources on verticle stop
          */
         @Override
-        public void stop() {
+        public void stop() throws Exception {
+                running.set(false);
                 if (producer != null) {
                         producer.close();
-                        logger.info("[ INGESTION VERTICLE ] Kafka Producer closed.");
                 }
-                logger.info(Colors.RED + "[ INGESTION VERTICLE ] IngestionVerticle stopped!" + Colors.RESET);
+                logger.info("[ INGESTION VERTICLE ] IngestionVerticle stopped!");
         }
 }

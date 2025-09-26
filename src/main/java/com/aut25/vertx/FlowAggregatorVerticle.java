@@ -22,132 +22,102 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import io.vertx.kafka.client.consumer.KafkaConsumer;
+import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
+import io.vertx.kafka.client.consumer.KafkaConsumerRecord;
+import io.vertx.kafka.client.producer.KafkaProducer;
+import io.vertx.kafka.client.producer.KafkaProducerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 
 public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(FlowAggregatorVerticle.class);
 
-        // Kafka config
         private static final String BOOTSTRAP_SERVERS = "localhost:9092";
         private static final String IN_TOPIC = "network-data";
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        // Flow timeouts (ms)
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500; // flush si inactif > 4.5s
-        private static final long FLOW_MAX_AGE_MS_TCP = 300_000; // flush si age > 5min
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // flush si inactif > 30s
-        private static final long FLOW_MAX_AGE_MS_UDP = 120_000; // flush si age > 2min
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500;
+        private static final long FLOW_MAX_AGE_MS_TCP = 300_000;
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000;
+        private static final long FLOW_MAX_AGE_MS_UDP = 120_000;
 
-        private static final long KAFKA_POLL_MS = 200; // durée poll Kafka
-        private static final long FLOW_CLEAN_PERIOD_MS = 5_000; // vérification périodique flows
+        private static final long FLOW_CLEAN_PERIOD_MS = 5_000;
 
-        private Consumer<String, String> consumer;
-        private Producer<String, String> producer;
+        private KafkaConsumer<String, String> consumer;
+        private KafkaProducer<String, String> producer;
 
-        // map clé -> Flow
         private final Map<String, Flow> flows = new ConcurrentHashMap<>();
-
-        // flag pour shutdown propre
         private final AtomicBoolean running = new AtomicBoolean(true);
 
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ] Starting FlowAggregatorVerticle..."
-                                + Colors.RESET);
+                logger.info("[ FLOWAGGREGATOR VERTICLE ] Starting FlowAggregatorVerticle...");
 
-                // Init Kafka consumer
-                Properties cprops = new Properties();
-                cprops.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-                cprops.put(ConsumerConfig.GROUP_ID_CONFIG, GROUP_ID);
-                cprops.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-                cprops.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-                cprops.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-                // désactiver auto commit pour mieux contrôler les offsets
-                cprops.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-                // si traitement lourd, augmenter max.poll.interval.ms
-                cprops.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "300000");
+                // Kafka consumer config
+                Map<String, String> consumerConfig = new HashMap<>();
+                consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
+                consumerConfig.put("group.id", GROUP_ID);
+                consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+                consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+                consumerConfig.put("auto.offset.reset", "earliest");
+                consumerConfig.put("enable.auto.commit", "false");
 
-                consumer = new KafkaConsumer<>(cprops);
-                consumer.subscribe(Collections.singletonList(IN_TOPIC));
+                consumer = KafkaConsumer.create(vertx, consumerConfig);
 
-                // Init Kafka producer
-                Properties pprops = new Properties();
-                pprops.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-                pprops.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                pprops.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                // optional acks
-                pprops.put(ProducerConfig.ACKS_CONFIG, "1");
+                // Kafka producer config
+                Map<String, String> producerConfig = new HashMap<>();
+                producerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
+                producerConfig.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+                producerConfig.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+                producerConfig.put("acks", "1");
 
-                producer = new KafkaProducer<>(pprops);
+                producer = KafkaProducer.create(vertx, producerConfig);
 
-                logger.info("[ FLOWAGGREGATOR VERTICLE ] Kafka consumer and producer initialized.");
+                // Subscribe to input topic
+                consumer.subscribe(IN_TOPIC, ar -> {
+                        if (ar.succeeded()) {
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Subscribed to topic {}", IN_TOPIC);
+                        } else {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to subscribe: {}",
+                                                ar.cause().getMessage());
+                        }
+                });
 
-                // Periodic task to poll kafka and process messages (runs on Vert.x event loop)
-                vertx.setPeriodic(KAFKA_POLL_MS, id -> {
+                // Handler for incoming Kafka messages
+                consumer.handler(record -> {
                         if (!running.get())
                                 return;
-                        // poll in blocking to avoid blocking event-loop too long: use executeBlocking
-                        vertx.executeBlocking(promise -> {
-                                try {
-                                        ConsumerRecords<String, String> records = consumer
-                                                        .poll(Duration.ofMillis(KAFKA_POLL_MS));
-                                        if (!records.isEmpty()) {
-                                                // process records
-                                                for (ConsumerRecord<String, String> rec : records) {
-                                                        if (rec.value() == null || rec.value().isEmpty()
-                                                                        || rec.value().equals("reset")) {
-                                                                logger.warn("[ FLOWAGGREGATOR VERTICLE ] Received empty record, skipping.");
-                                                                continue;
-                                                        }
-                                                        try {
-                                                                JsonObject json = new JsonObject(rec.value());
-                                                                try {
-                                                                        // Process the record to update/create flow
-                                                                        logger.debug(
-                                                                                        "[ FLOWAGGREGATOR VERTICLE ] Processing record from Kafka: "
-                                                                                                        + json.encodePrettily());
-                                                                        processRecord(json);
-                                                                } catch (Exception e) {
-                                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Could not parse IP/transport layer: {}",
-                                                                                        e.getMessage());
-                                                                }
-                                                        } catch (Exception e) {
-                                                                // log and continue (so we don't lose other messages)
-                                                                logger.error(
-                                                                                "[ FLOWAGGREGATOR VERTICLE ] Error processing record: "
-                                                                                                + e.getMessage());
-                                                                e.printStackTrace();
-                                                        }
-                                                }
-                                                // once all records processed, commit offsets
-                                                try {
-                                                        consumer.commitSync();
-                                                } catch (Exception e) {
-                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Error committing offsets: "
-                                                                        + e.getMessage());
-                                                        e.printStackTrace();
-                                                }
+
+                        String value = record.value();
+                        if (value == null || value.isEmpty() || value.equals("reset"))
+                                return;
+
+                        try {
+                                JsonObject json = new JsonObject(value);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Processing record: {}",
+                                                json.encodePrettily());
+
+                                processRecord(json);
+
+                        } catch (Exception e) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Error processing record: {}", e.getMessage());
+                        }
+
+                        // Commit offsets manually
+                        consumer.commit(ar -> {
+                                if (ar.failed()) {
+                                        if (ar.cause().getMessage() != null) {
+                                                logger.error(
+                                                                "[ FLOWAGGREGATOR VERTICLE ] Commit failed: "
+                                                                                + ar.cause().getMessage());
                                         }
-                                        promise.complete();
-                                } catch (Exception ex) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Error polling Kafka: "
-                                                        + ex.getMessage());
-                                        ex.printStackTrace();
-                                        promise.fail(ex);
-                                }
-                        }, res -> {
-                                if (res.failed()) {
-                                        // log error -- but do not crash Verticle
-                                        res.cause().printStackTrace();
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Error polling Kafka: "
-                                                        + res.cause().getMessage());
-                                        res.cause().printStackTrace();
                                 }
                         });
                 });
 
-                // Periodic cleaner to flush expired flows
+                // Periodic cleanup task to flush expired flows
                 vertx.setPeriodic(FLOW_CLEAN_PERIOD_MS, id -> {
                         if (!running.get())
                                 return;
@@ -158,21 +128,17 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         for (Flow f : flows.values()) {
                                 long inactivityTimeout;
                                 long maxAge;
-
-                                // Choix des paramètres selon le protocole
-                                if (f.protocol == "TCP") {
+                                if ("TCP".equals(f.protocol)) {
                                         inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_TCP;
                                         maxAge = FLOW_MAX_AGE_MS_TCP;
-                                } else if (f.protocol == "UDP") {
+                                } else if ("UDP".equals(f.protocol)) {
                                         inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_UDP;
                                         maxAge = FLOW_MAX_AGE_MS_UDP;
                                 } else {
-                                        // fallback pour d'autres protocoles éventuels
-                                        inactivityTimeout = 10_000; // 10s
-                                        maxAge = 120_000; // 2min
+                                        inactivityTimeout = 10_000;
+                                        maxAge = 120_000;
                                 }
 
-                                // Vérifie si le flux doit être flush
                                 if (now - f.lastSeen >= inactivityTimeout || now - f.firstSeen >= maxAge) {
                                         if (flows.remove(f.key) != null) {
                                                 toFlush.add(f);
@@ -180,20 +146,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 }
                         }
 
-                        // Publie les flows flushés
                         for (Flow f : toFlush) {
-                                logger.debug(String.format(
-                                                "[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key=%s bytes=%d packets=%d durationMs=%d",
-                                                f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen)));
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
+                                                f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
                                 publishFlow(f);
                         }
-                        long udpToFlush = toFlush.stream().filter(f -> "UDP".equals(f.protocol)).count();
-                        long tcpToFlush = toFlush.size() - udpToFlush;
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed " + toFlush.size() + " flows (TCP="
-                                        + tcpToFlush
-                                        + " UDP=" + udpToFlush + ")");
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Active flows count: " + flows.size());
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow cleanup completed at " + now);
+
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows, active flows: {}", toFlush.size(),
+                                        flows.size());
                 });
 
                 logger.info("[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle started.");
@@ -211,7 +171,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         consumer.close();
                 if (producer != null)
                         producer.close();
-                logger.info(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle stopped." + Colors.RESET);
+                logger.info(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ] FlowAggregatorVerticle stopped!" + Colors.RESET);
         }
 
         /**
@@ -433,14 +393,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 String value = jo.encode();
 
-                ProducerRecord<String, String> rec = new ProducerRecord<>(OUT_TOPIC, f.key, value);
-                producer.send(rec, (metadata, ex) -> {
-                        if (ex != null) {
-                                ex.printStackTrace();
-                        } else {
-                                logger.debug(String.format(
-                                                "[ FLOWAGGREGATOR VERTICLE ] Published flow: key=%s bytes=%d packets=%d durationMs=%d",
-                                                f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen)));
+                KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(OUT_TOPIC, f.key, value);
+
+                producer.write(record, ar -> {
+                        if (ar.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {}: {}", f.key,
+                                                ar.cause().getMessage());
                         }
                 });
         }
