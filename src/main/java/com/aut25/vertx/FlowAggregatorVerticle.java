@@ -403,19 +403,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @param f Flow to publish
          */
         private void publishFlow(Flow f) {
-                JsonObject jo = new JsonObject();
-                jo.put("firstSeen", f.firstSeen);
-                jo.put("lastSeen", f.lastSeen);
-                jo.put("srcIp", f.srcIp);
-                jo.put("dstIp", f.dstIp);
-                jo.put("srcPort", f.srcPort);
-                jo.put("dstPort", f.dstPort);
-                jo.put("protocol", f.protocol);
-                jo.put("bytes", f.bytes);
-                jo.put("packetCount", f.packetCount);
-                jo.put("durationMs", f.lastSeen - f.firstSeen);
-                jo.put("flowKey", f.key);
-
+                JsonObject jo = f.getJsonObject();
                 String value = jo.encode();
 
                 KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(OUT_TOPIC, f.key, value);
@@ -427,7 +415,5 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
                 });
         }
-
-        
 
 }
