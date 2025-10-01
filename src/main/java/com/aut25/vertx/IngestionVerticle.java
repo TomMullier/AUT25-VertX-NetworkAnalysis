@@ -66,14 +66,17 @@ public class IngestionVerticle extends AbstractVerticle {
                 KafkaProducerRecord<String, String> resetRecord = KafkaProducerRecord.create("network-data", "reset");
                 producer.send(resetRecord, ar -> {
                         if (ar.succeeded()) {
-                                logger.info(Colors.CYAN + "[ INGESTION VERTICLE ]            Kafka topic 'network-data' reset successfully." + Colors.RESET);
+                                logger.info(Colors.CYAN
+                                                + "[ INGESTION VERTICLE ]            Kafka topic 'network-data' reset successfully."
+                                                + Colors.RESET);
                         } else {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to reset Kafka topic: "
                                                 + ar.cause().getMessage());
                         }
                 });
 
-                logger.info(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase() + Colors.RESET);
+                logger.info(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase()
+                                + Colors.RESET);
                 switch (mode) {
                         case "json":
                                 JsonObject fileConfig = config.getJsonObject("json", new JsonObject());
@@ -329,13 +332,21 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 Packet packet = packets.get(index.get());
                 long rawDelay = deltas.get(index.getAndIncrement());
-                final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms
+                final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms.
+                logger.debug("[ INGESTION VERTICLE ]            Next packet delay: {} ms", rawDelay);
+                if (rawDelay < 1) {
 
-                vertx.setTimer(safeDelay, id -> {
-                        processPacket(packet, safeDelay);
-                        // Appel récursif pour le paquet suivant
+                        processPacket(packet, rawDelay);
                         publishNextPacket(packets, deltas, index);
-                });
+                        return;
+                } else {
+
+                        vertx.setTimer(safeDelay, id -> {
+                                processPacket(packet, safeDelay);
+                                publishNextPacket(packets, deltas, index);
+
+                        });
+                }
         }
 
         /**
@@ -373,6 +384,6 @@ public class IngestionVerticle extends AbstractVerticle {
                 if (producer != null) {
                         producer.close();
                 }
-                logger.info("[ INGESTION VERTICLE ]            IngestionVerticle stopped!");
+                logger.info(Colors.RED + "[ INGESTION VERTICLE ]            IngestionVerticle stopped!" + Colors.RESET);
         }
 }

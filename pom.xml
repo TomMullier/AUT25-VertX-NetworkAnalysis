@@ -82,6 +82,11 @@
             <artifactId>clickhouse-jdbc</artifactId>
             <version>0.3.2</version>            <!-- Use the latest stable version -->
         </dependency>
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-kafka-client</artifactId>
+            <version>4.5.9</version>            <!-- vérifie la dernière version -->
+        </dependency>
     </dependencies>
     <build>
         <plugins>

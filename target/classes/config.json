@@ -7,7 +7,7 @@
                 "ingestion-interval-ms": 1000
         },
         "pcap": {
-                "file-path": "src/main/resources/data/ping-flood-ddos.pcap"
+                "file-path": "src/main/resources/data/benign+slowloris_net_packets.pcap"
         },
         "realtime": {
                 "interface": "ens160"

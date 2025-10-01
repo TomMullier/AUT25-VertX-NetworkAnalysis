@@ -38,18 +38,20 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500;
-        private static final long FLOW_MAX_AGE_MS_TCP = 300_000;
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000;
-        private static final long FLOW_MAX_AGE_MS_UDP = 120_000;
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500; // 4.5 seconds
+        private static final long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 30 seconds
+        private static final long FLOW_MAX_AGE_MS_UDP = 120_000; // 2 minutes
 
-        private static final long FLOW_CLEAN_PERIOD_MS = 5_000;
+        private static final long FLOW_CLEAN_PERIOD_MS = 1_000;
 
         private KafkaConsumer<String, String> consumer;
         private KafkaProducer<String, String> producer;
 
         private final Map<String, Flow> flows = new ConcurrentHashMap<>();
         private final AtomicBoolean running = new AtomicBoolean(true);
+        private long notIpPacketCount = 0;
+        private long flushedEarlyCount = 0;
 
         @Override
         public void start() throws Exception {
@@ -149,15 +151,31 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 }
                         }
 
+                        long tcpCountToFlush = toFlush.stream().filter(f -> "TCP".equals(f.protocol)).count();
+                        long udpCountToFlush = toFlush.stream().filter(f -> "UDP".equals(f.protocol)).count();
+                        long tcpCount = flows.values().stream().filter(f -> "TCP".equals(f.protocol)).count();
+                        long udpCount = flows.values().stream().filter(f -> "UDP".equals(f.protocol)).count();
+
                         for (Flow f : toFlush) {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
                                 publishFlow(f);
                         }
 
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows, active flows: {}",
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows (TCP : {} | UDP : {})",
                                         toFlush.size(),
-                                        flows.size());
+                                        tcpCountToFlush,
+                                        udpCountToFlush);
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed early (FIN/RST) {} flows",
+                                        flushedEarlyCount);
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       >> Active flows: {} (TCP : {} | UDP : {})",
+                                        flows.size(),
+                                        tcpCount,
+                                        udpCount);
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       >> Not IP packets processed: {}",
+                                        notIpPacketCount);
+                        logger.info("---------------------------------------------------------------------------------------------");
+
                 });
 
                 logger.info("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
@@ -207,6 +225,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 IpPacket ipPacket = packet.get(IpPacket.class);
                 if (ipPacket == null) {
                         logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Not an IP packet, skipping.");
+                        notIpPacketCount++;
                         return;
                 }
 
@@ -265,7 +284,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Flow endedFlow = flows.remove(key);
                         if (endedFlow != null) {
                                 publishFlow(endedFlow);
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
+                                flushedEarlyCount++;
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
                                                 + endedFlow.key);
                         }
                 }
@@ -408,35 +428,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
         }
 
-        /**
-         * Internal Flow class to hold flow state
-         * Represents a network flow with its attributes and timestamps.
-         */
-        private static class Flow {
-                final String key;
-                final String srcIp;
-                final String dstIp;
-                final Integer srcPort;
-                final Integer dstPort;
-                final String protocol;
-                long firstSeen;
-                long lastSeen;
-                long bytes = 0;
-                long packetCount = 0;
-
-                Flow(String key, String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol,
-                                long ts) {
-                        this.key = key;
-                        this.srcIp = srcIp;
-                        this.dstIp = dstIp;
-                        this.srcPort = srcPort;
-                        this.dstPort = dstPort;
-                        this.protocol = protocol;
-                        this.firstSeen = ts;
-                        this.lastSeen = ts;
-                        this.packetCount = 0;
-                        this.bytes = 0;
-                }
-        }
+        
 
 }
