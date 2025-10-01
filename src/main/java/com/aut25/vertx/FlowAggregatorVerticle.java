@@ -160,6 +160,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
                                 publishFlow(f);
+
                         }
 
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows (TCP : {} | UDP : {})",
@@ -267,6 +268,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
                         }
                         // update
+                        f.addPacket(packet, ts);
                         f.lastSeen = Math.max(f.lastSeen, ts);
                         f.firstSeen = Math.min(f.firstSeen, ts);
                         f.packetCount++;
@@ -403,6 +405,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @param f Flow to publish
          */
         private void publishFlow(Flow f) {
+                f.calculateStats();
                 JsonObject jo = f.getJsonObject();
                 String value = jo.encode();
 
@@ -412,6 +415,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (ar.failed()) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}", f.key,
                                                 ar.cause().getMessage());
+                        } else {
+                                f.display();
                         }
                 });
         }
