@@ -416,7 +416,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}", f.key,
                                                 ar.cause().getMessage());
                         } else {
-                                f.display();
+                                // f.display();
                         }
                 });
         }
