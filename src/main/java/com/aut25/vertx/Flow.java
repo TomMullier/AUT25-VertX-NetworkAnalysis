@@ -24,6 +24,7 @@ public class Flow {
         final Integer dstPort;
         final String protocol;
         final String key;
+
         long firstSeen;
         long lastSeen;
         long bytes = -1;
@@ -67,6 +68,11 @@ public class Flow {
         List<Packet> packets = new ArrayList<>();
         List<Long> packetTimestamps = new ArrayList<>();
 
+        public long ndpiFlowPtr = 0;
+        private final List<byte[]> packetList = new ArrayList<>();
+        public String appProtocol;
+        public byte[] appProtocolBytes;
+
         Logger logger = LoggerFactory.getLogger(Flow.class);
 
         Flow(String key, String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol,
@@ -81,6 +87,8 @@ public class Flow {
                 this.lastSeen = ts;
                 this.packetCount = 0;
                 this.bytes = 0;
+                this.appProtocol = "UNKNOWN";
+                this.appProtocolBytes = new byte[0];
         }
 
         JsonObject getJsonObject() {
@@ -130,16 +138,28 @@ public class Flow {
                 jo.put("udpFraction", (double) this.udpFraction);
                 jo.put("otherFraction", (double) this.otherFraction);
 
+                jo.put("appProtocol", this.appProtocol);
+                jo.put("appProtocolBytes", this.appProtocolBytes != null ? this.appProtocolBytes.length : 0);
+                jo.put("ndpiFlowPtr", this.ndpiFlowPtr);
+
                 return jo;
         }
 
         public void addPacket(Packet packet, long ts) {
                 packets.add(packet);
                 packetTimestamps.add(ts);
+                packetList.add(packet.getRawData());
+                bytes += packet.getRawData().length;
+                packetCount++;
+
         }
 
         public List<Packet> getPackets() {
                 return packets;
+        }
+
+        public List<byte[]> getPacketsByte() {
+                return packetList;
         }
 
         public void calculateStats() {
@@ -309,6 +329,9 @@ public class Flow {
                 logger.info("tcpFraction: {}", tcpFraction);
                 logger.info("udpFraction: {}", udpFraction);
                 logger.info("otherFraction: {}", otherFraction);
+                logger.info("ndpiFlowPtr: {}", ndpiFlowPtr);
+                logger.info("appProtocol: {}", appProtocol);
+
         }
 
 }

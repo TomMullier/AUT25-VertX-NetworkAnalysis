@@ -6,16 +6,16 @@ public class NDPIWrapper {
         System.load("/home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/native/libndpi_jni.so");
     }
 
-    public native void init();
+    // Initialise le module nDPI et retourne un flow par défaut
+    public native long init();
 
-    public native String analyzePacket(byte[] packet);
+    // Crée un nouveau flow séparé et retourne le pointeur
+    public native long createFlow();
 
-    public native void cleanup();
+    // Analyse un paquet pour un flow donné
+    public native String analyzePacket(byte[] packet, long ts, long flowPtr);
 
-    public static void main(String[] args) {
-        NDPIWrapper w = new NDPIWrapper();
-        w.init();
-        System.out.println("✅ JNI call to C init() successful!");
-    }
+    // Libère un flow
+    public native void cleanup(long flowPtr);
 
 }

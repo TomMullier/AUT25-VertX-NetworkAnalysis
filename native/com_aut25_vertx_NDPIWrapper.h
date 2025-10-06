@@ -10,26 +10,34 @@ extern "C" {
 /*
  * Class:     com_aut25_vertx_NDPIWrapper
  * Method:    init
- * Signature: ()V
+ * Signature: ()J
  */
-JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_init
+JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_init
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_aut25_vertx_NDPIWrapper
+ * Method:    createFlow
+ * Signature: ()J
+ */
+JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_createFlow
   (JNIEnv *, jobject);
 
 /*
  * Class:     com_aut25_vertx_NDPIWrapper
  * Method:    analyzePacket
- * Signature: ([B)Ljava/lang/String;
+ * Signature: ([BJJ)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket
-  (JNIEnv *, jobject, jbyteArray);
+  (JNIEnv *, jobject, jbyteArray, jlong, jlong);
 
 /*
  * Class:     com_aut25_vertx_NDPIWrapper
  * Method:    cleanup
- * Signature: ()V
+ * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup
-  (JNIEnv *, jobject);
+  (JNIEnv *, jobject, jlong);
 
 #ifdef __cplusplus
 }

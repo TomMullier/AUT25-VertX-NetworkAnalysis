@@ -28,16 +28,18 @@ public class AnalyseVerticle extends AbstractVerticle {
         private static final Logger logger = LoggerFactory.getLogger(AnalyseVerticle.class);
         KafkaConsumer<String, String> consumer;
         String mode;
-        private final AtomicBoolean running = new AtomicBoolean(true);
+        private final AtomicBoolean running = new AtomicBoolean(true);// Analyse avec nDPI
 
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..." + Colors.RESET);
+                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..."
+                                + Colors.RESET);
                 // Get mode from config, default to "pcap"
                 JsonObject config = new JsonObject(
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
                 mode = config.getString("mode", "pcap").toLowerCase();
 
+                
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
                 switch (mode) {
                         case "pcap":
@@ -90,141 +92,12 @@ public class AnalyseVerticle extends AbstractVerticle {
                 KafkaConsumer<String, String> consumer = KafkaConsumer.create(vertx, config);
 
                 consumer.subscribe(topic)
-                                .onSuccess(v -> logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to " + topic
-                                                + Colors.RESET))
+                                .onSuccess(v -> logger.info(
+                                                Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to " + topic
+                                                                + Colors.RESET))
                                 .onFailure(err -> logger.error(
-                                                "[ ANALYSE VERTICLE ]              Failed to subscribe: " + err.getMessage()));
-
-                // Use executeBlocking to avoid blocking the event loop
-                // Read messages in a loop with the specified delay
-                // vertx.executeBlocking(promise -> {
-                // if (!running.get()) {
-                // return;
-                // }
-                // try {
-                // while (running.get()) {
-                // ConsumerRecords<String, String> records = consumer
-                // .poll(java.time.Duration.ofMillis(100));
-
-                // for (ConsumerRecord<String, String> record : records) {
-                // if (record.value() == null || record.value().isEmpty()
-                // || record.value().equals("reset")) {
-                // logger.warn("[ ANALYSE VERTICLE ] Received empty record, skipping.");
-                // continue;
-                // }
-                // try {
-                // JsonObject json = new JsonObject(record.value());
-                // try {
-                // String srcIp = "";
-                // String dstIp = "";
-                // String protocol = "UNKNOWN";
-
-                // // Parse the raw packet data
-                // String rawPacketBase64 = json.getString("rawPacket");
-                // if (rawPacketBase64 == null) {
-                // logger.warn("[ ANALYSE VERTICLE ] No rawPacket field in JSON.");
-                // continue;
-                // }
-                // byte[] rawData = Base64.getDecoder()
-                // .decode(rawPacketBase64);
-                // Packet packet = EthernetPacket.newPacket(rawData, 0,
-                // rawData.length);
-                // // Vérifie si c’est un paquet IP
-                // if (packet.contains(IpPacket.class)) {
-                // IpPacket ipPacket = packet.get(IpPacket.class);
-                // srcIp = ipPacket.getHeader().getSrcAddr()
-                // .getHostAddress();
-                // dstIp = ipPacket.getHeader().getDstAddr()
-                // .getHostAddress();
-                // if (ipPacket.getHeader()
-                // .getProtocol() != null) {
-                // protocol = ipPacket.getHeader()
-                // .getProtocol().name();
-                // } else {
-                // protocol = "UNKNOWN";
-                // }
-                // }
-                // // Add parsed fields to JSON
-                // json.put("srcIp", srcIp);
-                // json.put("dstIp", dstIp);
-                // json.put("protocol", protocol);
-                // json.put("bytes", packet.length());
-                // // Decode base64 to raw packet string
-                // String ltab = "\t";
-                // json.put("rawPacket",
-                // ltab.concat(packet.toString().replace(
-                // "\n",
-                // "\n\t\t")));
-                // } catch (Exception e) {
-                // logger.warn("[ INGESTION VERTICLE ] Could not parse IP/transport layer: {}",
-                // e.getMessage());
-                // }
-
-                // // Log the parsed data
-                // logger.debug(Colors.CYAN
-                // + "[ ANALYSE VERTICLE ] Received record:"
-                // + Colors.RESET);
-                // Object rawPacket = json.getValue("rawPacket");
-
-                // // Remove rawpacket from json copy
-                // JsonObject temp = json.copy();
-                // temp.remove("rawPacket");
-                // logger.debug(Colors.CYAN
-                // + "[ ANALYSE VERTICLE ] Parsed JSON data: "
-                // + temp.encodePrettily() + Colors.RESET);
-                // logger.debug(Colors.YELLOW
-                // + "[ ANALYSE VERTICLE ] Raw Packet Data: "
-                // + Colors.RESET);
-                // logger.debug(Colors.YELLOW + rawPacket.toString()
-                // + Colors.RESET);
-
-                // } catch (Exception e) {
-                // logger.error(Colors.RED
-                // + "[ ANALYSE VERTICLE ] Failed to parse JSON: "
-                // + e.getMessage() + Colors.RESET);
-                // logger.error(Colors.RED
-                // + "[ ANALYSE VERTICLE ] Original record: "
-                // + record.value() + Colors.RESET);
-                // }
-                // // TODO Process the JSON data as needed
-
-                // // Wait before printing the next record
-                // sleep(delay);
-
-                // }
-                // if (!records.isEmpty()) {
-                // consumer.commitSync();
-                // logger.debug("[ ANALYSE VERTICLE ] Offsets committed.");
-                // }
-
-                // }
-                // } catch (InterruptedException e) {
-                // Thread.currentThread().interrupt();
-                // logger.error(Colors.RED + "[ ANALYSE VERTICLE ] Consumer interrupted: " +
-                // e.getMessage()
-                // + Colors.RESET);
-                // } catch (Exception e) {
-                // logger.error("[ ANALYSE VERTICLE ] Error in consumer loop: "
-                // + e.getMessage());
-                // } finally {
-                // consumer.close();
-                // logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
-                // }
-                // }, res -> {
-                // if (res.succeeded()) {
-                // logger.info("[ ANALYSE VERTICLE ] Finished processing Kafka messages.");
-                // } else {
-                // logger.error("[ ANALYSE VERTICLE ] Failed to process Kafka messages: "
-                // + res.cause());
-                // }
-                // });
-
-                // logger.info("[ ANALYSE VERTICLE ] Kafka consumer setup complete.");
-
-                // Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                // consumer.close();
-                // logger.info("[ ANALYSE VERTICLE ] Kafka consumer closed.");
-                // }));
+                                                "[ ANALYSE VERTICLE ]              Failed to subscribe: "
+                                                                + err.getMessage()));
 
                 consumer.handler(record -> {
                         vertx.setTimer(delay, tid -> {
@@ -277,7 +150,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                                         logger.debug(Colors.CYAN + "[ ANALYSE VERTICLE ]              Parsed JSON: " +
                                                         json.encodePrettily() + Colors.RESET);
 
-                                        logger.debug(Colors.YELLOW + "[ ANALYSE VERTICLE ]              Raw Packet Data: "
+                                        logger.debug(Colors.YELLOW
+                                                        + "[ ANALYSE VERTICLE ]              Raw Packet Data: "
                                                         + Colors.RESET);
                                         logger.debug(Colors.YELLOW + json.getValue("rawPacket").toString()
                                                         + Colors.RESET);
@@ -295,7 +169,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                         });
 
                                 } catch (Exception e) {
-                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ]              Failed to parse JSON: "
+                                        logger.error(Colors.RED
+                                                        + "[ ANALYSE VERTICLE ]              Failed to parse JSON: "
                                                         + e.getMessage() + Colors.RESET);
                                         logger.error(Colors.RED + "[ ANALYSE VERTICLE ]              Original record: "
                                                         + record.value() + Colors.RESET);

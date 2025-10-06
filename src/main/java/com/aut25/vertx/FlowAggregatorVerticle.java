@@ -53,10 +53,26 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private long notIpPacketCount = 0;
         private long flushedEarlyCount = 0;
 
+        private final Map<String, NdpiFlowWrapper> ndpiFlows = new ConcurrentHashMap<>();
+
+        // Start ndpi
+        private final NDPIWrapper ndpi = new NDPIWrapper();
+
         @Override
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
+                // Initialize nDPI
+                try {
+                        ndpi.init();
+                        logger.info(Colors.GREEN
+                                        + "[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully in FlowAggregatorVerticle."
+                                        + Colors.RESET);
+                } catch (Exception e) {
+                        logger.error(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ]       Failed to initialize nDPI: "
+                                        + e.getMessage() + Colors.RESET);
+                        return;
+                }
 
                 // Kafka consumer config
                 Map<String, String> consumerConfig = new HashMap<>();
@@ -157,10 +173,34 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         long udpCount = flows.values().stream().filter(f -> "UDP".equals(f.protocol)).count();
 
                         for (Flow f : toFlush) {
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flushing flow: key={} bytes={} packets={} durationMs={}",
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
+
+                                // Analyse nDPI avant flush
+                                if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
+                                        for (byte[] pkt : f.getPacketsByte()) {
+                                                try {
+                                                        f.display();
+                                                        String proto = ndpi.analyzePacket(pkt, f.lastSeen,
+                                                                        f.ndpiFlowPtr);
+                                                        if (!"Unknown".equalsIgnoreCase(proto)) {
+                                                                f.appProtocol = proto; // on met à jour dès qu'on
+                                                                                       // détecte qqch
+                                                                break; // on peut sortir dès qu'un protocole est détecté
+                                                        }
+                                                } catch (Exception e) {
+                                                        logger.warn("Failed to analyze packet for flow {}: {}", f.key,
+                                                                        e.getMessage());
+                                                }
+                                        }
+                                }
+
+                                // Publier le flow avec appProtocol renseigné
                                 publishFlow(f);
 
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} bytes={} packets={} durationMs={}",
+                                                f.key, f.appProtocol, f.bytes, f.packetCount,
+                                                (f.lastSeen - f.firstSeen));
                         }
 
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows (TCP : {} | UDP : {})",
@@ -263,9 +303,40 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 // === Bilatéral : rendre la clé canonique ===
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
 
+                NdpiFlowWrapper ndpiFlow = ndpiFlows.computeIfAbsent(key, k -> {
+                        // Crée un nouveau flow nDPI via JNI
+                        long flowPtr = ndpi.createFlow();
+                        return new NdpiFlowWrapper(flowPtr);
+                });
+
+                ndpiFlow.lastSeen = ts;
+
+                // Envoyer le payload à nDPI
+                try {
+                        byte[] payload = ipPacket.getPayload() != null ? ipPacket.getPayload().getRawData()
+                                        : new byte[0];
+
+                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr);
+
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Sent to nDPI {} bytes for flow {}",
+                                        payload.length, key);
+
+                        if (!"UNKNOWN".equalsIgnoreCase(ndpiProtocol)) {
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow {} analyzed with nDPI: {}",
+                                                key, ndpiProtocol);
+                        }
+
+                        ndpiFlow.detectedProtocol = ndpiProtocol;
+
+                } catch (Exception e) {
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
+                                        e.getMessage());
+                }
+
                 flows.compute(key, (k, f) -> {
                         if (f == null) {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
+                                f.ndpiFlowPtr = ndpi.createFlow();
                         }
                         // update
                         f.addPacket(packet, ts);
