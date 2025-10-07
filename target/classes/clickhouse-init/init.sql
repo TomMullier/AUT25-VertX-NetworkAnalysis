@@ -54,7 +54,10 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     ackRate Float32,
     tcpFraction Float32,
     udpFraction Float32,
-    otherFraction Float32
+    otherFraction Float32,
+    appProtocolBytes Float32,
+    appProtocol String,
+    ndpiFlowPtr UInt64
 ) ENGINE = MergeTree()
 ORDER BY (firstSeen, flowKey);
 

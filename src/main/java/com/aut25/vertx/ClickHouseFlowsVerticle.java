@@ -107,6 +107,10 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 double udpFraction = getSafeDouble(json, "udpFraction", 0.0);
                                 double otherFraction = getSafeDouble(json, "otherFraction", 0.0);
 
+                                double appProtocolBytes = getSafeDouble(json, "appProtocolBytes", 0.0);
+                                String appProtocol = json.getString("appProtocol", "UNKNOWN");
+                                long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
@@ -120,8 +124,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "interArrivalTimeMean, interArrivalTimeStdDev, interArrivalTimeMin, interArrivalTimeMax, "
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
-                                                "tcpFraction, udpFraction, otherFraction) " +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr) "
+                                                +
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -167,6 +172,10 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setDouble(35, tcpFraction);
                                         pstmt.setDouble(36, udpFraction);
                                         pstmt.setDouble(37, otherFraction);
+
+                                        pstmt.setDouble(38, appProtocolBytes);
+                                        pstmt.setString(39, appProtocol);
+                                        pstmt.setLong(40, ndpiFlowPtr);
 
                                         pstmt.executeUpdate();
                                 }

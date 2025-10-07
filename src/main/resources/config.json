@@ -1,6 +1,6 @@
 {
         "http.port": 8080,
-        "store": "false",
+        "store": "true",
         "mode": "pcap",
         "json": {
                 "file-path": "src/main/resources/data/network-data.json",

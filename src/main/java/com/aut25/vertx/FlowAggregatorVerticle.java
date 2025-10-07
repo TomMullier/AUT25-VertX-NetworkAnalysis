@@ -180,7 +180,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
                                         for (byte[] pkt : f.getPacketsByte()) {
                                                 try {
-                                                        f.display();
+                                                        // // f.display();
+                                                        // logger.info(
+                                                        // "[ FLOWAGGREGATOR VERTICLE ] Sent to nDPI : {} {} {}",
+                                                        // pkt, f.key, f.ndpiFlowPtr);
                                                         String proto = ndpi.analyzePacket(pkt, f.lastSeen,
                                                                         f.ndpiFlowPtr);
                                                         if (!"Unknown".equalsIgnoreCase(proto)) {
@@ -306,6 +309,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 NdpiFlowWrapper ndpiFlow = ndpiFlows.computeIfAbsent(key, k -> {
                         // Crée un nouveau flow nDPI via JNI
                         long flowPtr = ndpi.createFlow();
+                        // System.out.println("Created nDPI flow for key " + k + " with ptr " +
+                        // flowPtr);
                         return new NdpiFlowWrapper(flowPtr);
                 });
 
@@ -313,8 +318,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Envoyer le payload à nDPI
                 try {
-                        byte[] payload = ipPacket.getPayload() != null ? ipPacket.getPayload().getRawData()
-                                        : new byte[0];
+                        // byte[] payload = ipPacket.getPayload() != null ?
+                        // ipPacket.getPayload().getRawData()
+                        // : new byte[0];
+                        IpPacket ip = packet.get(IpPacket.class);
+                        byte[] payload = ip.getRawData();
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Payload : {} " + payload);
 
                         String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr);
 
@@ -336,7 +345,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 flows.compute(key, (k, f) -> {
                         if (f == null) {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
-                                f.ndpiFlowPtr = ndpi.createFlow();
+                                f.ndpiFlowPtr = ndpiFlow.ndpiFlowPtr;
                         }
                         // update
                         f.addPacket(packet, ts);
