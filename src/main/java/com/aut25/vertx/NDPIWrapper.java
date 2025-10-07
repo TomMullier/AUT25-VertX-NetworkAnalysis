@@ -6,7 +6,7 @@ public class NDPIWrapper {
         System.load("/home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/native/libndpi_jni.so");
     }
 
-    // Initialise le module nDPI et retourne un flow par défaut
+    // Initialise nDPI et retourne le pointeur vers le contexte nDPI
     public native long init();
 
     // Crée un nouveau flow séparé et retourne le pointeur

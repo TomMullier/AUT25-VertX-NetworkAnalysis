@@ -38,7 +38,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 4_500; // 4.5 seconds
+        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 5_000; // 5 seconds
         private static final long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
         private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 30 seconds
         private static final long FLOW_MAX_AGE_MS_UDP = 120_000; // 2 minutes
@@ -176,20 +176,16 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
 
-                                // Analyse nDPI avant flush
+                                // nDPI analysis on flow packets if not already detected
+                                // before publishing
                                 if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
                                         for (byte[] pkt : f.getPacketsByte()) {
                                                 try {
-                                                        // // f.display();
-                                                        // logger.info(
-                                                        // "[ FLOWAGGREGATOR VERTICLE ] Sent to nDPI : {} {} {}",
-                                                        // pkt, f.key, f.ndpiFlowPtr);
                                                         String proto = ndpi.analyzePacket(pkt, f.lastSeen,
                                                                         f.ndpiFlowPtr);
                                                         if (!"Unknown".equalsIgnoreCase(proto)) {
-                                                                f.appProtocol = proto; // on met à jour dès qu'on
-                                                                                       // détecte qqch
-                                                                break; // on peut sortir dès qu'un protocole est détecté
+                                                                f.appProtocol = proto;
+                                                                break;
                                                         }
                                                 } catch (Exception e) {
                                                         logger.warn("Failed to analyze packet for flow {}: {}", f.key,
@@ -198,10 +194,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         }
                                 }
 
-                                // Publier le flow avec appProtocol renseigné
+                                // Publish the flow with appProtocol set
                                 publishFlow(f);
 
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} bytes={} packets={} durationMs={}",
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} bytes={} packets={} durationMs={}",
                                                 f.key, f.appProtocol, f.bytes, f.packetCount,
                                                 (f.lastSeen - f.firstSeen));
                         }
@@ -303,29 +299,24 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 dstIp, dstPort == null ? 0 : dstPort,
                                 protocol, bytes, ts, flowEnded));
 
-                // === Bilatéral : rendre la clé canonique ===
+                // Build bilateral flow key
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
 
                 NdpiFlowWrapper ndpiFlow = ndpiFlows.computeIfAbsent(key, k -> {
-                        // Crée un nouveau flow nDPI via JNI
+                        // Create new nDPI flow
                         long flowPtr = ndpi.createFlow();
-                        // System.out.println("Created nDPI flow for key " + k + " with ptr " +
-                        // flowPtr);
                         return new NdpiFlowWrapper(flowPtr);
                 });
 
                 ndpiFlow.lastSeen = ts;
 
-                // Envoyer le payload à nDPI
+                // Send packet to nDPI for analysis
                 try {
-                        // byte[] payload = ipPacket.getPayload() != null ?
-                        // ipPacket.getPayload().getRawData()
-                        // : new byte[0];
-                        IpPacket ip = packet.get(IpPacket.class);
+                        IpPacket ip = packet.get(IpPacket.class); // IpPacket
                         byte[] payload = ip.getRawData();
                         logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Payload : {} " + payload);
 
-                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr);
+                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
 
                         logger.debug("[ FLOWAGGREGATOR VERTICLE ] Sent to nDPI {} bytes for flow {}",
                                         payload.length, key);

@@ -75,6 +75,17 @@ public class Flow {
 
         Logger logger = LoggerFactory.getLogger(Flow.class);
 
+        /**
+         * Constructor for Flow
+         * 
+         * @param key      Flow key (e.g., "srcIp:srcPort-dstIp:dstPort-protocol")
+         * @param srcIp    Source IP address
+         * @param dstIp    Destination IP address
+         * @param srcPort  Source port number
+         * @param dstPort  Destination port number
+         * @param protocol Protocol used (e.g., TCP, UDP)
+         * @param ts       Timestamp of the flow creation
+         */
         Flow(String key, String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol,
                         long ts) {
                 this.key = key;
@@ -91,6 +102,11 @@ public class Flow {
                 this.appProtocolBytes = new byte[0];
         }
 
+        /**
+         * Convert flow attributes to JsonObject
+         * 
+         * @return JsonObject representation of the flow
+         */
         JsonObject getJsonObject() {
                 JsonObject jo = new JsonObject();
                 jo.put("firstSeen", this.firstSeen);
@@ -145,6 +161,12 @@ public class Flow {
                 return jo;
         }
 
+        /**
+         * Add a packet to the flow
+         * 
+         * @param packet Packet to add
+         * @param ts     Timestamp of the packet
+         */
         public void addPacket(Packet packet, long ts) {
                 packets.add(packet);
                 packetTimestamps.add(ts);
@@ -154,14 +176,29 @@ public class Flow {
 
         }
 
+        /**
+         * Get the list of packets in the flow
+         * 
+         * @return List of packets
+         */
         public List<Packet> getPackets() {
                 return packets;
         }
 
+        /**
+         * Get the list of packet byte arrays in the flow
+         * 
+         * @return List of byte arrays
+         */
         public List<byte[]> getPacketsByte() {
                 return packetList;
         }
 
+        /**
+         * Calculate various statistics for the flow
+         * Computes metrics like packet lengths, rates, upstream/downstream stats,
+         * inter-arrival times, protocol fractions, and TCP flag rates.
+         */
         public void calculateStats() {
                 if (packets.isEmpty() || packetTimestamps.isEmpty())
                         return;
@@ -292,6 +329,9 @@ public class Flow {
 
         }
 
+        /**
+         * Display flow parameters in logs
+         */
         public void display() {
                 logger.info(">> Flow parameters:");
                 logger.info("srcIp: {}", srcIp);
