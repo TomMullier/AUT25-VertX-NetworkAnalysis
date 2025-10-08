@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     otherFraction Float32,
     appProtocolBytes Float32,
     appProtocol String,
+    riskLevel Int32,
+    riskMask Int32,
+    riskLabel String,
+    riskSeverity String,
     ndpiFlowPtr UInt64
 ) ENGINE = MergeTree()
 ORDER BY (firstSeen, flowKey);

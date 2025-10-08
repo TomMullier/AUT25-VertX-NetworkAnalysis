@@ -164,7 +164,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         if (flows.remove(f.key) != null) {
                                                 toFlush.add(f);
                                         }
+                                        // Also remove from ndpiFlows
+                                        ndpiFlows.remove(f.key);
                                 }
+                                f.appProtocol = getNDPIProcol(f);
                         }
 
                         long tcpCountToFlush = toFlush.stream().filter(f -> "TCP".equals(f.protocol)).count();
@@ -179,13 +182,30 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // nDPI analysis on flow packets if not already detected
                                 // before publishing
                                 f.appProtocol = getNDPIProcol(f);
-                                f.riskLevel = getNDPIFlowRiskString(f);
+                                f.riskLevel = getNDPIFlowRisk(f);
+                                f.riskMask = getNDPIFlowRiskMask(f);
+                                f.riskLabel = getNDPIFlowRiskLabel(f);
+                                f.riskSeverity = getNDPIFlowRiskSeverity(f);
 
-                                // Publish the flow with appProtocol and riskLevel set
+                                // Publish the flow with appProtocol, riskLevel, and riskLabel set
                                 publishFlow(f);
 
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} riskLevel={} bytes={} packets={} durationMs={}",
-                                                f.key, f.appProtocol, f.riskLevel, f.bytes, f.packetCount,
+                                // Free flow in nDPI
+                                if (f.ndpiFlowPtr != 0) {
+                                        try {
+                                                ndpi.cleanup(f.ndpiFlowPtr);
+                                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
+                                                                f.key);
+                                        } catch (Exception e) {
+                                                logger.warn(
+                                                                "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
+                                                                f.key, e.getMessage());
+                                        }
+                                }
+
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
+                                                f.key, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
+                                                f.packetCount,
                                                 (f.lastSeen - f.firstSeen));
                         }
 
@@ -216,25 +236,104 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         private String getNDPIProcol(Flow f) {
                 if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
+                        String proto = "UNKNOWN";
                         for (byte[] pkt : f.getPacketsByte()) {
                                 try {
-                                        String proto = ndpi.analyzePacket(pkt, f.lastSeen,
+                                        proto = ndpi.analyzePacket(pkt, f.lastSeen,
                                                         f.ndpiFlowPtr);
-                                        if (!"Unknown".equalsIgnoreCase(proto)) {
-                                                return proto;
-                                        }
+
                                 } catch (Exception e) {
                                         logger.warn("Failed to analyze packet for flow {}: {}", f.key,
                                                         e.getMessage());
                                 }
                         }
+                        return proto;
                 }
                 return "UNKNOWN";
         }
 
-        private String getNDPIFlowRiskString(Flow f) {
+        /**
+         * Get nDPI risk level for a flow
+         * 
+         * @param f Flow to analyze
+         * @return risk level as int, or 0 if not identified
+         */
+        private int getNDPIFlowRisk(Flow f) {
+                if (f.ndpiFlowPtr != 0) {
+                        try {
+                                int riskScore = ndpi.getFlowRiskScore(f.ndpiFlowPtr);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskScore={}",
+                                                f.key, riskScore);
+                                return riskScore;
+                        } catch (Exception e) {
+                                logger.warn("Failed to get nDPI risk for flow {}: {}", f.key,
+                                                e.getMessage());
+                        }
+                }
+                return 0;
+        }
 
-                return "LOW";
+        /**
+         * Get nDPI risk mask for a flow
+         * 
+         * @param f Flow to analyze
+         * @return risk mask as int, or 0 if not identified
+         */
+        private int getNDPIFlowRiskMask(Flow f) {
+                if (f.ndpiFlowPtr != 0) {
+                        try {
+                                int riskMask = ndpi.getFlowRiskMask(f.ndpiFlowPtr);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskMask={}",
+                                                f.key, riskMask);
+                                return riskMask;
+                        } catch (Exception e) {
+                                logger.warn("Failed to get nDPI risk mask for flow {}: {}", f.key,
+                                                e.getMessage());
+                        }
+                }
+                return 0;
+        }
+
+        /**
+         * Get nDPI risk label for a flow
+         * 
+         * @param f Flow to analyze
+         * @return risk label as String, or "UNKNOWN" if not identified
+         */
+        private String getNDPIFlowRiskLabel(Flow f) {
+                if (f.ndpiFlowPtr != 0) {
+                        try {
+                                String riskLabel = ndpi.getFlowRiskLabel(f.ndpiFlowPtr);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskLabel={}",
+                                                f.key, riskLabel);
+                                return riskLabel;
+                        } catch (Exception e) {
+                                logger.warn("Failed to get nDPI risk label for flow {}: {}", f.key,
+                                                e.getMessage());
+                        }
+                }
+                return "UNKNOWN";
+        }
+
+        /**
+         * Get nDPI risk severity for a flow
+         * 
+         * @param f Flow to analyze
+         * @return risk severity as String, or "UNKNOWN" if not identified
+         */
+        private String getNDPIFlowRiskSeverity(Flow f) {
+                if (f.ndpiFlowPtr != 0) {
+                        try {
+                                String riskSeverity = ndpi.getFlowRiskSeverity(f.ndpiFlowPtr);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskSeverity={}",
+                                                f.key, riskSeverity);
+                                return riskSeverity;
+                        } catch (Exception e) {
+                                logger.warn("Failed to get nDPI risk severity for flow {}: {}", f.key,
+                                                e.getMessage());
+                        }
+                }
+                return "UNKNOWN";
         }
 
         /**
@@ -506,6 +605,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // f.display();
                         }
                 });
+
         }
 
 }

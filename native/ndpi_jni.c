@@ -157,13 +157,60 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket(JNIEnv 
  */
 JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup(JNIEnv *env, jobject obj, jlong flow_ptr)
 {
+        // Free the flow structure
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
         if (flow)
-                free(flow);
-
-        if (ndpi_mod)
         {
-                ndpi_exit_detection_module(ndpi_mod);
-                ndpi_mod = NULL;
+                free(flow);
         }
+
+}
+
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskMask(JNIEnv *env, jobject obj, jlong flow_ptr)
+{
+        struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
+        if (!ndpi_mod || !flow)
+        {
+                return -1; // Error: nDPI not initialized or invalid flow
+        }
+        return (jint)(flow->risk_mask);
+}
+
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskScore(JNIEnv *env, jobject obj, jlong flow_ptr)
+{
+        struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
+        if (!ndpi_mod || !flow)
+        {
+                return -1; // Error: nDPI not initialized or invalid flow
+        }
+        return (jint)(flow->risk);
+}
+
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskLabel(JNIEnv *env, jobject obj, jlong flowPtr)
+{
+        struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)(uintptr_t)flowPtr;
+        if (flow == NULL)
+                return (*env)->NewStringUTF(env, "Invalid flow");
+
+        // Get the risk label using ndpi_risk2str
+        const char *riskLabel = ndpi_risk2str((ndpi_risk_enum)flow->risk);
+        if (riskLabel == NULL)
+                return (*env)->NewStringUTF(env, "Unknown risk");
+
+        return (*env)->NewStringUTF(env, riskLabel);
+}
+
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(JNIEnv *env, jobject obj, jlong flowPtr)
+{
+        struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)(uintptr_t)flowPtr;
+        if (!flow)
+                return (*env)->NewStringUTF(env, "Invalid flow");
+
+        ndpi_risk_info *sev = ndpi_risk2severity(flow->risk);
+        // ndpi_severity2str convertit un int en const char *
+        const char *severityStr = ndpi_severity2str(sev->severity);
+        if (!severityStr)
+                return (*env)->NewStringUTF(env, "Unknown severity");
+
+        return (*env)->NewStringUTF(env, severityStr);
 }

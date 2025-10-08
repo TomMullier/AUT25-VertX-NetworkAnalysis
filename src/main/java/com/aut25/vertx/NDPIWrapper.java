@@ -18,4 +18,12 @@ public class NDPIWrapper {
     // Libère un flow
     public native void cleanup(long flowPtr);
 
+    public native int getFlowRiskMask(long flowPtr);
+
+    public native int getFlowRiskScore(long flowPtr);
+
+    public native String getFlowRiskLabel(long flowPtr);
+
+    public native String getFlowRiskSeverity(long flowPtr);
+
 }

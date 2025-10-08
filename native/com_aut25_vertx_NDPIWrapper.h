@@ -39,6 +39,38 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket
 JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup
   (JNIEnv *, jobject, jlong);
 
+/*
+ * Class:     com_aut25_vertx_NDPIWrapper
+ * Method:    getFlowRiskMask
+ * Signature: (J)I
+ */
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskMask
+  (JNIEnv *, jobject, jlong);
+
+/*
+ * Class:     com_aut25_vertx_NDPIWrapper
+ * Method:    getFlowRiskScore
+ * Signature: (J)I
+ */
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskScore
+  (JNIEnv *, jobject, jlong);
+
+/*
+ * Class:     com_aut25_vertx_NDPIWrapper
+ * Method:    getFlowRiskLabel
+ * Signature: (J)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskLabel
+  (JNIEnv *, jobject, jlong);
+
+/*
+ * Class:     com_aut25_vertx_NDPIWrapper
+ * Method:    getFlowRiskSeverity
+ * Signature: (J)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity
+  (JNIEnv *, jobject, jlong);
+
 #ifdef __cplusplus
 }
 #endif

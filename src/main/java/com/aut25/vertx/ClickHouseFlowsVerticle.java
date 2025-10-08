@@ -111,6 +111,11 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 String appProtocol = json.getString("appProtocol", "UNKNOWN");
                                 long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
 
+                                int riskLevel = json.getInteger("riskLevel", -1);
+                                int riskMask = json.getInteger("riskMask", -1);
+                                String riskLabel = json.getString("riskLabel", "UNKNOWN");
+                                String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
@@ -124,9 +129,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "interArrivalTimeMean, interArrivalTimeStdDev, interArrivalTimeMin, interArrivalTimeMax, "
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
-                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr) "
+                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -176,6 +181,11 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setDouble(38, appProtocolBytes);
                                         pstmt.setString(39, appProtocol);
                                         pstmt.setLong(40, ndpiFlowPtr);
+
+                                        pstmt.setInt(41, riskLevel);
+                                        pstmt.setInt(42, riskMask);
+                                        pstmt.setString(43, riskLabel);
+                                        pstmt.setString(44, riskSeverity);
 
                                         pstmt.executeUpdate();
                                 }
