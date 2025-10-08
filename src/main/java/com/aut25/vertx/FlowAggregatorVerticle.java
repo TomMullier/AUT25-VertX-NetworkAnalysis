@@ -178,27 +178,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                                 // nDPI analysis on flow packets if not already detected
                                 // before publishing
-                                if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
-                                        for (byte[] pkt : f.getPacketsByte()) {
-                                                try {
-                                                        String proto = ndpi.analyzePacket(pkt, f.lastSeen,
-                                                                        f.ndpiFlowPtr);
-                                                        if (!"Unknown".equalsIgnoreCase(proto)) {
-                                                                f.appProtocol = proto;
-                                                                break;
-                                                        }
-                                                } catch (Exception e) {
-                                                        logger.warn("Failed to analyze packet for flow {}: {}", f.key,
-                                                                        e.getMessage());
-                                                }
-                                        }
-                                }
+                                f.appProtocol = getNDPIProcol(f);
+                                f.riskLevel = getNDPIFlowRiskString(f);
 
-                                // Publish the flow with appProtocol set
+                                // Publish the flow with appProtocol and riskLevel set
                                 publishFlow(f);
 
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} bytes={} packets={} durationMs={}",
-                                                f.key, f.appProtocol, f.bytes, f.packetCount,
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} riskLevel={} bytes={} packets={} durationMs={}",
+                                                f.key, f.appProtocol, f.riskLevel, f.bytes, f.packetCount,
                                                 (f.lastSeen - f.firstSeen));
                         }
 
@@ -219,6 +206,35 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
 
                 logger.info("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
+        }
+
+        /**
+         * Get nDPI detected protocol for a flow
+         * 
+         * @param f Flow to analyze
+         * @return detected protocol as String, or "UNKNOWN" if not identified
+         */
+        private String getNDPIProcol(Flow f) {
+                if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
+                        for (byte[] pkt : f.getPacketsByte()) {
+                                try {
+                                        String proto = ndpi.analyzePacket(pkt, f.lastSeen,
+                                                        f.ndpiFlowPtr);
+                                        if (!"Unknown".equalsIgnoreCase(proto)) {
+                                                return proto;
+                                        }
+                                } catch (Exception e) {
+                                        logger.warn("Failed to analyze packet for flow {}: {}", f.key,
+                                                        e.getMessage());
+                                }
+                        }
+                }
+                return "UNKNOWN";
+        }
+
+        private String getNDPIFlowRiskString(Flow f) {
+
+                return "LOW";
         }
 
         /**

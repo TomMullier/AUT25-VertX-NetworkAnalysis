@@ -73,6 +73,8 @@ public class Flow {
         public String appProtocol;
         public byte[] appProtocolBytes;
 
+        public String riskLevel = "UNKNOWN";
+
         Logger logger = LoggerFactory.getLogger(Flow.class);
 
         /**
@@ -100,6 +102,8 @@ public class Flow {
                 this.bytes = 0;
                 this.appProtocol = "UNKNOWN";
                 this.appProtocolBytes = new byte[0];
+                this.riskLevel = "UNKNOWN";
+
         }
 
         /**
@@ -157,6 +161,7 @@ public class Flow {
                 jo.put("appProtocol", this.appProtocol);
                 jo.put("appProtocolBytes", this.appProtocolBytes != null ? this.appProtocolBytes.length : 0);
                 jo.put("ndpiFlowPtr", this.ndpiFlowPtr);
+                jo.put("riskLevel", this.riskLevel);
 
                 return jo;
         }
@@ -371,7 +376,7 @@ public class Flow {
                 logger.info("otherFraction: {}", otherFraction);
                 logger.info("ndpiFlowPtr: {}", ndpiFlowPtr);
                 logger.info("appProtocol: {}", appProtocol);
-
+                logger.info("riskLevel: {}", riskLevel);
         }
 
 }
