@@ -22,18 +22,56 @@ echo ""
 echo ""
 echo -e "${YELLOW}=== Installing dependencies ===${NC}"
 
+# === Detect OS function ===
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO=$ID
+    else
+        echo -e "${RED}❌ Cannot detect the operating system.${NC}"
+        exit 1
+    fi
+}
+detect_distro
+echo -e "${GREEN}>> Detected distribution: $DISTRO${NC}"
+echo ""
+
+# === Install packages function ===
+install_package() {
+    PACKAGE=$1
+    case "$DISTRO" in
+        ubuntu|debian)
+            sudo apt update
+            sudo apt install -y $PACKAGE
+            ;;
+        fedora|centos|rhel)
+            sudo dnf install -y $PACKAGE
+            ;;
+        arch)
+            sudo pacman -Syu --noconfirm $PACKAGE
+            ;;
+        opensuse*|suse)
+            sudo zypper install -y $PACKAGE
+            ;;
+        *)
+            echo -e "${RED}❌ Distribution $DISTRO not supported.${NC}"
+            exit 1
+            ;;
+    esac
+}
 
 # === Installations ===
 echo ""
 echo -e "${BLUE}=== Maven installation ===${NC}"
-sudo dnf install -y maven
+install_package maven
 echo ""
 
 echo -e "${BLUE}=== Docker installation ===${NC}"
-sudo dnf -y install dnf-plugins-core
-sudo dnf install docker-cli containerd -y
-sudo dnf install docker-compose -y
-sudo dnf install docker-compose-switch -y 
+install_package dnf-plugins-core
+install_package docker-cli
+install_package containerd
+install_package docker-compose
+install_package docker-compose-switch
 echo ""
 
 echo -e "${BLUE}=== Docker activation and startup ===${NC}"
