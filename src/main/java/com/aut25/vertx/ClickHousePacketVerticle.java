@@ -121,7 +121,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                         }
                 });
 
-                logger.info("[ CLICKHOUSE PACKET VERTICLE ]    ClickHousePacketVerticle deployed successfully!");
+                logger.debug("[ CLICKHOUSE PACKET VERTICLE ]    ClickHousePacketVerticle deployed successfully!");
         }
 
         @Override

@@ -28,39 +28,48 @@ public class Main extends AbstractVerticle {
         boolean store = config.getString("store", "false").equalsIgnoreCase("true");
         logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Store configuration: " + store + Colors.RESET);
 
-        // Deploy verticles based on configuration
-        deployAndTrack(new IngestionVerticle());
-        deployAndTrack(new AnalyseVerticle());
-        deployAndTrack(new FlowAggregatorVerticle());
-        // deployAndTrack(new ApiVerticle());
+        // Créer la liste de verticles à déployer
+        List<AbstractVerticle> verticles = new ArrayList<>();
+        verticles.add(new IngestionVerticle());
+        verticles.add(new AnalyseVerticle());
+        verticles.add(new FlowAggregatorVerticle());
+        // verticles.add(new ApiVerticle());
 
         if (store) {
-            deployAndTrack(new ClickHousePacketVerticle());
-            deployAndTrack(new ClickHouseFlowsVerticle());
+            verticles.add(new ClickHousePacketVerticle());
+            verticles.add(new ClickHouseFlowsVerticle());
         } else {
             logger.info(Colors.YELLOW
                     + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."
                     + Colors.RESET);
         }
 
-        startPromise.complete();
+        // Déploiement séquentiel
+        deployVerticlesSequentially(verticles, startPromise);
     }
 
     /**
-     * Deploy a verticle and track its deployment ID
-     * 
-     * @param verticle The verticle to deploy
+     * Déploie les verticles un par un de manière séquentielle.
      */
-    private void deployAndTrack(AbstractVerticle verticle) {
-        vertx.deployVerticle(verticle, res -> {
+    private void deployVerticlesSequentially(List<AbstractVerticle> verticles, Promise<Void> startPromise) {
+        if (verticles.isEmpty()) {
+            startPromise.complete();
+            return;
+        }
+
+        AbstractVerticle verticle = verticles.remove(0);
+        vertx.deployVerticle(verticle).onComplete(res -> {
             if (res.succeeded()) {
                 String id = res.result();
                 deploymentIds.add(id);
                 logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 " + verticle.getClass().getSimpleName()
                         + " deployed successfully! id=" + id + Colors.RESET);
+                // Passer au verticle suivant
+                deployVerticlesSequentially(verticles, startPromise);
             } else {
                 logger.error(Colors.RED + "[ MAIN VERTICLE ]                 Failed to deploy "
                         + verticle.getClass().getSimpleName() + ": " + res.cause() + Colors.RESET);
+                startPromise.fail(res.cause());
             }
         });
     }

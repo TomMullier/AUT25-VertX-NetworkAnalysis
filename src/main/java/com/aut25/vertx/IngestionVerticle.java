@@ -7,12 +7,14 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.io.EOFException;
+import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +33,7 @@ import org.pcap4j.packet.namednumber.DataLinkType;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Enumeration;
 import java.util.concurrent.Executors;
 import io.vertx.kafka.client.producer.KafkaProducer;
 import io.vertx.kafka.client.producer.KafkaProducerRecord;
@@ -49,8 +52,18 @@ public class IngestionVerticle extends AbstractVerticle {
                                 + Colors.RESET);
 
                 // Config file : get debug mode
-                JsonObject config = new JsonObject(
-                                new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
+                JsonObject config;
+                try {
+                        config = new JsonObject(
+                                        new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
+
+                        logger.debug("[ INGESTION VERTICLE ] Loaded configuration: " + config.encodePrettily());
+
+                } catch (Exception e) {
+                        logger.error("[ INGESTION VERTICLE ]            Failed to read config file: "
+                                        + e.getMessage());
+                        return;
+                }
 
                 /*
                  * Get mode from config file.
@@ -60,13 +73,17 @@ public class IngestionVerticle extends AbstractVerticle {
                  * - realtime
                  */
                 String mode = config.getString("mode", "json");
+                if (!List.of("json", "pcap", "realtime").contains(mode)) {
+                        logger.error("[ INGESTION VERTICLE ]            Invalid mode specified: " + mode);
+                        return;
+                }
 
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
                 KafkaProducerRecord<String, String> resetRecord = KafkaProducerRecord.create("network-data", "reset");
                 producer.send(resetRecord, ar -> {
                         if (ar.succeeded()) {
-                                logger.info(Colors.CYAN
+                                logger.debug(Colors.CYAN
                                                 + "[ INGESTION VERTICLE ]            Kafka topic 'network-data' reset successfully."
                                                 + Colors.RESET);
                         } else {
@@ -75,7 +92,7 @@ public class IngestionVerticle extends AbstractVerticle {
                         }
                 });
 
-                logger.info(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase()
+                logger.debug(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase()
                                 + Colors.RESET);
                 switch (mode) {
                         case "json":
@@ -83,8 +100,8 @@ public class IngestionVerticle extends AbstractVerticle {
                                 String filePath = fileConfig.getString("file-path", "data/sample_data.json");
                                 int interval = fileConfig.getInteger("ingestion-interval-ms", 1000);
 
-                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
-                                logger.info("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): " + interval);
+                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
+                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): " + interval);
 
                                 List<JsonObject> records;
                                 try {
@@ -142,7 +159,10 @@ public class IngestionVerticle extends AbstractVerticle {
 
                         case "realtime":
                                 JsonObject rtConfig = config.getJsonObject("realtime", new JsonObject());
-                                String networkInterface = rtConfig.getString("interface", "eth0");
+                                String networkInterface = rtConfig.getString("interface", null);
+                                if (networkInterface == null) {
+                                        networkInterface = chooseNetworkinterface();
+                                }
                                 logger.debug("[ INGESTION VERTICLE ][ CONFIG ] Network Interface: "
                                                 + networkInterface);
                                 ingestInRealTime(networkInterface);
@@ -158,7 +178,60 @@ public class IngestionVerticle extends AbstractVerticle {
                                 break;
                 }
 
-                logger.info("[ INGESTION VERTICLE ]            IngestionVerticle started!");
+                logger.debug("[ INGESTION VERTICLE ]            IngestionVerticle started!");
+
+        }
+
+        private String chooseNetworkinterface() {
+                try {
+
+                        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+                        List<NetworkInterface> interfaceList = new ArrayList<>();
+
+                        logger.info(Colors.MAGENTA
+                                        + "[ INGESTION VERTICLE ]            Available network interfaces:"
+                                        + Colors.RESET);
+                        int index = 1;
+                        while (interfaces.hasMoreElements()) {
+                                NetworkInterface ni = interfaces.nextElement();
+                                // Ignore loopback and down interfaces
+                                if (ni.isUp() && !ni.isLoopback()) {
+                                        interfaceList.add(ni);
+                                        logger.info(Colors.MAGENTA + "                                  [" + index
+                                                        + "] " + ni.getName() + " ("
+                                                        + ni.getDisplayName() + ")" + Colors.RESET);
+                                        index++;
+                                }
+                        }
+
+                        if (interfaceList.isEmpty()) {
+                                throw new RuntimeException("No active network interfaces found.");
+                        }
+
+                        Scanner scanner = new Scanner(System.in);
+                        int choice = -1;
+                        while (choice < 1 || choice > interfaceList.size()) {
+                                logger.info(Colors.MAGENTA
+                                                + "[ INGESTION VERTICLE ]            Select a network interface by number (1-"
+                                                + interfaceList.size() + "): "
+                                                + Colors.RESET);
+                                if (scanner.hasNextInt()) {
+                                        choice = scanner.nextInt();
+                                } else {
+                                        scanner.next(); // ignore non-numeric input
+                                }
+                        }
+                        scanner.close();
+
+                        logger.info(Colors.MAGENTA + "[ INGESTION VERTICLE ]            Selected interface: "
+                                        + interfaceList.get(choice - 1).getName() + Colors.RESET);
+
+                        return interfaceList.get(choice - 1).getName();
+                } catch (Exception e) {
+                        logger.error("[ INGESTION VERTICLE ]            Error retrieving network interfaces: "
+                                        + e.getMessage());
+                        return null;
+                }
 
         }
 
@@ -174,7 +247,8 @@ public class IngestionVerticle extends AbstractVerticle {
                 props.put("acks", "1");
 
                 producer = KafkaProducer.create(vertx, props);
-                logger.info("[ INGESTION VERTICLE ]            Kafka Producer (Vert.x) initialized.");
+                logger.debug("[ INGESTION VERTICLE ]            Kafka Producer for ingestion configured."
+                                + Colors.RESET);
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
@@ -208,6 +282,8 @@ public class IngestionVerticle extends AbstractVerticle {
          */
         private void ingestInRealTime(String networkInterface) {
                 try {
+                        if (running.get() == false)
+                                return;
                         PcapNetworkInterface nif = Pcaps.getDevByName(networkInterface);
                         if (nif == null) {
                                 logger.error("[ INGESTION VERTICLE ]            Network interface not found: "
@@ -266,6 +342,11 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 vertx.executeBlocking(promise -> {
                         try {
+                                if (running.get() == false) {
+                                        handle.close();
+                                        promise.complete();
+                                        return;
+                                }
                                 // Lire tous les paquets et calculer les deltas de temps
                                 List<Packet> packets = new ArrayList<>();
                                 List<Long> deltas = new ArrayList<>();
@@ -285,6 +366,8 @@ public class IngestionVerticle extends AbstractVerticle {
 
                                 while (true) {
                                         try {
+                                                if (!running.get())
+                                                        break;
                                                 Packet packet = handle.getNextPacketEx();
                                                 if (packet == null)
                                                         break;
@@ -366,6 +449,8 @@ public class IngestionVerticle extends AbstractVerticle {
 
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
                                 record.encode());
+                if (running.get() == false)
+                        return;
                 producer.send(kafkaRecord, ar -> {
                         if (ar.failed()) {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "

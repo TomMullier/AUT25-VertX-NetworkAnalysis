@@ -39,7 +39,6 @@ public class AnalyseVerticle extends AbstractVerticle {
                                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
                 mode = config.getString("mode", "pcap").toLowerCase();
 
-                
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
                 switch (mode) {
                         case "pcap":
@@ -72,8 +71,6 @@ public class AnalyseVerticle extends AbstractVerticle {
          * @param delay the delay in milliseconds between reads
          */
         private void readFromKafka_ActionEveryDelay(String topic, long delay) {
-                logger.info(Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribing to Kafka topic: " + topic
-                                + Colors.RESET);
 
                 // Config Kafka
                 Map<String, String> config = new HashMap<>();
@@ -93,7 +90,8 @@ public class AnalyseVerticle extends AbstractVerticle {
 
                 consumer.subscribe(topic)
                                 .onSuccess(v -> logger.info(
-                                                Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to " + topic
+                                                Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to topic "
+                                                                + topic
                                                                 + Colors.RESET))
                                 .onFailure(err -> logger.error(
                                                 "[ ANALYSE VERTICLE ]              Failed to subscribe: "
@@ -102,6 +100,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                 consumer.handler(record -> {
                         vertx.setTimer(delay, tid -> {
                                 try {
+                                        if (!running.get())
+                                                return;
                                         String value = record.value();
                                         if (value == null || value.isEmpty() || value.equals("reset")) {
                                                 logger.warn("[ ANALYSE VERTICLE ]              Received empty record, skipping.");
@@ -178,26 +178,14 @@ public class AnalyseVerticle extends AbstractVerticle {
                         });
                 });
 
-                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                        consumer.close()
-                                        .onSuccess(v -> logger
-                                                        .info("[ ANALYSE VERTICLE ]              Kafka consumer closed."))
-                                        .onFailure(err -> logger
-                                                        .error("[ ANALYSE VERTICLE ]              Error closing Kafka consumer: "
-                                                                        + err.getMessage()));
-                }));
         }
 
         @Override
         public void stop() throws Exception {
-                if (consumer != null) {
-                        consumer.close()
-                                        .onSuccess(v -> logger.info(
-                                                        "[ ANALYSE VERTICLE ]              Kafka consumer closed proprement ✅"))
-                                        .onFailure(err -> logger.error(
-                                                        "[ ANALYSE VERTICLE ]              Error closing consumer",
-                                                        err));
-                }
+                running.set(false);
+                if (consumer != null)
+                        consumer.close();
+
                 logger.info(Colors.RED + "[ ANALYSE VERTICLE ]              AnalyseVerticle stopped!" + Colors.RESET);
         }
 

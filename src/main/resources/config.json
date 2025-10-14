@@ -1,7 +1,7 @@
 {
         "http.port": 8080,
         "store": "true",
-        "mode": "pcap",
+        "mode": "realtime",
         "json": {
                 "file-path": "src/main/resources/data/network-data.json",
                 "ingestion-interval-ms": 1000
@@ -9,7 +9,9 @@
         "pcap": {
                 "file-path": "src/main/resources/data/benign+slowloris_net_packets.pcap"
         },
-        "realtime": {
+        "realtime_test": {
                 "interface": "ens160"
-        }
+        },
+        "realtime": {}
+
 }

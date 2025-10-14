@@ -222,7 +222,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                         }
                 });
 
-                logger.info("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
+                logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
         }
 
         @Override

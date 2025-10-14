@@ -225,7 +225,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 });
 
-                logger.info("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
+                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
         }
 
         /**
