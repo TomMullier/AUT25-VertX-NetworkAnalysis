@@ -230,11 +230,13 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(J
                 return (*env)->NewStringUTF(env, "Invalid flow");
 
         ndpi_risk_info *sev = ndpi_risk2severity(flow->risk);
-        // ndpi_severity2str convertit un int en const char *
+        if (!sev)
+                return (*env)->NewStringUTF(env, "No severity info");
+
         const char *severityStr = ndpi_severity2str(sev->severity);
         if (!severityStr)
                 return (*env)->NewStringUTF(env, "Unknown severity");
-        // If 0 < sev->severity, return "No risk"
+
         if (sev->severity == 0)
                 return (*env)->NewStringUTF(env, "No risk");
 

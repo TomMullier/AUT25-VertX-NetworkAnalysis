@@ -191,17 +191,17 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 publishFlow(f);
 
                                 // Free flow in nDPI
-                                if (f.ndpiFlowPtr != 0) {
-                                        try {
-                                                ndpi.cleanup(f.ndpiFlowPtr);
-                                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
-                                                                f.key);
-                                        } catch (Exception e) {
-                                                logger.warn(
-                                                                "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
-                                                                f.key, e.getMessage());
-                                        }
-                                }
+                                // if (f.ndpiFlowPtr != 0) {
+                                //         try {
+                                //                 ndpi.cleanup(f.ndpiFlowPtr);
+                                //                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
+                                //                                 f.key);
+                                //         } catch (Exception e) {
+                                //                 logger.warn(
+                                //                                 "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
+                                //                                 f.key, e.getMessage());
+                                //         }
+                                // }
 
                                 logger.info("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
                                                 f.key, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
