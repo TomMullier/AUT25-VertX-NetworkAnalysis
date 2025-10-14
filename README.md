@@ -83,6 +83,13 @@ chmod +x start.sh
 
 > Le script détecte automatiquement la distribution Linux et adapte l’installation en conséquence.
 
+Le script peut aussi être exécuté avec des options : 
+```bash
+./start.sh [--skip-deps] [--quiet]
+```
+* `--skip-deps` : saute l’installation des dépendances (Java, Maven, Docker, Docker Compose)
+* `--quiet` : réduit la verbosité de l’installation
+
 ---
 
 ## Conteneurs Docker utilisés
