@@ -12,6 +12,23 @@ CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
+# === Parse arguments ===
+SKIP_DEPS=false
+QUIET=false
+
+for arg in "$@"; do
+    case $arg in
+        --skip-deps)
+            SKIP_DEPS=true
+            shift
+            ;;
+        --quiet)
+            QUIET=true
+            shift
+            ;;
+    esac
+done
+
 # === Title ===
 echo -e "${CYAN}===================================="
 echo -e "===== Network Traffic Analyzer ====="
@@ -21,6 +38,17 @@ echo -e "${WHITE}>> By Tom MULLIER${NC}"
 echo ""
 echo ""
 echo -e "${YELLOW}=== Installing dependencies ===${NC}"
+
+# === Minimal mode check ===
+if [ "$QUIET" = true ]; then
+    echo -e "${YELLOW}Mode silencieux activé (affichage minimal).${NC}"
+fi
+if [ "$SKIP_DEPS" = true ]; then
+    echo -e "${YELLOW}Skipping dependencies installation as per user request.${NC}"
+else
+    echo -e "${YELLOW}Dependencies installation will proceed.${NC}"
+fi
+echo ""
 
 # === Detect OS function ===
 detect_distro() {
@@ -39,19 +67,23 @@ echo ""
 # === Install packages function ===
 install_package() {
     PACKAGE=$1
+    if [ "$QUIET" = false ]; then
+        echo -e "${BLUE}Installing ${PACKAGE}...${NC}"
+    fi
+
     case "$DISTRO" in
         ubuntu|debian)
-            sudo apt update
-            sudo apt install -y $PACKAGE
+            sudo apt-get update -qq >/dev/null 2>&1
+            sudo apt-get install -y -qq $PACKAGE >/dev/null 2>&1
             ;;
         fedora|centos|rhel)
-            sudo dnf install -y $PACKAGE
+            sudo dnf install -y -q $PACKAGE >/dev/null 2>&1
             ;;
         arch)
-            sudo pacman -Syu --noconfirm $PACKAGE
+            sudo pacman -Syu --noconfirm $PACKAGE >/dev/null 2>&1
             ;;
         opensuse*|suse)
-            sudo zypper install -y $PACKAGE
+            sudo zypper install -y -q $PACKAGE >/dev/null 2>&1
             ;;
         *)
             echo -e "${RED}❌ Distribution $DISTRO not supported.${NC}"
@@ -60,68 +92,71 @@ install_package() {
     esac
 }
 
+
 # === Installations ===
-echo ""
-echo -e "${BLUE}=== Maven installation ===${NC}"
-install_package maven
-echo ""
+if [ "$SKIP_DEPS" = false ]; then
+    echo -e "${YELLOW}=== Installing dependencies ===${NC}"
+    if [ "$QUIET" = false ]; then
+        echo ""
+        echo -e "${BLUE}=== Maven installation ===${NC}"
+    fi
+    install_package maven
+    if [ "$QUIET" = false ]; then
+        echo ""
+        echo -e "${BLUE}=== Docker installation ===${NC}"
+    fi
+    install_package dnf-plugins-core
+    install_package docker-cli
+    install_package containerd
+    install_package docker-compose
+    install_package docker-compose-switch
+    if [ "$QUIET" = false ]; then
+        echo ""
+        echo -e "${BLUE}=== Docker activation and startup ===${NC}"
+    fi
+    sudo systemctl enable docker --now
+    sudo systemctl start docker
+    if [ "$QUIET" = false ]; then
+        echo ""
+        echo -e "${YELLOW}=== Checking versions ===${NC}"
+        mvn -v
+        docker --version
+        echo ""
+    fi
+    echo -e "${GREEN}=== ✅ Installation complete ===${NC}"
+    echo ""
+    echo ""
+fi
 
-echo -e "${BLUE}=== Docker installation ===${NC}"
-install_package dnf-plugins-core
-install_package docker-cli
-install_package containerd
-install_package docker-compose
-install_package docker-compose-switch
-echo ""
 
-echo -e "${BLUE}=== Docker activation and startup ===${NC}"
-sudo systemctl enable docker --now
-sudo systemctl start docker
-echo ""
-
-echo -e "${YELLOW}=== Checking versions ===${NC}"
-mvn -v
-docker --version
-echo ""
-
-echo -e "${GREEN}=== ✅ Installation complete ===${NC}"
-echo ""
-echo ""
 
 # === Function to check and start a service ===
 check_and_start_service() {
     local service_name=$1
     local compose_file=$2
 
-    echo -e "${MAGENTA}=== Checking if ${service_name} is running ===${NC}"
-
-    # Vérifie si le conteneur existe (même arrêté)
-    if docker ps -a --format '{{.Names}}' | grep -q "^${service_name}$"; then
-        # Vérifie s’il tourne actuellement
-        if docker inspect -f '{{.State.Running}}' "${service_name}" 2>/dev/null | grep -q true; then
-            echo -e "${GREEN}✅ ${service_name} is already running.${NC}"
-            return
-        else
-            echo -e "${YELLOW}⚠️ ${service_name} exists but is not running. Restarting...${NC}"
-            docker start "${service_name}"
-        fi
-    else
-        echo -e "${RED}❌ ${service_name} is not found.${NC}"
-        echo -e "${YELLOW}Launching ${service_name}...${NC}"
-        docker-compose -f "${compose_file}" up -d "${service_name}"
+    if [ "$QUIET" = false ]; then
+        echo -e "${MAGENTA}=== Checking ${service_name} ===${NC}"
     fi
 
-    echo -e "${CYAN}Waiting for ${service_name} to be healthy...${NC}"
-    # Boucle d’attente jusqu’à ce que le service soit prêt
-    until [ "$(docker inspect -f '{{.State.Health.Status}}' "${service_name}" 2>/dev/null || echo 'none')" = "healthy" ] || \
-          docker logs "${service_name}" 2>&1 | grep -q "started" || \
-          docker ps --filter "name=${service_name}" --filter "status=running" | grep -q "${service_name}"; do
-        echo -e "${YELLOW}... still waiting for ${service_name} ...${NC}"
+    if docker ps -a --format '{{.Names}}' | grep -q "^${service_name}$"; then
+        if docker inspect -f '{{.State.Running}}' "${service_name}" 2>/dev/null | grep -q true; then
+            [ "$QUIET" = false ] && echo -e "${GREEN}✅ ${service_name} is already running.${NC}"
+            return
+        else
+            [ "$QUIET" = false ] && echo -e "${YELLOW}⚠️ Restarting ${service_name}...${NC}"
+            docker start "${service_name}" >/dev/null
+        fi
+    else
+        [ "$QUIET" = false ] && echo -e "${YELLOW}Launching ${service_name}...${NC}"
+        docker-compose -f "${compose_file}" up -d "${service_name}" >/dev/null
+    fi
+
+    until docker ps --filter "name=${service_name}" --filter "status=running" | grep -q "${service_name}"; do
+        [ "$QUIET" = false ] && echo -e "${YELLOW}... waiting for ${service_name} ...${NC}"
         sleep 5
     done
-
-    echo -e "${GREEN}✅ ${service_name} is up and running.${NC}"
-    echo ""
+    [ "$QUIET" = false ] && echo -e "${GREEN}✅ ${service_name} is up.${NC}"
 }
 
 # === Check each service ===
