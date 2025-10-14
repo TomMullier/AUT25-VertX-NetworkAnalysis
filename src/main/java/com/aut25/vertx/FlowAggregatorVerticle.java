@@ -8,6 +8,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.IpPacket;
+import org.pcap4j.packet.IpV4Packet;
+import org.pcap4j.packet.IpV6Packet;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.TcpPacket;
 import org.pcap4j.packet.UdpPacket;
@@ -22,6 +24,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import io.vertx.kafka.client.consumer.KafkaConsumer;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecord;
@@ -52,6 +55,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private final AtomicBoolean running = new AtomicBoolean(true);
         private long notIpPacketCount = 0;
         private long flushedEarlyCount = 0;
+        private long ipv4PacketCount = 0;
+        private long ipv6PacketCount = 0;
+        private long arpPacketCount = 0;
+        private long vlanPacketCount = 0;
+        private long unknownPacketCount = 0;
+        private long nonEthernetCount = 0;
 
         private final Map<String, NdpiFlowWrapper> ndpiFlows = new ConcurrentHashMap<>();
 
@@ -111,8 +120,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 return;
 
                         String value = record.value();
-                        if (value == null || value.isEmpty() || value.equals("reset"))
+                        if (value == null || value.isEmpty() || value.equals("reset")) {
+                                // Display packet info
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Empty or Reset Packet details: {}",
+                                                record);
+
                                 return;
+                        }
 
                         try {
                                 JsonObject json = new JsonObject(value);
@@ -192,27 +206,32 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                                 // Free flow in nDPI
                                 // if (f.ndpiFlowPtr != 0) {
-                                //         try {
-                                //                 ndpi.cleanup(f.ndpiFlowPtr);
-                                //                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
-                                //                                 f.key);
-                                //         } catch (Exception e) {
-                                //                 logger.warn(
-                                //                                 "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
-                                //                                 f.key, e.getMessage());
-                                //         }
+                                // try {
+                                // ndpi.cleanup(f.ndpiFlowPtr);
+                                // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
+                                // f.key);
+                                // } catch (Exception e) {
+                                // logger.warn(
+                                // "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
+                                // f.key, e.getMessage());
+                                // }
                                 // }
 
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
-                                                f.key, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
-                                                f.packetCount,
-                                                (f.lastSeen - f.firstSeen));
                         }
+
+                        Map<String, Long> protocolCounts = toFlush.stream()
+                                        .collect(Collectors.groupingBy(f -> f.protocol, Collectors.counting()));
 
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows (TCP : {} | UDP : {})",
                                         toFlush.size(),
                                         tcpCountToFlush,
                                         udpCountToFlush);
+
+                        protocolCounts.forEach((protocol, count) -> {
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows for protocol: {}",
+                                                count, protocol);
+                        });
+
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed early (FIN/RST) {} flows",
                                         flushedEarlyCount);
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       >> Active flows: {} (TCP : {} | UDP : {})",
@@ -376,11 +395,69 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 }
 
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Parsed packet: " + packet);
+                EthernetPacket eth = packet.get(EthernetPacket.class);
+                if (eth == null) {
+                        logger.warn("[FLOWAGGREGATOR] Not an Ethernet packet.");
+                        nonEthernetCount++;
+                        return;
+                }
 
+                EthernetPacket.EthernetHeader ethHeader = eth.getHeader();
+                int etherType = ethHeader.getType().value() & 0xFFFF;
+
+                switch (etherType) {
+                        case 0x0800: // IPv4
+                                handleIPv4(packet, json, rawData);
+                                break;
+
+                        case 0x86DD: // IPv6
+                                handleIPv6(packet, json, rawData);
+                                break;
+
+                        case 0x0806: // ARP
+                                handleArp(packet);
+                                break;
+
+                        case 0x8100: // VLAN
+                                handleVlanEncapsulated(packet, json, rawData);
+                                break;
+
+                        default:
+                                logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}",
+                                                Integer.toHexString(etherType));
+                                unknownPacketCount++;
+                }
+
+        }
+
+        private void handleIPv4(Packet packet, JsonObject json, byte[] rawData) {
+                IpV4Packet ipv4 = packet.get(IpV4Packet.class);
+                if (ipv4 == null) {
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Not an IPv4 packet, skipping.");
+                        notIpPacketCount++;
+                        return;
+                }
+                ipv4PacketCount++;
+                processIpPacket(packet, json, rawData);
+        }
+
+        private void handleIPv6(Packet packet, JsonObject json, byte[] rawData) {
+                IpV6Packet ipv6 = packet.get(IpV6Packet.class);
+                if (ipv6 == null) {
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Not an IPv6 packet, skipping.");
+                        notIpPacketCount++;
+                        return;
+                }
+                ipv6PacketCount++;
+                processIpPacket(packet, json, rawData);
+        }
+
+        private void processIpPacket(Packet packet, JsonObject json, byte[] rawData) {
                 IpPacket ipPacket = packet.get(IpPacket.class);
                 if (ipPacket == null) {
                         logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Not an IP packet, skipping.");
                         notIpPacketCount++;
+                        // Display packet info
                         return;
                 }
 
@@ -476,6 +553,53 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
                                                 + endedFlow.key);
                         }
+                }
+        }
+
+        private void handleArp(Packet packet) {
+                arpPacketCount++;
+                notIpPacketCount++;
+                EthernetPacket eth = packet.get(EthernetPacket.class);
+                if (eth != null) {
+                        EthernetPacket.EthernetHeader ethHeader = eth.getHeader();
+                        String srcMac = ethHeader.getSrcAddr().toString();
+                        String dstMac = ethHeader.getDstAddr().toString();
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: srcMac={} dstMac={} packet={}",
+                                        srcMac, dstMac, packet);
+                } else {
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
+                }
+        }
+
+        private void handleVlanEncapsulated(Packet packet, JsonObject json, byte[] rawData) {
+                vlanPacketCount++;
+                // Extract the encapsulated Ethernet frame
+                Packet payload = packet.getPayload();
+                if (payload != null && payload instanceof EthernetPacket) {
+                        EthernetPacket innerEth = (EthernetPacket) payload;
+                        int innerEtherType = innerEth.getHeader().getType().value() & 0xFFFF;
+
+                        switch (innerEtherType) {
+                                case 0x0800: // IPv4
+                                        handleIPv4(innerEth, json, rawData);
+                                        break;
+
+                                case 0x86DD: // IPv6
+                                        handleIPv6(innerEth, json, rawData);
+                                        break;
+
+                                case 0x0806: // ARP
+                                        handleArp(innerEth);
+                                        break;
+
+                                default:
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       VLAN with unsupported inner EtherType: 0x{}",
+                                                        Integer.toHexString(innerEtherType));
+                                        unknownPacketCount++;
+                        }
+                } else {
+                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       VLAN packet does not contain an inner Ethernet frame.");
+                        notIpPacketCount++;
                 }
         }
 
@@ -594,6 +718,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 f.calculateStats();
                 JsonObject jo = f.getJsonObject();
                 String value = jo.encode();
+
+                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
+                                f.key, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
+                                f.packetCount,
+                                (f.lastSeen - f.firstSeen));
 
                 KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(OUT_TOPIC, f.key, value);
 
