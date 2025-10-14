@@ -163,7 +163,6 @@ JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup(JNIEnv *env, job
         {
                 free(flow);
         }
-
 }
 
 JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskMask(JNIEnv *env, jobject obj, jlong flow_ptr)
@@ -198,6 +197,30 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskLabel(JNIE
                 return (*env)->NewStringUTF(env, "Unknown risk");
 
         return (*env)->NewStringUTF(env, riskLabel);
+        // struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)(uintptr_t)flowPtr;
+        // if (!flow)
+        //         return (*env)->NewStringUTF(env, "Invalid flow");
+
+        // char buffer[1024] = {0};
+        // for (int r = 0; r < NDPI_MAX_RISK; r++)
+        // {
+        //         if (flow->risk & (1ull << r))
+        //         {
+        //                 const char *label = ndpi_risk2str(r);
+        //                 if (label)
+        //                 {
+        //                         strcat(buffer, label);
+        //                         strcat(buffer, ", ");
+        //                 }
+        //         }
+        // }
+
+        // if (strlen(buffer) == 0)
+        //         strcpy(buffer, "No risk detected");
+        // else
+        //         buffer[strlen(buffer) - 2] = '\0'; // Remove last comma
+
+        // return (*env)->NewStringUTF(env, buffer);
 }
 
 JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(JNIEnv *env, jobject obj, jlong flowPtr)
@@ -211,6 +234,9 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(J
         const char *severityStr = ndpi_severity2str(sev->severity);
         if (!severityStr)
                 return (*env)->NewStringUTF(env, "Unknown severity");
+        // If 0 < sev->severity, return "No risk"
+        if (sev->severity == 0)
+                return (*env)->NewStringUTF(env, "No risk");
 
         return (*env)->NewStringUTF(env, severityStr);
 }
