@@ -714,14 +714,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private String buildBilateralFlowKey(String srcIp, Integer srcPort,
                         String dstIp, Integer dstPort,
                         String protocol) {
-                String a = srcIp + ":" + (srcPort == null ? 0 : srcPort);
-                String b = dstIp + ":" + (dstPort == null ? 0 : dstPort);
+                String a = srcIp + "_" + (srcPort == null ? 0 : srcPort);
+                String b = dstIp + "_" + (dstPort == null ? 0 : dstPort);
 
                 // On met toujours la "plus petite" paire en premier
                 if (a.compareTo(b) <= 0) {
-                        return a + "-" + b + "-" + protocol;
+                        return a + "_" + b + "_" + protocol;
                 } else {
-                        return b + "-" + a + "-" + protocol;
+                        return b + "_" + a + "_" + protocol;
                 }
         }
 
