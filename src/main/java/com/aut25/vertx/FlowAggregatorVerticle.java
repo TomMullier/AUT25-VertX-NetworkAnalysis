@@ -561,11 +561,31 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 notIpPacketCount++;
                 EthernetPacket eth = packet.get(EthernetPacket.class);
                 if (eth != null) {
-                        EthernetPacket.EthernetHeader ethHeader = eth.getHeader();
-                        String srcMac = ethHeader.getSrcAddr().toString();
-                        String dstMac = ethHeader.getDstAddr().toString();
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: srcMac={} dstMac={} packet={}",
-                                        srcMac, dstMac, packet);
+                        // Extract ARP header details
+                        String srcIp = eth.getHeader().getSrcAddr().toString();
+                        String dstIp = eth.getHeader().getDstAddr().toString();
+                        String protocol = "ARP";
+
+                        // ARP packets don't have ports, so use 0 as placeholders
+                        Integer srcPort = 0;
+                        Integer dstPort = 0;
+
+                        // Build a flow key for ARP
+                        String key = buildFlowKey(srcIp, dstIp, srcPort, dstPort, protocol);
+
+                        // Create flow and publish immediately
+                        Flow arpFlow = new Flow(key, srcIp, dstIp, srcPort, dstPort, protocol,
+                                        System.currentTimeMillis());
+                        arpFlow.addPacket(packet, System.currentTimeMillis());
+                        arpFlow.packetCount = 1;
+                        arpFlow.bytes = (long) eth.length();
+                        arpFlow.lastSeen = System.currentTimeMillis();
+                        arpFlow.firstSeen = arpFlow.lastSeen;
+                        publishFlow(arpFlow);
+
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP flow created/updated: key={} srcIp={} dstIp={} bytes={}",
+                                        key, srcIp, dstIp, eth.length());
+
                 } else {
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
                 }

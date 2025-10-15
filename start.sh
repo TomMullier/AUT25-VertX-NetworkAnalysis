@@ -95,6 +95,67 @@ detect_distro
 echo -e "${GREEN}>> Detected distribution: $DISTRO${NC}"
 echo ""
 
+# Check NDPI installed
+if [ "$SKIP_DEPS" = false ]; then
+    echo -e "${YELLOW}=== Checking for nDPI installation ===${NC}"
+    MISSING_NDPI=false
+    echo ""
+
+    # Vérifie la présence de la commande ndpiReader
+    if ! command -v ndpiReader &> /dev/null; then
+        echo -e "${RED}❌ nDPI is not installed or ndpiReader not found.${NC}"
+        echo -e "${YELLOW}You can install it manually by following:${NC}"
+        echo -e "${WHITE}  git clone https://github.com/ntop/nDPI.git${NC}"
+        echo -e "${WHITE}  cd nDPI && sudo ./autogen.sh && ./configure && make && sudo make install${NC}"
+        MISSING_NDPI=true
+        exit 1
+    else
+        echo -e "${GREEN}✅ ndpiReader is available.${NC}"
+    fi
+
+    # Vérifie le dossier des headers
+    if [ ! -d "/usr/include/ndpi" ]; then
+        echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
+        echo -e "${YELLOW}Please ensure nDPI headers are installed properly.${NC}"
+        MISSING_NDPI=true
+        exit 1
+    else
+        echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
+    fi
+
+    # Check if /usr/local/include/ndpi exists
+    if [ ! -d "/usr/local/include/ndpi" ]; then
+        echo -e "${RED}❌ Missing directory: /usr/local/include/ndpi/${NC}"
+        echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/local/include.${NC}"
+        MISSING_NDPI=true
+        exit 1
+    else
+        echo -e "${GREEN}✅ Found: /usr/local/include/ndpi/${NC}"
+    fi
+
+    # Check if /usr/include/ndpi exists
+    if [ ! -d "/usr/include/ndpi" ]; then
+        echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
+        echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/include.${NC}"
+        MISSING_NDPI=true
+        exit 1
+    else
+        echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
+    fi
+
+
+    # Stoppe l’installation si nDPI est manquant
+    if [ "$MISSING_NDPI" = true ]; then
+        echo ""
+        echo -e "${RED}⚠️ nDPI installation is incomplete. Please install it before continuing.${NC}"
+        echo ""
+        exit 1
+    fi
+
+    echo -e "${GREEN}=== ✅ nDPI installation verified successfully ===${NC}"
+    echo ""
+fi
+
 # === Install packages function ===
 install_package() {
     PACKAGE=$1
