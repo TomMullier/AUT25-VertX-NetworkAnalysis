@@ -301,7 +301,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 long packetTimestamp = System.currentTimeMillis();
                                 long delay = packetTimestamp - timestamp.get();
                                 timestamp.set(packetTimestamp);
-                                processPacket(packet, delay);
+                                processPacket(packet, delay, packetTimestamp);
                         };
 
                         ExecutorService pool = Executors.newSingleThreadExecutor();
@@ -327,6 +327,7 @@ public class IngestionVerticle extends AbstractVerticle {
          * 
          * @param pcapFilePath Path to the pcap file
          */
+
         private void ingestFromPcap(String pcapFilePath) {
                 PcapHandle handle;
                 try {
@@ -339,7 +340,6 @@ public class IngestionVerticle extends AbstractVerticle {
                 logger.info("[ INGESTION VERTICLE ]            PCAP file opened successfully: {}", pcapFilePath);
                 DataLinkType dlt = handle.getDlt();
                 logger.debug("[ INGESTION VERTICLE ]            Data Link Type: {}", dlt);
-
                 vertx.executeBlocking(promise -> {
                         try {
                                 if (running.get() == false) {
@@ -350,6 +350,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 // Lire tous les paquets et calculer les deltas de temps
                                 List<Packet> packets = new ArrayList<>();
                                 List<Long> deltas = new ArrayList<>();
+                                List<Long> timestamps = new ArrayList<>();
 
                                 Packet firstPacket = handle.getNextPacketEx();
                                 if (firstPacket == null) {
@@ -363,6 +364,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 long previousTime = firstTimestamp.getTime();
                                 packets.add(firstPacket);
                                 deltas.add(0L);
+                                timestamps.add(firstTimestamp.getTime());
 
                                 while (true) {
                                         try {
@@ -378,13 +380,14 @@ public class IngestionVerticle extends AbstractVerticle {
 
                                                 packets.add(packet);
                                                 deltas.add(delta);
+                                                timestamps.add(currentTs.getTime());
                                         } catch (EOFException e) {
                                                 break;
                                         }
                                 }
 
                                 handle.close();
-                                promise.complete(List.of(packets, deltas));
+                                promise.complete(List.of(packets, deltas, timestamps));
                         } catch (Exception e) {
                                 logger.error("[ INGESTION VERTICLE ]            Error reading pcap: " + e.getMessage());
                                 handle.close();
@@ -398,10 +401,12 @@ public class IngestionVerticle extends AbstractVerticle {
                                 List<Packet> packets = (List<Packet>) result.get(0);
                                 @SuppressWarnings("unchecked")
                                 List<Long> deltas = (List<Long>) result.get(1);
+                                @SuppressWarnings("unchecked")
+                                List<Long> timestamps = (List<Long>) result.get(2);
 
                                 // Publier les paquets sur Kafka en respectant les délais
                                 AtomicInteger index = new AtomicInteger(0);
-                                publishNextPacket(packets, deltas, index);
+                                publishNextPacket(packets, deltas, timestamps, index);
                         } else {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to process pcap file: "
                                                 + res.cause().getMessage());
@@ -409,24 +414,26 @@ public class IngestionVerticle extends AbstractVerticle {
                 });
         }
 
-        private void publishNextPacket(List<Packet> packets, List<Long> deltas, AtomicInteger index) {
+        private void publishNextPacket(List<Packet> packets, List<Long> deltas, List<Long> timestamps,
+                        AtomicInteger index) {
                 if (index.get() >= packets.size() || !running.get())
                         return;
 
                 Packet packet = packets.get(index.get());
+                long packetTimestamp = timestamps.get(index.get());
                 long rawDelay = deltas.get(index.getAndIncrement());
                 final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms.
                 logger.debug("[ INGESTION VERTICLE ]            Next packet delay: {} ms", rawDelay);
                 if (rawDelay < 1) {
 
-                        processPacket(packet, rawDelay);
-                        publishNextPacket(packets, deltas, index);
+                        processPacket(packet, rawDelay, packetTimestamp);
+                        publishNextPacket(packets, deltas, timestamps, index);
                         return;
                 } else {
 
                         vertx.setTimer(safeDelay, id -> {
-                                processPacket(packet, safeDelay);
-                                publishNextPacket(packets, deltas, index);
+                                processPacket(packet, safeDelay, packetTimestamp);
+                                publishNextPacket(packets, deltas, timestamps, index);
 
                         });
                 }
@@ -437,15 +444,18 @@ public class IngestionVerticle extends AbstractVerticle {
          *
          * @param packet The packet to process
          */
-        private void processPacket(Packet packet, long delay) {
+        private void processPacket(Packet packet, long delay, long packetTimestamp) {
                 if (packet == null)
                         return;
 
                 String base64Packet = Base64.getEncoder().encodeToString(packet.getRawData());
                 JsonObject record = new JsonObject()
-                                .put("timestamp", System.currentTimeMillis())
+                                .put("timestamp", packetTimestamp)
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
+
+                logger.debug("[ INGESTION VERTICLE ]            Processing packet at timestamp: {} with delay: {} ms",
+                                packetTimestamp, delay);
 
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
                                 record.encode());

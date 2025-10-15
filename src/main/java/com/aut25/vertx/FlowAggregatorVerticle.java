@@ -415,7 +415,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 break;
 
                         case 0x0806: // ARP
-                                handleArp(packet);
+                                handleArp(packet, json);
                                 break;
 
                         case 0x8100: // VLAN
@@ -485,7 +485,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
                 }
 
-                logger.debug(String.format(
+                logger.info(String.format(
                                 "[ FLOWAGGREGATOR VERTICLE ]       Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
                                 srcIp, srcPort == null ? 0 : srcPort,
                                 dstIp, dstPort == null ? 0 : dstPort,
@@ -556,7 +556,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 }
         }
 
-        private void handleArp(Packet packet) {
+        private void handleArp(Packet packet, JsonObject json) {
                 arpPacketCount++;
                 notIpPacketCount++;
                 EthernetPacket eth = packet.get(EthernetPacket.class);
@@ -575,17 +575,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         // Create flow and publish immediately
                         Flow arpFlow = new Flow(key, srcIp, dstIp, srcPort, dstPort, protocol,
-                                        System.currentTimeMillis());
-                        arpFlow.addPacket(packet, System.currentTimeMillis());
+                                        json.getLong("timestamp", System.currentTimeMillis()));
+                        arpFlow.addPacket(packet, json.getLong("timestamp", System.currentTimeMillis()));
                         arpFlow.packetCount = 1;
                         arpFlow.bytes = (long) eth.length();
-                        arpFlow.lastSeen = System.currentTimeMillis();
+                        arpFlow.lastSeen = json.getLong("timestamp", System.currentTimeMillis());
                         arpFlow.firstSeen = arpFlow.lastSeen;
                         publishFlow(arpFlow);
-
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP flow created/updated: key={} srcIp={} dstIp={} bytes={}",
-                                        key, srcIp, dstIp, eth.length());
-
                 } else {
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
                 }
@@ -609,7 +605,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         break;
 
                                 case 0x0806: // ARP
-                                        handleArp(innerEth);
+                                        handleArp(innerEth, json);
                                         break;
 
                                 default:
@@ -739,8 +735,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 JsonObject jo = f.getJsonObject();
                 String value = jo.encode();
 
-                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
-                                f.key, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
+                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
+                                f.key, f.protocol, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
                                 f.packetCount,
                                 (f.lastSeen - f.firstSeen));
 

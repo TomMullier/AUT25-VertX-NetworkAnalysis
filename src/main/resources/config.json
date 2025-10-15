@@ -1,7 +1,7 @@
 {
         "http.port": 8080,
         "store": "true",
-        "mode": "realtime",
+        "mode": "pcap",
         "json": {
                 "file-path": "src/main/resources/data/network-data.json",
                 "ingestion-interval-ms": 1000
