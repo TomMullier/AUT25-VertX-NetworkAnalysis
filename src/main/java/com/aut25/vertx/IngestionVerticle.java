@@ -387,6 +387,12 @@ public class IngestionVerticle extends AbstractVerticle {
                                 }
 
                                 handle.close();
+                                logger.info(Colors.MAGENTA + "[ INGESTION VERTICLE ]            Total packets read: {}",
+                                                packets.size() +
+                                                                Colors.RESET);
+                                logger.info(Colors.MAGENTA
+                                                + "[ INGESTION VERTICLE ]            End of pcap file reached."
+                                                + Colors.RESET);
                                 promise.complete(List.of(packets, deltas, timestamps));
                         } catch (Exception e) {
                                 logger.error("[ INGESTION VERTICLE ]            Error reading pcap: " + e.getMessage());

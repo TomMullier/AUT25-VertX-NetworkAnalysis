@@ -52,6 +52,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private KafkaProducer<String, String> producer;
 
         private final Map<String, Flow> flows = new ConcurrentHashMap<>();
+        private List<Flow> toFlush = new ArrayList<>();
         private final AtomicBoolean running = new AtomicBoolean(true);
         private long notIpPacketCount = 0;
         private long flushedEarlyCount = 0;
@@ -158,31 +159,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 return;
 
                         long now = System.currentTimeMillis();
-                        List<Flow> toFlush = new ArrayList<>();
+                        toFlush = new ArrayList<>();
 
-                        for (Flow f : flows.values()) {
-                                long inactivityTimeout;
-                                long maxAge;
-                                if ("TCP".equals(f.protocol)) {
-                                        inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_TCP;
-                                        maxAge = FLOW_MAX_AGE_MS_TCP;
-                                } else if ("UDP".equals(f.protocol)) {
-                                        inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_UDP;
-                                        maxAge = FLOW_MAX_AGE_MS_UDP;
-                                } else {
-                                        inactivityTimeout = 10_000;
-                                        maxAge = 120_000;
-                                }
-
-                                if (now - f.lastSeen >= inactivityTimeout || now - f.firstSeen >= maxAge) {
-                                        if (flows.remove(f.key) != null) {
-                                                toFlush.add(f);
-                                        }
-                                        // Also remove from ndpiFlows
-                                        ndpiFlows.remove(f.key);
-                                }
-                                f.appProtocol = getNDPIProcol(f);
-                        }
+                        flushExpiredFlows(flows.values().stream()
+                                        .mapToLong(f -> f.lastSeen)
+                                        .max()
+                                        .orElse(now));
 
                         long tcpCountToFlush = toFlush.stream().filter(f -> "TCP".equals(f.protocol)).count();
                         long udpCountToFlush = toFlush.stream().filter(f -> "UDP".equals(f.protocol)).count();
@@ -203,20 +185,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                                 // Publish the flow with appProtocol, riskLevel, and riskLabel set
                                 publishFlow(f);
-
-                                // Free flow in nDPI
-                                // if (f.ndpiFlowPtr != 0) {
-                                // try {
-                                // ndpi.cleanup(f.ndpiFlowPtr);
-                                // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Cleaned up nDPI flow for key={}",
-                                // f.key);
-                                // } catch (Exception e) {
-                                // logger.warn(
-                                // "[ FLOWAGGREGATOR VERTICLE ] Failed to clean up nDPI flow for key={} : {}",
-                                // f.key, e.getMessage());
-                                // }
-                                // }
-
                         }
 
                         Map<String, Long> protocolCounts = toFlush.stream()
@@ -245,6 +213,57 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
 
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
+        }
+
+        /**
+         * Publish a flow to the output Kafka topic
+         * 
+         * @param f Flow to publish
+         */
+        private void flushExpiredFlows(long referenceTimeMs) {
+                if (!running.get())
+                        return;
+
+                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Reference time for flushing: {}",
+                                referenceTimeMs);
+
+                // Iterate safely over the entry set so we can remove while iterating
+                Iterator<Map.Entry<String, Flow>> it = flows.entrySet().iterator();
+                while (it.hasNext()) {
+                        Map.Entry<String, Flow> entry = it.next();
+                        Flow f = entry.getValue();
+
+                        long inactivityTimeout;
+                        long maxAge;
+                        if ("TCP".equals(f.protocol)) {
+                                inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_TCP;
+                                maxAge = FLOW_MAX_AGE_MS_TCP;
+                        } else if ("UDP".equals(f.protocol)) {
+                                inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_UDP;
+                                maxAge = FLOW_MAX_AGE_MS_UDP;
+                        } else {
+                                inactivityTimeout = 10_000;
+                                maxAge = 120_000;
+                        }
+
+                        boolean inactive = (referenceTimeMs - f.lastSeen) >= inactivityTimeout;
+                        boolean tooOld = (referenceTimeMs - f.firstSeen) >= maxAge;
+
+                        if (inactive || tooOld) {
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Checking flow: key={} inactivityTimeout={} maxAge={}",
+                                                f.key, inactivityTimeout, maxAge);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Inactivity duration: {} ms, Age duration: {} ms",
+                                                (referenceTimeMs - f.lastSeen), (referenceTimeMs - f.firstSeen));
+                                // remove via iterator to avoid ConcurrentModificationException on
+                                // non-concurrent maps
+                                it.remove();
+                                // remove from ndpiFlows as well
+                                ndpiFlows.remove(entry.getKey());
+                                toFlush.add(f);
+                        }
+                        // NOTE: don't call getNDPIProtocol() here for every flow on flush.
+                        // Prefer to call it when the flow is updated on packet arrival.
+                }
         }
 
         /**
@@ -485,7 +504,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
                 }
 
-                logger.info(String.format(
+                logger.debug(String.format(
                                 "[ FLOWAGGREGATOR VERTICLE ]       Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
                                 srcIp, srcPort == null ? 0 : srcPort,
                                 dstIp, dstPort == null ? 0 : dstPort,

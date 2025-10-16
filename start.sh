@@ -280,10 +280,12 @@ echo -e "${GREEN}✅ ClickHouse database, users and tables are ready.${NC}"
 echo ""
 
 # === Maven build ===
-echo -e "${BLUE}=== Building the project with Maven ===${NC}"
-mvn clean install -DskipTests -q
-echo -e "${GREEN}✅ Maven build completed.${NC}"
-echo ""
+if [ "$SKIP_DEPS" = false ]; then
+    echo -e "${BLUE}=== Building the project with Maven ===${NC}"
+    mvn clean install -DskipTests -q
+    echo -e "${GREEN}✅ Maven build completed.${NC}"
+    echo ""
+fi
 
 # === Launch Application ===
 echo -e "${CYAN}=== Starting the application ===${NC}"
