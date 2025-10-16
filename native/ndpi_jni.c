@@ -190,14 +190,7 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskLabel(JNIE
         if (flow == NULL)
                 return (*env)->NewStringUTF(env, "Invalid flow");
 
-        // printf("[ C ] Flow risk: %u\n", flow->risk);
-        // printf("[ C ] Flow risk (binary): ");
-        for (int i = sizeof(flow->risk) * 8 - 1; i >= 0; i--)
-        {
-                printf("%d", (flow->risk >> i) & 1);
-        }
-        // printf("[ C ] Risk enum value: %u\n", (ndpi_risk_enum)flow->risk);
-        // printf("[ C ] Flow risk mask: %u\n", flow->risk_mask);
+        
 
         char riskLabel[512] = "";
         uint64_t risk_bits[NDPI_MAX_RISK] = {0};
@@ -306,14 +299,13 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(J
                                         const char *higherSeverity = compareSeverities(riskSeverity, severityStr);
                                         strncpy(riskSeverity, higherSeverity, sizeof(riskSeverity) - 1);
                                 }
-                                // printf("[ C ] Detected risk severity: %s\n", severityStr);
-                                // printf("[ C ] Risk bit %d is set\n", i);
-
-                                // printf("[ C ] Current risk severity: %s\n", riskSeverity);
                         }
                 }
         }
-
+        if (strlen(riskSeverity) == 0)
+        {
+                strncpy(riskSeverity, "No risk", sizeof(riskSeverity) - 1);
+        }
         // Log and return the severity string
         return (*env)->NewStringUTF(env, riskSeverity);
 }

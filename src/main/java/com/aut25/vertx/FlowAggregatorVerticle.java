@@ -567,6 +567,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (flowEnded.get()) {
                         Flow endedFlow = flows.remove(key);
                         if (endedFlow != null) {
+                                endedFlow.appProtocol = getNDPIProcol(endedFlow);
+                                endedFlow.riskLevel = getNDPIFlowRisk(endedFlow);
+                                endedFlow.riskMask = getNDPIFlowRiskMask(endedFlow);
+                                endedFlow.riskLabel = getNDPIFlowRiskLabel(endedFlow);
+                                endedFlow.riskSeverity = getNDPIFlowRiskSeverity(endedFlow);
                                 publishFlow(endedFlow);
                                 flushedEarlyCount++;
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
@@ -590,7 +595,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Integer dstPort = 0;
 
                         // Build a flow key for ARP
-                        String key = buildFlowKey(srcIp, dstIp, srcPort, dstPort, protocol);
+                        String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
 
                         // Create flow and publish immediately
                         Flow arpFlow = new Flow(key, srcIp, dstIp, srcPort, dstPort, protocol,
@@ -600,6 +605,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         arpFlow.bytes = (long) eth.length();
                         arpFlow.lastSeen = json.getLong("timestamp", System.currentTimeMillis());
                         arpFlow.firstSeen = arpFlow.lastSeen;
+                        arpFlow.appProtocol = "ARP";
+                        arpFlow.ndpiFlowPtr = 0;
+                        arpFlow.riskLevel = 0;
+                        arpFlow.riskMask = 0;
+                        arpFlow.riskLabel = "Unknown (ARP)";
+                        arpFlow.riskSeverity = "Unknown (ARP)";
                         publishFlow(arpFlow);
                 } else {
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
