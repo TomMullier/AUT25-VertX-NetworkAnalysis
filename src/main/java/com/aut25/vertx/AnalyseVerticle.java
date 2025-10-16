@@ -35,8 +35,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                 logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..."
                                 + Colors.RESET);
                 // Get mode from config, default to "pcap"
-                JsonObject config = new JsonObject(
-                                new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
+                JsonObject config = config();
                 mode = config.getString("mode", "pcap").toLowerCase();
 
                 // Start reading from Kafka topic every 2 seconds if mode is pcap

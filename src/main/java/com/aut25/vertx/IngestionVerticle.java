@@ -54,9 +54,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 // Config file : get debug mode
                 JsonObject config;
                 try {
-                        config = new JsonObject(
-                                        new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
-
+                        config = config();
                         logger.debug("[ INGESTION VERTICLE ] Loaded configuration: " + config.encodePrettily());
 
                 } catch (Exception e) {
