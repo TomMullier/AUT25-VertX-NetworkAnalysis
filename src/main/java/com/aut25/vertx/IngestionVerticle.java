@@ -208,18 +208,21 @@ public class IngestionVerticle extends AbstractVerticle {
 
                         Scanner scanner = new Scanner(System.in);
                         int choice = -1;
-                        while (choice < 1 || choice > interfaceList.size()) {
-                                logger.info(Colors.MAGENTA
-                                                + "[ INGESTION VERTICLE ]            Select a network interface by number (1-"
-                                                + interfaceList.size() + "): "
-                                                + Colors.RESET);
-                                if (scanner.hasNextInt()) {
-                                        choice = scanner.nextInt();
-                                } else {
-                                        scanner.next(); // ignore non-numeric input
+                        try {
+                                while (choice < 1 || choice > interfaceList.size()) {
+                                        logger.info(Colors.MAGENTA
+                                                        + "[ INGESTION VERTICLE ]            Select a network interface by number (1-"
+                                                        + interfaceList.size() + "): "
+                                                        + Colors.RESET);
+                                        if (scanner.hasNextInt()) {
+                                                choice = scanner.nextInt();
+                                        } else {
+                                                scanner.next(); // ignore non-numeric input
+                                        }
                                 }
+                        } finally {
+                                // Do not close the scanner to avoid closing System.in
                         }
-                        scanner.close();
 
                         logger.info(Colors.MAGENTA + "[ INGESTION VERTICLE ]            Selected interface: "
                                         + interfaceList.get(choice - 1).getName() + Colors.RESET);

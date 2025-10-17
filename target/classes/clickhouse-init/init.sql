@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     appProtocol String,
     riskLevel Int32,
     riskMask Int32,
-    riskLabel String,
+    riskLabel Array(String),
     riskSeverity String,
     ndpiFlowPtr UInt64
 ) ENGINE = MergeTree()

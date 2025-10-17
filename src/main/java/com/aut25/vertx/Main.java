@@ -22,19 +22,7 @@ public class Main extends AbstractVerticle {
     // List to track deployed verticle IDs
     private final List<String> deploymentIds = new ArrayList<>();
     private JsonObject config;
-
-    private JsonObject originalConfig = new JsonObject()
-            .put("http.port", 8080)
-            .put("store", "true")
-            .put("mode", "menu")
-            .put("json", new JsonObject()
-                    .put("file-path", "src/main/resources/data/network-data.json")
-                    .put("ingestion-interval-ms", 1000))
-            .put("pcap", new JsonObject()
-                    .put("file-path", "src/main/resources/data/benign+slowloris_net_packets.pcap"))
-            .put("realtime_test", new JsonObject()
-                    .put("interface", "ens160"))
-            .put("realtime", new JsonObject());
+    private Scanner scanner;
 
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
@@ -56,7 +44,7 @@ public class Main extends AbstractVerticle {
             logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 3. Realtime" + Colors.RESET);
 
             int choice = -1;
-            Scanner scanner = new Scanner(System.in);
+            scanner = new Scanner(System.in);
             while (choice < 1 || choice > 3) {
                 logger.info(
                         Colors.MAGENTA + "[ MAIN VERTICLE ]                 Enter your choice (1-3): " + Colors.RESET);
@@ -108,11 +96,11 @@ public class Main extends AbstractVerticle {
                     config.put("mode", "realtime");
                     break;
                 default:
-                    scanner.close();
+                    // scanner.close();
                     throw new IllegalStateException("Unexpected value: " + choice);
             }
 
-            scanner.close();
+            // scanner.close();
 
         }
 
@@ -178,7 +166,7 @@ public class Main extends AbstractVerticle {
     @Override
     public void stop(Promise<Void> stopPromise) throws Exception {
         logger.info(Colors.RED + "[ MAIN VERTICLE ]                 Stopping MainVerticle..." + Colors.RESET);
-
+        scanner.close();
         // Stopper tous les verticles explicitement
         if (deploymentIds.isEmpty()) {
             logger.info(Colors.RED + "[ MAIN VERTICLE ]                 No verticles to undeploy." + Colors.RESET);

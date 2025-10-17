@@ -114,6 +114,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 int riskLevel = json.getInteger("riskLevel", -1);
                                 int riskMask = json.getInteger("riskMask", -1);
                                 String riskLabel = json.getString("riskLabel", "UNKNOWN");
+                                String[] riskLabels = riskLabel.isEmpty() ? new String[0] : riskLabel.split(",");
                                 String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
 
                                 String packetSummariesString = json.getString("packetSummariesString", "");
@@ -190,7 +191,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
                                         pstmt.setInt(41, riskLevel);
                                         pstmt.setInt(42, riskMask);
-                                        pstmt.setString(43, riskLabel);
+                                        pstmt.setString(43, setArrayAsClickHouseStringArray(riskLabels));
                                         pstmt.setString(44, riskSeverity);
 
                                         pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
@@ -239,9 +240,10 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 StringBuilder sb = new StringBuilder();
                 sb.append("[");
                 for (int i = 0; i < array.length; i++) {
-                        sb.append("'").append(array[i]).append("'");
+                        String element = array[i].startsWith(" ") ? array[i].substring(1) : array[i];
+                        sb.append("'").append(element).append("'");
                         if (i < array.length - 1) {
-                                sb.append(", ");
+                                sb.append(",");
                         }
                 }
                 sb.append("]");
