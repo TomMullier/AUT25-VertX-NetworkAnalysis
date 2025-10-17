@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     packets UInt64,
     packetSummaries Array(String),
     durationMs UInt64,
+    reasonOfFlowEnd String,
     minPacketLength UInt32,
     maxPacketLength UInt32,
     meanPacketLength Float32,

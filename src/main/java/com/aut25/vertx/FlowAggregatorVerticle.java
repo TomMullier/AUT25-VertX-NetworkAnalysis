@@ -183,8 +183,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 f.riskLabel = getNDPIFlowRiskLabel(f);
                                 f.riskSeverity = getNDPIFlowRiskSeverity(f);
 
-                                // Publish the flow with appProtocol, riskLevel, and riskLabel set
-                                publishFlow(f);
+                                // Publish the flow with appProtocol, riskLevel, riskLabel, and reasonOfFlowEnd
+                                // set
+                                publishFlow(f, f.reasonOfFlowEnd);
                         }
 
                         Map<String, Long> protocolCounts = toFlush.stream()
@@ -248,6 +249,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         boolean inactive = (referenceTimeMs - f.lastSeen) >= inactivityTimeout;
                         boolean tooOld = (referenceTimeMs - f.firstSeen) >= maxAge;
+
+                        if (inactive) {
+                                f.reasonOfFlowEnd = "Inactivity Timeout";
+                        } else if (tooOld) {
+                                f.reasonOfFlowEnd = "Max Age Exceeded";
+                        }
 
                         if (inactive || tooOld) {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Checking flow: key={} inactivityTimeout={} maxAge={}",
@@ -493,14 +500,19 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Check for TCP FIN/RST to end flow early
                 AtomicBoolean flowEnded = new AtomicBoolean(false);
-
+                String endFlag = "";
                 if (ipPacket.contains(TcpPacket.class)) {
                         TcpPacket tcp = ipPacket.get(TcpPacket.class);
                         TcpPacket.TcpHeader tcpHeader = tcp.getHeader();
 
-                        if (tcpHeader.getFin() || tcpHeader.getRst()) {
+                        if (tcpHeader.getFin()) {
                                 flowEnded.set(true);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (FIN/RST). Will flush early.");
+                                endFlag = "FIN";
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (FIN). Will flush early.");
+                        } else if (tcpHeader.getRst()) {
+                                flowEnded.set(true);
+                                endFlag = "RST";
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (RST). Will flush early.");
                         }
                 }
 
@@ -567,13 +579,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 // after compute, check if the flow should be flushed
                 if (flowEnded.get()) {
                         Flow endedFlow = flows.remove(key);
+                        ndpiFlows.remove(key);
                         if (endedFlow != null) {
                                 endedFlow.appProtocol = getNDPIProcol(endedFlow);
                                 endedFlow.riskLevel = getNDPIFlowRisk(endedFlow);
                                 endedFlow.riskMask = getNDPIFlowRiskMask(endedFlow);
                                 endedFlow.riskLabel = getNDPIFlowRiskLabel(endedFlow);
                                 endedFlow.riskSeverity = getNDPIFlowRiskSeverity(endedFlow);
-                                publishFlow(endedFlow);
+                                publishFlow(endedFlow, endFlag);
                                 flushedEarlyCount++;
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
                                                 + endedFlow.key);
@@ -615,7 +628,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         arpFlow.riskMask = 0;
                         arpFlow.riskLabel = "Unknown (ARP)";
                         arpFlow.riskSeverity = "Unknown (ARP)";
-                        publishFlow(arpFlow);
+                        publishFlow(arpFlow, "ARP");
                 } else {
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
                 }
@@ -763,8 +776,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * Publish flow to Kafka topic as JSON
          * 
          * @param f Flow to publish
+         * @param reasonOfFlowEnd Reason for flow termination
          */
-        private void publishFlow(Flow f) {
+        private void publishFlow(Flow f, String reasonOfFlowEnd) {
+                f.reasonOfFlowEnd = reasonOfFlowEnd;
                 f.calculateStats();
                 JsonObject jo = f.getJsonObject();
                 String value = jo.encode();

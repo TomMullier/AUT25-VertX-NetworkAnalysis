@@ -120,6 +120,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 String[] packetSummaries = packetSummariesString.isEmpty() ? new String[0]
                                                 : packetSummariesString.split(",");
 
+                                String reasonOfFlowEnd = json.getString("reasonOfFlowEnd", "");
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
@@ -133,9 +135,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "interArrivalTimeMean, interArrivalTimeStdDev, interArrivalTimeMin, interArrivalTimeMax, "
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
-                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries) "
+                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries, reasonOfFlowEnd) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -192,6 +194,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setString(44, riskSeverity);
 
                                         pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
+
+                                        pstmt.setString(46, reasonOfFlowEnd);
 
                                         pstmt.executeUpdate();
                                 }

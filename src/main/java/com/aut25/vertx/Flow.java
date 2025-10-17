@@ -79,6 +79,8 @@ public class Flow {
         public String riskLabel = "UNKNOWN";
         public String riskSeverity = "UNKNOWN";
 
+        public String reasonOfFlowEnd = "";
+
         Logger logger = LoggerFactory.getLogger(Flow.class);
 
         /**
@@ -175,6 +177,7 @@ public class Flow {
 
                 jo.put("packetSummariesString", this.getPacketSummariesString());
                 jo.put("packetSummaries", this.getPacketSummaries());
+                jo.put("reasonOfFlowEnd", this.reasonOfFlowEnd);
                 return jo;
         }
 
@@ -414,6 +417,7 @@ public class Flow {
                 logger.info("riskLabel: {}", riskLabel);
                 logger.info("riskSeverity: {}", riskSeverity);
                 logger.info("packetSummariesString: {}", getPacketSummariesString());
+                logger.info("reasonOfFlowEnd: {}", reasonOfFlowEnd);
 
         }
 
