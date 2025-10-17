@@ -550,7 +550,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 f.ndpiFlowPtr = ndpiFlow.ndpiFlowPtr;
                         }
                         // update
-                        f.addPacket(packet, ts);
+                        String packId = setPacketId(srcIp, dstIp, protocol, ts, packet);
+                        f.addPacket(packet, ts, packId);
                         f.lastSeen = Math.max(f.lastSeen, ts);
                         f.firstSeen = Math.min(f.firstSeen, ts);
                         f.packetCount++;
@@ -600,7 +601,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         // Create flow and publish immediately
                         Flow arpFlow = new Flow(key, srcIp, dstIp, srcPort, dstPort, protocol,
                                         json.getLong("timestamp", System.currentTimeMillis()));
-                        arpFlow.addPacket(packet, json.getLong("timestamp", System.currentTimeMillis()));
+
+                        String arpPackId = setPacketId(srcIp, dstIp, protocol,
+                                        json.getLong("timestamp", System.currentTimeMillis()), eth);
+                        arpFlow.addPacket(packet, json.getLong("timestamp", System.currentTimeMillis()), arpPackId);
                         arpFlow.packetCount = 1;
                         arpFlow.bytes = (long) eth.length();
                         arpFlow.lastSeen = json.getLong("timestamp", System.currentTimeMillis());
@@ -781,6 +785,35 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
                 });
 
+        }
+
+        /**
+         * Generate a unique packet ID based on source IP, destination IP, protocol, and
+         * timestamp
+         * 
+         * @param sourceIp  IP address of the packet source
+         * @param destIp    IP address of the packet destination
+         * @param proto     Protocol used in the packet
+         * @param timestamp Timestamp of the packet
+         * @param packet    The packet object to extract flags
+         * @return Unique packet ID
+         */
+        private String setPacketId(String sourceIp, String destIp, String proto, long timestamp, Packet packet) {
+                String flag = "";
+                if (packet.contains(TcpPacket.class)) {
+                        TcpPacket tcpPacket = packet.get(TcpPacket.class);
+                        TcpPacket.TcpHeader tcpHeader = tcpPacket.getHeader();
+                        if (tcpHeader.getRst()) {
+                                flag = "RST";
+                        } else if (tcpHeader.getFin()) {
+                                flag = "FIN";
+                        } else if (tcpHeader.getSyn()) {
+                                flag = "SYN";
+                        } else if (tcpHeader.getAck()) {
+                                flag = "ACK";
+                        }
+                }
+                return "P_" + sourceIp + "_" + destIp + "_" + proto + "_" + flag + "_" + timestamp;
         }
 
 }

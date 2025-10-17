@@ -66,6 +66,7 @@ public class Flow {
 
         // List of packets for this flow
         List<Packet> packets = new ArrayList<>();
+        List<String> packetSummaries = new ArrayList<>();
         List<Long> packetTimestamps = new ArrayList<>();
 
         public long ndpiFlowPtr = 0;
@@ -172,21 +173,26 @@ public class Flow {
                 jo.put("riskLabel", this.riskLabel);
                 jo.put("riskSeverity", this.riskSeverity);
 
+                jo.put("packetSummariesString", this.getPacketSummariesString());
+                jo.put("packetSummaries", this.getPacketSummaries());
                 return jo;
         }
 
         /**
          * Add a packet to the flow
          * 
-         * @param packet Packet to add
-         * @param ts     Timestamp of the packet
+         * @param packet   Packet to add
+         * @param ts       Timestamp of the packet
+         * @param packetId Unique identifier for the packet
          */
-        public void addPacket(Packet packet, long ts) {
+        public void addPacket(Packet packet, long ts, String packetId) {
                 packets.add(packet);
                 packetTimestamps.add(ts);
                 packetList.add(packet.getRawData());
                 bytes += packet.getRawData().length;
                 packetCount++;
+
+                packetSummaries.add(packetId);
 
         }
 
@@ -197,6 +203,24 @@ public class Flow {
          */
         public List<Packet> getPackets() {
                 return packets;
+        }
+
+        /**
+         * Get the list of packet summaries in the flow
+         * 
+         * @return List of packet summaries
+         */
+        public List<String> getPacketSummaries() {
+                return packetSummaries;
+        }
+
+        /**
+         * Get the packet summaries as a single string
+         * 
+         * @return Comma-separated string of packet summaries
+         */
+        public String getPacketSummariesString() {
+                return String.join(",", packetSummaries);
         }
 
         /**
@@ -389,6 +413,7 @@ public class Flow {
                 logger.info("riskMask: {}", riskMask);
                 logger.info("riskLabel: {}", riskLabel);
                 logger.info("riskSeverity: {}", riskSeverity);
+                logger.info("packetSummariesString: {}", getPacketSummariesString());
 
         }
 

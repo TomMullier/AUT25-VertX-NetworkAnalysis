@@ -116,6 +116,10 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 String riskLabel = json.getString("riskLabel", "UNKNOWN");
                                 String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
 
+                                String packetSummariesString = json.getString("packetSummariesString", "");
+                                String[] packetSummaries = packetSummariesString.isEmpty() ? new String[0]
+                                                : packetSummariesString.split(",");
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
@@ -129,9 +133,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "interArrivalTimeMean, interArrivalTimeStdDev, interArrivalTimeMin, interArrivalTimeMax, "
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
-                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity) "
+                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -187,6 +191,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setString(43, riskLabel);
                                         pstmt.setString(44, riskSeverity);
 
+                                        pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
+
                                         pstmt.executeUpdate();
                                 }
 
@@ -223,6 +229,19 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 });
 
                 logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
+        }
+
+        private String setArrayAsClickHouseStringArray(String[] array) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("[");
+                for (int i = 0; i < array.length; i++) {
+                        sb.append("'").append(array[i]).append("'");
+                        if (i < array.length - 1) {
+                                sb.append(", ");
+                        }
+                }
+                sb.append("]");
+                return sb.toString();
         }
 
         @Override

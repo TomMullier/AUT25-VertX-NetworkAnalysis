@@ -6,6 +6,8 @@ import io.vertx.kafka.client.consumer.KafkaConsumer;
 import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.TcpPacket;
+
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -83,7 +85,7 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                         String sql = "INSERT INTO network_data (id, timestamp, srcIp, dstIp, protocol, bytes, rawPacket) "
                                                         + "VALUES (?, ?, ?, ?, ?, ?, ?)";
                                         try (PreparedStatement pstmt = clickhouseConn.prepareStatement(sql)) {
-                                                pstmt.setString(1, UUID.randomUUID().toString());
+                                                pstmt.setString(1, setPacketId(srcIp, dstIp, protocol, timestamp, packet));
                                                 pstmt.setLong(2, timestamp);
                                                 pstmt.setString(3, srcIp);
                                                 pstmt.setString(4, dstIp);
@@ -114,7 +116,9 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 // Subscribe au topic
                 consumer.subscribe("network-data", ar -> {
                         if (ar.succeeded()) {
-                                logger.info(Colors.CYAN + "[ CLICKHOUSE PACKET VERTICLE ]    Subscribed to topic network-data" + Colors.RESET);
+                                logger.info(Colors.CYAN
+                                                + "[ CLICKHOUSE PACKET VERTICLE ]    Subscribed to topic network-data"
+                                                + Colors.RESET);
                         } else {
                                 logger.error("[ CLICKHOUSE PACKET VERTICLE ]    Failed to subscribe: {}",
                                                 ar.cause().getMessage());
@@ -122,6 +126,35 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 });
 
                 logger.debug("[ CLICKHOUSE PACKET VERTICLE ]    ClickHousePacketVerticle deployed successfully!");
+        }
+
+        /**
+         * Generate a unique packet ID based on source IP, destination IP, protocol, and
+         * timestamp
+         * 
+         * @param sourceIp  IP address of the packet source
+         * @param destIp    IP address of the packet destination
+         * @param proto     Protocol used in the packet
+         * @param timestamp Timestamp of the packet
+         * @param packet    The packet object to extract flags
+         * @return Unique packet ID
+         */
+        private String setPacketId(String sourceIp, String destIp, String proto, long timestamp, Packet packet) {
+                String flag="";
+                if (packet.contains(TcpPacket.class)) {
+                                TcpPacket tcpPacket = packet.get(TcpPacket.class);
+                                TcpPacket.TcpHeader tcpHeader = tcpPacket.getHeader();
+                                if (tcpHeader.getRst()) {
+                                                flag = "RST";
+                                } else if (tcpHeader.getFin()) {
+                                                flag = "FIN";
+                                } else if (tcpHeader.getSyn()) {
+                                                flag = "SYN";
+                                } else if (tcpHeader.getAck()) {
+                                                flag = "ACK";
+                                }
+                }
+                return "P_" + sourceIp + "_" + destIp + "_" + proto + "_" + flag + "_" + timestamp;
         }
 
         @Override
