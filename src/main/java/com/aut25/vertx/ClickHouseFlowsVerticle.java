@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.aut25.vertx.utils.Colors;
+
 public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
         private Connection clickhouseConn;

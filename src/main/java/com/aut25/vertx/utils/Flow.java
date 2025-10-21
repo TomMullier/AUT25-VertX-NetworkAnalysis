@@ -1,4 +1,4 @@
-package com.aut25.vertx;
+package com.aut25.vertx.utils;
 
 import io.vertx.core.json.JsonObject;
 import org.pcap4j.packet.EthernetPacket;
@@ -18,59 +18,59 @@ import java.util.List;
  * Represents a network flow with its attributes and timestamps.
  */
 public class Flow {
-        final String srcIp;
-        final String dstIp;
-        final Integer srcPort;
-        final Integer dstPort;
-        final String protocol;
-        final String key;
+        public String srcIp;
+        public String dstIp;
+        public Integer srcPort;
+        public Integer dstPort;
+        public String protocol;
+        public String key;
 
-        long firstSeen;
-        long lastSeen;
-        long bytes = -1;
-        long packetCount = -1;
+        public long firstSeen;
+        public long lastSeen;
+        public long bytes = -1;
+        public long packetCount = -1;
 
         // Stats of flow
-        double minPacketLength = -1;
-        double maxPacketLength = -1;
-        double meanPacketLength = -1;
-        double stddevPacketLength = -1;
+        public double minPacketLength = -1;
+        public double maxPacketLength = -1;
+        public double meanPacketLength = -1;
+        public double stddevPacketLength = -1;
 
-        double bytesPerSecond = -1;
-        double packetsPerSecond = -1;
+        public double bytesPerSecond = -1;
+        public double packetsPerSecond = -1;
 
-        double totalBytesUpstream = -1;
-        double totalBytesDownstream = -1;
-        double totalPacketsUpstream = -1;
-        double totalPacketsDownstream = -1;
-        double ratioBytesUpstreamDownstream = -1;
-        double ratioPacketsUpstreamDownstream = -1;
+        public double totalBytesUpstream = -1;
+        public double totalBytesDownstream = -1;
+        public double totalPacketsUpstream = -1;
+        public double totalPacketsDownstream = -1;
+        public double ratioBytesUpstreamDownstream = -1;
+        public double ratioPacketsUpstreamDownstream = -1;
 
-        double flowDurationMs = -1;
+        public double flowDurationMs = -1;
 
-        double interArrivalTimeMean = -1;
-        double interArrivalTimeStdDev = -1;
-        double interArrivalTimeMin = -1;
-        double interArrivalTimeMax = -1;
+        public double interArrivalTimeMean = -1;
+        public double interArrivalTimeStdDev = -1;
+        public double interArrivalTimeMin = -1;
+        public double interArrivalTimeMax = -1;
 
         // IDS-friendly features
-        double flowSymmetry = -1;
-        double synRate = -1;
-        double finRate = -1;
-        double rstRate = -1;
-        double ackRate = -1;
+        public double flowSymmetry = -1;
+        public double synRate = -1;
+        public double finRate = -1;
+        public double rstRate = -1;
+        public double ackRate = -1;
 
-        double tcpFraction = -1;
-        double udpFraction = -1;
-        double otherFraction = -1;
+        public double tcpFraction = -1;
+        public double udpFraction = -1;
+        public double otherFraction = -1;
 
         // List of packets for this flow
-        List<Packet> packets = new ArrayList<>();
-        List<String> packetSummaries = new ArrayList<>();
-        List<Long> packetTimestamps = new ArrayList<>();
+        public List<Packet> packets = new ArrayList<>();
+        public List<String> packetSummaries = new ArrayList<>();
+        public List<Long> packetTimestamps = new ArrayList<>();
 
         public long ndpiFlowPtr = 0;
-        private final List<byte[]> packetList = new ArrayList<>();
+        public final List<byte[]> packetList = new ArrayList<>();
         public String appProtocol;
         public byte[] appProtocolBytes;
 
@@ -81,7 +81,7 @@ public class Flow {
 
         public String reasonOfFlowEnd = "";
 
-        Logger logger = LoggerFactory.getLogger(Flow.class);
+        public Logger logger = LoggerFactory.getLogger(Flow.class);
 
         /**
          * Constructor for Flow
@@ -94,7 +94,7 @@ public class Flow {
          * @param protocol Protocol used (e.g., TCP, UDP)
          * @param ts       Timestamp of the flow creation
          */
-        Flow(String key, String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol,
+        public Flow(String key, String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol,
                         long ts) {
                 this.key = key;
                 this.srcIp = srcIp;
@@ -120,7 +120,7 @@ public class Flow {
          * 
          * @return JsonObject representation of the flow
          */
-        JsonObject getJsonObject() {
+        public JsonObject getJsonObject() {
                 JsonObject jo = new JsonObject();
                 jo.put("firstSeen", this.firstSeen);
                 jo.put("lastSeen", this.lastSeen);

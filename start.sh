@@ -289,5 +289,5 @@ fi
 
 # === Launch Application ===
 echo -e "${CYAN}=== Starting the application ===${NC}"
-mvn compile vertx:run -q
+mvn compile vertx:run 
 echo -e "${MAGENTA}=== Application has stopped ===${NC}"

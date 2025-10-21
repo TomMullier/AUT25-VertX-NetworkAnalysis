@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <stdlib.h>
-#include "com_aut25_vertx_NDPIWrapper.h"
+#include "com_aut25_vertx_utils_NDPIWrapper.h"
 #include "ndpi_api.h"
 #include "ndpi_typedefs.h" // Ensure this header is included for NDPI_PROTOCOL_BITMASK
 #include "ndpi_main.h"
@@ -50,7 +50,7 @@ static void check_proto_file()
  * @param obj   Java object reference
  * @return JNIEXPORT jlong JNICALL
  */
-JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_init(JNIEnv *env, jobject obj)
+JNIEXPORT jlong JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_init(JNIEnv *env, jobject obj)
 {
         printf("\033[35m           [ C ]                             Initializing nDPI...\033[0m\n");
 
@@ -88,7 +88,7 @@ JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_init(JNIEnv *env, jobje
  * @param obj  Java object reference
  * @return JNIEXPORT jlong JNICALL
  */
-JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_createFlow(JNIEnv *env, jobject obj)
+JNIEXPORT jlong JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_createFlow(JNIEnv *env, jobject obj)
 {
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)calloc(1, sizeof(struct ndpi_flow_struct));
         if (!flow)
@@ -106,10 +106,11 @@ JNIEXPORT jlong JNICALL Java_com_aut25_vertx_NDPIWrapper_createFlow(JNIEnv *env,
  * @param flow_ptr Pointer to the flow structure
  * @return JNIEXPORT jstring JNICALL
  */
-JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket(JNIEnv *env, jobject obj,
-                                                                         jbyteArray packet,
-                                                                         jlong ts,
-                                                                         jlong flow_ptr)
+
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_analyzePacket(JNIEnv *env, jobject obj,
+                                                                               jbyteArray packet,
+                                                                               jlong ts,
+                                                                               jlong flow_ptr)
 {
         check_proto_file(); // Verify the protocols file before initializing nDPI
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
@@ -131,6 +132,10 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket(JNIEnv 
         // Process the packet with nDPI
         struct ndpi_flow_input_info input_info;
         memset(&input_info, 0, sizeof(input_info));
+
+        // Clear specific risk bits before processing
+        flow->risk &= ~((uint64_t)1 << NDPI_UNIDIRECTIONAL_TRAFFIC);
+
         ndpi_protocol detected = ndpi_detection_process_packet(ndpi_mod, flow, (const u_int8_t *)buf, length, (u_int64_t)ts, &input_info);
 
         // Release the byte array elements
@@ -154,7 +159,7 @@ JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_analyzePacket(JNIEnv 
  * @param flow_ptr Pointer to the flow structure
  * @return JNIEXPORT void JNICALL
  */
-JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup(JNIEnv *env, jobject obj, jlong flow_ptr)
+JNIEXPORT void JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_cleanup(JNIEnv *env, jobject obj, jlong flow_ptr)
 {
         // Free the flow structure
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
@@ -164,7 +169,7 @@ JNIEXPORT void JNICALL Java_com_aut25_vertx_NDPIWrapper_cleanup(JNIEnv *env, job
         }
 }
 
-JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskMask(JNIEnv *env, jobject obj, jlong flow_ptr)
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_getFlowRiskMask(JNIEnv *env, jobject obj, jlong flow_ptr)
 {
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
         if (!ndpi_mod || !flow)
@@ -174,7 +179,7 @@ JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskMask(JNIEnv *
         return (jint)(flow->risk_mask);
 }
 
-JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskScore(JNIEnv *env, jobject obj, jlong flow_ptr)
+JNIEXPORT jint JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_getFlowRiskScore(JNIEnv *env, jobject obj, jlong flow_ptr)
 {
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)flow_ptr;
         if (!ndpi_mod || !flow)
@@ -184,13 +189,11 @@ JNIEXPORT jint JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskScore(JNIEnv 
         return (jint)(flow->risk);
 }
 
-JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskLabel(JNIEnv *env, jobject obj, jlong flowPtr)
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_getFlowRiskLabel(JNIEnv *env, jobject obj, jlong flowPtr)
 {
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)(uintptr_t)flowPtr;
         if (flow == NULL)
                 return (*env)->NewStringUTF(env, "Invalid flow");
-
-        
 
         char riskLabel[512] = "";
         uint64_t risk_bits[NDPI_MAX_RISK] = {0};
@@ -263,7 +266,7 @@ const char *compareSeverities(const char *severity1, const char *severity2)
         return (sev1Index > sev2Index) ? severityLevels[sev1Index] : severityLevels[sev2Index];
 }
 
-JNIEXPORT jstring JNICALL Java_com_aut25_vertx_NDPIWrapper_getFlowRiskSeverity(JNIEnv *env, jobject obj, jlong flowPtr)
+JNIEXPORT jstring JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_getFlowRiskSeverity(JNIEnv *env, jobject obj, jlong flowPtr)
 {
         struct ndpi_flow_struct *flow = (struct ndpi_flow_struct *)(uintptr_t)flowPtr;
         if (!flow)

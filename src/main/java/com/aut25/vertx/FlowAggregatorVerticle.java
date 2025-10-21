@@ -18,6 +18,11 @@ import org.pcap4j.packet.namednumber.DataLinkType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.aut25.vertx.utils.Colors;
+import com.aut25.vertx.utils.Flow;
+import com.aut25.vertx.utils.NDPIWrapper;
+import com.aut25.vertx.utils.NdpiFlowWrapper;
+
 import static java.lang.Thread.sleep;
 
 import java.time.Duration;
@@ -524,7 +529,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Build bilateral flow key
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
-
                 NdpiFlowWrapper ndpiFlow = ndpiFlows.computeIfAbsent(key, k -> {
                         // Create new nDPI flow
                         long flowPtr = ndpi.createFlow();
@@ -775,7 +779,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         /**
          * Publish flow to Kafka topic as JSON
          * 
-         * @param f Flow to publish
+         * @param f               Flow to publish
          * @param reasonOfFlowEnd Reason for flow termination
          */
         private void publishFlow(Flow f, String reasonOfFlowEnd) {

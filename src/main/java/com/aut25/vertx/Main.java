@@ -13,6 +13,13 @@ import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.aut25.vertx.utils.Colors;
+import com.aut25.vertx.utils.Flow;
+import com.aut25.vertx.utils.NDPIWrapper;
+import com.aut25.vertx.utils.NdpiFlowWrapper;
+
+
 import java.util.Scanner;
 import java.io.BufferedWriter;
 
@@ -27,7 +34,6 @@ public class Main extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
         logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Starting MainVerticle..." + Colors.RESET);
-
         // Load configuration from JSON file
         config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
@@ -57,6 +63,8 @@ public class Main extends AbstractVerticle {
 
             switch (choice) {
                 case 1:
+                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] JSON ingestion method selected."
+                            + Colors.RESET);
                     logger.info(
                             Colors.MAGENTA + "[ MAIN VERTICLE ] Enter JSON file path: " + Colors.RESET);
                     String jsonPath = scanner.nextLine();
@@ -74,6 +82,8 @@ public class Main extends AbstractVerticle {
                             + Colors.RESET);
                     break;
                 case 2:
+                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] PCAP ingestion method selected."
+                            + Colors.RESET);
                     logger.info(
                             Colors.MAGENTA + "[ MAIN VERTICLE ] Enter PCAP file path: " + Colors.RESET);
                     String pcapPath = scanner.nextLine();

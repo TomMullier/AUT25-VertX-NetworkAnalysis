@@ -1,4 +1,4 @@
-package com.aut25.vertx;
+package com.aut25.vertx.utils;
 
 /**
  * Wrapper for managing nDPI flow pointers and associated metadata.

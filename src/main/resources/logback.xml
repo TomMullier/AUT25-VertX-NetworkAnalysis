@@ -1,34 +1,72 @@
 <configuration>
-        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <!-- Encodage -->
+        <property name="LOG_PATH" value="logs" />
+        <property name="LOG_FILE" value="${LOG_PATH}/log_%d{yyyy-MM-dd_HH-mm-ss-SSS}.log"/>
+
+        <!-- Console standard -->
+        <appender name="CONSOLE_OUT" class="ch.qos.logback.core.ConsoleAppender">
+                <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                        <level>DEBUG</level>
+                        <onMatch>DENY</onMatch>
+                        <onMismatch>ACCEPT</onMismatch>
+                </filter>
                 <encoder>
-                        <!-- <pattern>%red(%-5level) %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern> -->
-                        <pattern>[ %blue(%-5level)] - %msg%n</pattern>
+                        <pattern>[ %blue(%-5level)] %d{HH:mm:ss.SSS} - %msg%n</pattern>
                 </encoder>
-
-
         </appender>
 
-        <!-- Niveau global par défaut -->
-        <root level="INFO">
-                <appender-ref ref="STDOUT" />
-        </root>
-
-        <!-- <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener" /> -->
-
-        <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
-                <encoder>
-                        <pattern>[%red(%-5level)] - %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern>
-                        <!-- <pattern>%red(%-5level) %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern> -->
-                </encoder>
+        <!-- Console erreur -->
+        <appender name="CONSOLE_ERR" class="ch.qos.logback.core.ConsoleAppender">
+                <target>System.err</target>
                 <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
                         <level>ERROR</level>
                 </filter>
+                <encoder>
+                        <pattern>[ %red(%-5level)] %d{HH:mm:ss.SSS} - %red(%msg%n)</pattern>
+                </encoder>
         </appender>
 
-        <root level="ERROR">
-                <appender-ref ref="STDERR" />
-        </root>
+        <!-- Fichier rotatif asynchrone -->
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+                <file>${LOG_FILE}</file>
+                <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+                        <fileNamePattern>${LOG_PATH}/app-%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+                        <maxHistory>10</maxHistory>
+                </rollingPolicy>
+                <encoder>
+                        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+                </encoder>
+        </appender>
 
-        <!-- Niveau spécifique à ton package -->
-        <logger name="com.aut25.vertx" level="INFO"/>
+        <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+                <queueSize>5000</queueSize>
+                <discardingThreshold>0</discardingThreshold>
+                <appender-ref ref="FILE" />
+        </appender>
+
+        <!-- ================= Loggers ================= -->
+
+        <!-- Ton code : niveau INFO et DEBUG complet -->
+        <logger name="com.aut25.vertx" level="DEBUG" additivity="false">
+                <appender-ref ref="ASYNC_FILE"/>
+                <appender-ref ref="CONSOLE_OUT"/>
+                <appender-ref ref="CONSOLE_ERR"/>
+        </logger>
+
+        <!-- Réduction du bruit : dépendances externes -->
+        <logger name="io.vertx" level="WARN"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+        <logger name="org.apache.zookeeper" level="WARN"/>
+        <logger name="org.apache.http" level="WARN"/>
+        <logger name="io.netty" level="WARN"/>
+        <logger name="org.reflections" level="WARN"/>
+        <logger name="org.eclipse.jetty" level="WARN"/>
+        <logger name="org.pcap4j" level="WARN"/>
+
+        <!-- Root logger -->
+        <root level="INFO">
+                <appender-ref ref="CONSOLE_OUT"/>
+                <appender-ref ref="CONSOLE_ERR"/>
+                <appender-ref ref="ASYNC_FILE"/>
+        </root>
 </configuration>
