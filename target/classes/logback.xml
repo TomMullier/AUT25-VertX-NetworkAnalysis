@@ -1,7 +1,7 @@
 <configuration>
         <!-- Encodage -->
         <property name="LOG_PATH" value="logs" />
-        <property name="LOG_FILE" value="${LOG_PATH}/log_%d{yyyy-MM-dd_HH-mm-ss-SSS}.log"/>
+        <property name="LOG_FILE" value="${LOG_PATH}/app.log"/>
 
         <!-- Console standard -->
         <appender name="CONSOLE_OUT" class="ch.qos.logback.core.ConsoleAppender">

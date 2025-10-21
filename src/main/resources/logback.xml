@@ -1,7 +1,7 @@
 <configuration>
         <!-- Encodage -->
         <property name="LOG_PATH" value="logs" />
-        <property name="LOG_FILE" value="${LOG_PATH}/log_%d{yyyy-MM-dd_HH-mm-ss-SSS}.log"/>
+        <property name="LOG_FILE" value="${LOG_PATH}/app.log"/>
 
         <!-- Console standard -->
         <appender name="CONSOLE_OUT" class="ch.qos.logback.core.ConsoleAppender">
@@ -36,6 +36,8 @@
                 <encoder>
                         <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
                 </encoder>
+                <bufferedIO>true</bufferedIO>                <!-- activer le buffer -->
+                <bufferSize>8192</bufferSize>                <!-- taille du buffer -->
         </appender>
 
         <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
