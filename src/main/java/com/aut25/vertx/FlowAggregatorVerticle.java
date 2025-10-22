@@ -99,6 +99,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("enable.auto.commit", "false");
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
+                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
 
                 // Kafka producer config
                 Map<String, String> producerConfig = new HashMap<>();
@@ -108,6 +109,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 producerConfig.put("acks", "1");
 
                 producer = KafkaProducer.create(vertx, producerConfig);
+
+                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka producer created : " + producerConfig.toString());
 
                 // Subscribe to input topic
                 consumer.subscribe(IN_TOPIC, ar -> {
@@ -217,8 +220,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         logger.info("---------------------------------------------------------------------------------------------");
 
                 });
-
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       FlowAggregatorVerticle started.");
         }
 
         /**
@@ -438,18 +439,22 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 switch (etherType) {
                         case 0x0800: // IPv4
+                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: IPv4 (0x0800)");
                                 handleIPv4(packet, json, rawData);
                                 break;
 
                         case 0x86DD: // IPv6
+                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: IPv6 (0x86DD)");
                                 handleIPv6(packet, json, rawData);
                                 break;
 
                         case 0x0806: // ARP
+                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: ARP (0x0806)");
                                 handleArp(packet, json);
                                 break;
 
                         case 0x8100: // VLAN
+                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: VLAN (0x8100)");
                                 handleVlanEncapsulated(packet, json, rawData);
                                 break;
 
@@ -521,12 +526,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
                 }
 
-                logger.debug(String.format(
-                                "[ FLOWAGGREGATOR VERTICLE ]       Processing packet: %s:%d -> %s:%d protocol=%s bytes=%d ts=%d",
-                                srcIp, srcPort == null ? 0 : srcPort,
-                                dstIp, dstPort == null ? 0 : dstPort,
-                                protocol, bytes, ts, flowEnded));
-
                 // Build bilateral flow key
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
                 NdpiFlowWrapper ndpiFlow = ndpiFlows.computeIfAbsent(key, k -> {
@@ -541,12 +540,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 try {
                         IpPacket ip = packet.get(IpPacket.class); // IpPacket
                         byte[] payload = ip.getRawData();
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Payload : {} " + payload);
 
                         String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
-
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Sent to nDPI {} bytes for flow {}",
-                                        payload.length, key);
 
                         if (!"UNKNOWN".equalsIgnoreCase(ndpiProtocol)) {
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow {} analyzed with nDPI: {}",
@@ -592,8 +587,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 endedFlow.riskSeverity = getNDPIFlowRiskSeverity(endedFlow);
                                 publishFlow(endedFlow, endFlag);
                                 flushedEarlyCount++;
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: "
-                                                + endedFlow.key);
+                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: {} firstSeen={} lastSeen={} bytes={} packets={}",
+                                                endedFlow.key, endedFlow.firstSeen, endedFlow.lastSeen, endedFlow.bytes,
+                                                endedFlow.packetCount);
                         }
                 }
         }
@@ -765,8 +761,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private String buildBilateralFlowKey(String srcIp, Integer srcPort,
                         String dstIp, Integer dstPort,
                         String protocol) {
-                String a = srcIp + "_" + (srcPort == null ? 0 : srcPort);
-                String b = dstIp + "_" + (dstPort == null ? 0 : dstPort);
+                String a = srcIp + "_" + (srcPort == null ? "null" : srcPort);
+                String b = dstIp + "_" + (dstPort == null ? "null" : dstPort);
 
                 // On met toujours la "plus petite" paire en premier
                 if (a.compareTo(b) <= 0) {

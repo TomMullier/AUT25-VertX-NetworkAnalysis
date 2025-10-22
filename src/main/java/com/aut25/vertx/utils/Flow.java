@@ -18,15 +18,15 @@ import java.util.List;
  * Represents a network flow with its attributes and timestamps.
  */
 public class Flow {
-        public String srcIp;
-        public String dstIp;
-        public Integer srcPort;
-        public Integer dstPort;
-        public String protocol;
-        public String key;
+        public String srcIp = "";
+        public String dstIp = "";
+        public Integer srcPort = -1;
+        public Integer dstPort = -1;
+        public String protocol = "";
+        public String key = "";
 
-        public long firstSeen;
-        public long lastSeen;
+        public long firstSeen = -1;
+        public long lastSeen = -1;
         public long bytes = -1;
         public long packetCount = -1;
 

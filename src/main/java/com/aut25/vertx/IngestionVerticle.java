@@ -252,6 +252,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 producer = KafkaProducer.create(vertx, props);
                 logger.debug("[ INGESTION VERTICLE ]            Kafka Producer for ingestion configured."
                                 + Colors.RESET);
+                logger.debug("[ INGESTION VERTICLE ]            Kafka Producer properties: " + props.toString());
         }
 
         /* ----------------------------- Mode Realtime ------------------------------ */
@@ -432,7 +433,6 @@ public class IngestionVerticle extends AbstractVerticle {
                 long packetTimestamp = timestamps.get(index.get());
                 long rawDelay = deltas.get(index.getAndIncrement());
                 final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms.
-                logger.debug("[ INGESTION VERTICLE ]            Next packet delay: {} ms", rawDelay);
                 if (rawDelay < 1) {
 
                         processPacket(packet, rawDelay, packetTimestamp);
@@ -463,8 +463,8 @@ public class IngestionVerticle extends AbstractVerticle {
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
 
-                logger.debug("[ INGESTION VERTICLE ]            Processing packet at timestamp: {} with delay: {} ms",
-                                packetTimestamp, delay);
+                // logger.debug("[ INGESTION VERTICLE ]            Processing packet at timestamp: {} with delay: {} ms",
+                //                 packetTimestamp, delay);
 
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
                                 record.encode());

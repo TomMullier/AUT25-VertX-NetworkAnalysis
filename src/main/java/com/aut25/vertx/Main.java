@@ -19,7 +19,6 @@ import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
 import com.aut25.vertx.utils.NdpiFlowWrapper;
 
-
 import java.util.Scanner;
 import java.io.BufferedWriter;
 
@@ -122,7 +121,7 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
         List<AbstractVerticle> verticles = new ArrayList<>();
         verticles.add(new IngestionVerticle());
-        verticles.add(new AnalyseVerticle());
+        // verticles.add(new AnalyseVerticle());
         verticles.add(new FlowAggregatorVerticle());
         // verticles.add(new ApiVerticle());
 
@@ -133,6 +132,11 @@ public class Main extends AbstractVerticle {
             logger.info(Colors.YELLOW
                     + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."
                     + Colors.RESET);
+        }
+
+        logger.debug("[ MAIN VERTICLE ]                 Verticles to deploy: ");
+        for (AbstractVerticle v : verticles) {
+            logger.debug(" - " + v.getClass().getSimpleName());
         }
 
         // Déploiement séquentiel

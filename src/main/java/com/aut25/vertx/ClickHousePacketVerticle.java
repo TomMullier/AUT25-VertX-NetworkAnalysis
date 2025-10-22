@@ -8,7 +8,6 @@ import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.TcpPacket;
 
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -50,6 +49,11 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
 
                 consumer = KafkaConsumer.create(vertx, config);
 
+                logger.debug("[ CLICKHOUSE PACKET VERTICLE ]    Connected to ClickHouse at " + jdbcUrl);
+                logger.debug(
+                                "[ CLICKHOUSE PACKET VERTICLE ]    KafkaConsumer configured for topic network-data : "
+                                                + config.toString());
+
                 // Handler pour chaque message reçu
                 consumer.handler(record -> {
                         if (!running.get())
@@ -87,7 +91,8 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                         String sql = "INSERT INTO network_data (id, timestamp, srcIp, dstIp, protocol, bytes, rawPacket) "
                                                         + "VALUES (?, ?, ?, ?, ?, ?, ?)";
                                         try (PreparedStatement pstmt = clickhouseConn.prepareStatement(sql)) {
-                                                pstmt.setString(1, setPacketId(srcIp, dstIp, protocol, timestamp, packet));
+                                                pstmt.setString(1,
+                                                                setPacketId(srcIp, dstIp, protocol, timestamp, packet));
                                                 pstmt.setLong(2, timestamp);
                                                 pstmt.setString(3, srcIp);
                                                 pstmt.setString(4, dstIp);
@@ -97,10 +102,14 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                                 pstmt.executeUpdate();
                                         }
 
+                                        logger.debug("[ CLICKHOUSE PACKET VERTICLE ]    Inserted packet into ClickHouse: srcIp={}, dstIp={}, protocol={}, timestamp={}",
+                                                        srcIp, dstIp, protocol, timestamp);
+
                                 }
                         } catch (Exception e) {
                                 logger.error("[ CLICKHOUSE PACKET VERTICLE ]    Error processing record: {}",
                                                 e.getMessage());
+                                logger.error("Packet producing the error: {}", record.value());
                         }
 
                         // Commit manuel après traitement
@@ -142,19 +151,19 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
          * @return Unique packet ID
          */
         private String setPacketId(String sourceIp, String destIp, String proto, long timestamp, Packet packet) {
-                String flag="";
+                String flag = "";
                 if (packet.contains(TcpPacket.class)) {
-                                TcpPacket tcpPacket = packet.get(TcpPacket.class);
-                                TcpPacket.TcpHeader tcpHeader = tcpPacket.getHeader();
-                                if (tcpHeader.getRst()) {
-                                                flag = "RST";
-                                } else if (tcpHeader.getFin()) {
-                                                flag = "FIN";
-                                } else if (tcpHeader.getSyn()) {
-                                                flag = "SYN";
-                                } else if (tcpHeader.getAck()) {
-                                                flag = "ACK";
-                                }
+                        TcpPacket tcpPacket = packet.get(TcpPacket.class);
+                        TcpPacket.TcpHeader tcpHeader = tcpPacket.getHeader();
+                        if (tcpHeader.getRst()) {
+                                flag = "RST";
+                        } else if (tcpHeader.getFin()) {
+                                flag = "FIN";
+                        } else if (tcpHeader.getSyn()) {
+                                flag = "SYN";
+                        } else if (tcpHeader.getAck()) {
+                                flag = "ACK";
+                        }
                 }
                 return "P_" + sourceIp + "_" + destIp + "_" + proto + "_" + flag + "_" + timestamp;
         }

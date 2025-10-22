@@ -251,6 +251,15 @@ check_and_start_service() {
     [ "$QUIET" = false ] && echo -e "${GREEN}✅ ${service_name} is up.${NC}"
 }
 
+# === Delete log file ===
+LOG_FILE="logs/app.log"
+if [ -f "$LOG_FILE" ]; then
+    echo -e "${BLUE}=== Deleting old log file: ${YELLOW}$LOG_FILE${NC}"
+    rm "$LOG_FILE"
+    echo -e "${GREEN}✅ Old log file deleted.${NC}"
+    echo ""
+fi
+
 # === Check each service ===
 check_and_start_service "zookeeper" "src/main/resources/kafka-docker-compose.yml"
 check_and_start_service "kafka" "src/main/resources/kafka-docker-compose.yml"

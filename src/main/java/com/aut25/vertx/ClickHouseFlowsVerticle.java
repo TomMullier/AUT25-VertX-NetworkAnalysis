@@ -1,6 +1,7 @@
 package com.aut25.vertx;
 
 import io.vertx.core.AbstractVerticle;
+import io.vertx.core.json.Json;
 import io.vertx.core.json.JsonObject;
 import io.vertx.kafka.client.consumer.KafkaConsumer;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
@@ -52,6 +53,11 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
                 consumer = KafkaConsumer.create(vertx, config);
 
+                logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Connected to ClickHouse at " + jdbcUrl);
+                logger.debug(
+                                "[ CLICKHOUSE FLOWS VERTICLE ]     KafkaConsumer configured for topic network-flows : "
+                                                + config.toString());
+
                 consumer.handler(record -> {
                         if (!running.get())
                                 return;
@@ -68,8 +74,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 long lastSeen = json.getLong("lastSeen", firstSeen);
                                 String srcIp = json.getString("srcIp", "0.0.0.0");
                                 String dstIp = json.getString("dstIp", "0.0.0.0");
-                                long srcPort = Long.parseLong(json.getString("srcPort", "0"));
-                                long dstPort = Long.parseLong(json.getString("dstPort", "0"));
+                                String srcPort = json.getString("srcPort");
+                                String dstPort = json.getString("dstPort");
+
                                 String protocol = json.getString("protocol", "UNKNOWN");
                                 long bytes = json.getLong("bytes", 0L);
                                 long packetCount = json.getLong("packetCount", 0L);
@@ -147,8 +154,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setLong(3, lastSeen);
                                         pstmt.setString(4, srcIp);
                                         pstmt.setString(5, dstIp);
-                                        pstmt.setLong(6, srcPort);
-                                        pstmt.setLong(7, dstPort);
+                                        pstmt.setString(6, srcPort);
+                                        pstmt.setString(7, dstPort);
                                         pstmt.setString(8, protocol);
                                         pstmt.setLong(9, bytes);
                                         pstmt.setLong(10, packetCount);
@@ -201,12 +208,14 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setString(46, reasonOfFlowEnd);
 
                                         pstmt.executeUpdate();
+                                        logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Inserted flow into ClickHouse: srcIp={}, dstIp={}, protocol={}, firstSeen={}, lastSeen={}",
+                                                        srcIp, dstIp, protocol, firstSeen, lastSeen);
                                 }
 
                         } catch (Exception e) {
                                 logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Error processing record: {}",
                                                 e.getMessage());
-
+                                logger.error("Packet producing the error: {}", record.value());
                         }
 
                         // Commit manuel après traitement
