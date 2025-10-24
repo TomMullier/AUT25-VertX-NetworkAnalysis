@@ -1,5 +1,6 @@
 package com.aut25.vertx.utils;
 
+import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.IpPacket;
@@ -12,6 +13,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+import io.vertx.core.CompositeFuture;
+import com.aut25.vertx.services.GeoIPService;
+import com.aut25.vertx.services.DnsService;
+import com.aut25.vertx.services.WhoisService;
 
 /**
  * Internal Flow class to hold flow state
@@ -80,6 +88,14 @@ public class Flow {
         public String riskSeverity = "UNKNOWN";
 
         public String reasonOfFlowEnd = "";
+
+        // Enrich flow
+        public String srcDomain;
+        public String dstDomain;
+        public String srcCountry;
+        public String dstCountry;
+        public String srcOrg;
+        public String dstOrg;
 
         public Logger logger = LoggerFactory.getLogger(Flow.class);
 
@@ -178,6 +194,14 @@ public class Flow {
                 jo.put("packetSummariesString", this.getPacketSummariesString());
                 jo.put("packetSummaries", this.getPacketSummaries());
                 jo.put("reasonOfFlowEnd", this.reasonOfFlowEnd);
+
+                jo.put("srcCountry", this.srcCountry);
+                jo.put("dstCountry", this.dstCountry);
+                jo.put("srcOrg", this.srcOrg);
+                jo.put("dstOrg", this.dstOrg);
+                jo.put("srcDomain", this.srcDomain);
+                jo.put("dstDomain", this.dstDomain);
+
                 return jo;
         }
 
@@ -417,6 +441,7 @@ public class Flow {
                 this.tcpFraction = -1;
                 this.udpFraction = -1;
                 this.otherFraction = -1;
+
         }
 
         /**
@@ -470,4 +495,97 @@ public class Flow {
 
         }
 
+        // static caches for enrichment
+        private static final ConcurrentHashMap<String, String> geoCache = new ConcurrentHashMap<>();
+        private static final ConcurrentHashMap<String, String> dnsCache = new ConcurrentHashMap<>();
+        private static final ConcurrentHashMap<String, String> whoisCache = new ConcurrentHashMap<>();
+
+        /**
+         * Enrich flow with GeoIP, DNS, and WHOIS data
+         * 
+         * @param geoIPService // GeoIP service for IP to country lookup
+         * @param dnsService   // DNS service for reverse DNS lookup
+         * @param whoisService // WHOIS service for IP to organization lookup
+         * @param vertx        // Vertx instance for async operations
+         * @return Future<Flow>
+         */
+        public Future<Flow> enrich(GeoIPService geoIPService, DnsService dnsService, WhoisService whoisService,
+                        Vertx vertx) {
+                Promise<Flow> promise = Promise.promise();
+
+                CompositeFuture.all(
+                                lookupGeo(geoIPService, vertx, srcIp),
+                                lookupGeo(geoIPService, vertx, dstIp),
+                                lookupDns(dnsService, vertx, srcIp),
+                                lookupDns(dnsService, vertx, dstIp),
+                                lookupWhois(whoisService, vertx, srcIp),
+                                lookupWhois(whoisService, vertx, dstIp)).onSuccess(cf -> {
+                                        this.srcCountry = cf.resultAt(0);
+                                        this.dstCountry = cf.resultAt(1);
+                                        this.srcDomain = cf.resultAt(2);
+                                        this.dstDomain = cf.resultAt(3);
+                                        this.srcOrg = cf.resultAt(4);
+                                        this.dstOrg = cf.resultAt(5);
+                                        promise.complete(this);
+                                }).onFailure(err -> promise.complete(this));
+
+                return promise.future();
+        }
+
+        // Méthodes auxiliaires privées
+        private Future<String> lookupGeo(GeoIPService service, Vertx vertx, String ip) {
+                if (geoCache.containsKey(ip))
+                        return Future.succeededFuture(geoCache.get(ip));
+                Promise<String> p = Promise.promise();
+                vertx.executeBlocking(fut -> {
+                        try {
+                                String country = service.getCountryByIP(ip);
+                                geoCache.put(ip, country);
+                                fut.complete(country);
+                        } catch (Exception e) {
+                                fut.complete("N/A");
+                        }
+                }, false, p);
+                return p.future().recover(err -> Future.succeededFuture("N/A"));
+        }
+
+        private Future<String> lookupDns(DnsService service, Vertx vertx, String ip) {
+                if (dnsCache.containsKey(ip))
+                        return Future.succeededFuture(dnsCache.get(ip));
+                Promise<String> p = Promise.promise();
+                vertx.executeBlocking(fut -> {
+                        try {
+                                String host = service.reverseLookupBlocking(ip);
+                                dnsCache.put(ip, host);
+                                fut.complete(host);
+                        } catch (Exception e) {
+                                fut.complete("N/A");
+                        }
+                }, false, p);
+                return p.future().recover(err -> Future.succeededFuture("N/A"));
+        }
+
+        private Future<String> lookupWhois(WhoisService service, Vertx vertx, String ip) {
+                if (whoisCache.containsKey(ip))
+                        return Future.succeededFuture(whoisCache.get(ip));
+                Promise<String> p = Promise.promise();
+                vertx.executeBlocking(fut -> {
+                        try {
+                                String org = service.lookupBlocking(ip);
+                                if (org == null || org.isEmpty()) {
+                                        whoisCache.put(ip, "N/A");
+                                        fut.complete("N/A");
+                                } else if (org.contains("No match")) {
+                                        whoisCache.put(ip, "Unknown");
+                                        fut.complete("Unknown");
+                                } else {
+                                        whoisCache.put(ip, org);
+                                        fut.complete(org);
+                                }
+                        } catch (Exception e) {
+                                fut.complete("N/A");
+                        }
+                }, false, p);
+                return p.future().recover(err -> Future.succeededFuture("N/A"));
+        }
 }

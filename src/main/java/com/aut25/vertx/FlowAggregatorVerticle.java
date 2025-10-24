@@ -18,6 +18,9 @@ import org.pcap4j.packet.namednumber.DataLinkType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.aut25.vertx.services.DnsService;
+import com.aut25.vertx.services.GeoIPService;
+import com.aut25.vertx.services.WhoisService;
 import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
@@ -73,9 +76,21 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         // Start ndpi
         private final NDPIWrapper ndpi = new NDPIWrapper();
 
+        // Enrichment services
+        private GeoIPService geoIPService;
+        private DnsService dnsService;
+        private WhoisService whoisService;
+
         @Override
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
+                                + Colors.RESET);
+
+                // Init enrich services if needed
+                geoIPService = new GeoIPService();
+                dnsService = new DnsService();
+                whoisService = new WhoisService();
+                logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Enrichment services initialized."
                                 + Colors.RESET);
                 // Initialize nDPI
                 try {
@@ -781,24 +796,41 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private void publishFlow(Flow f, String reasonOfFlowEnd) {
                 f.reasonOfFlowEnd = reasonOfFlowEnd;
                 f.calculateStats();
-                JsonObject jo = f.getJsonObject();
-                String value = jo.encode();
+                // Enrichissement avant publication
+                f.enrich(geoIPService, dnsService, whoisService, vertx)
+                                .onSuccess(enrichedFlow -> {
+                                        JsonObject jo = enrichedFlow.getJsonObject();
+                                        String value = jo.encode();
 
-                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={}",
-                                f.key, f.protocol, f.appProtocol, f.riskLevel, f.riskLabel, f.riskSeverity, f.bytes,
-                                f.packetCount,
-                                (f.lastSeen - f.firstSeen));
+                                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
+                                                        enrichedFlow.key, enrichedFlow.protocol,
+                                                        enrichedFlow.appProtocol,
+                                                        enrichedFlow.riskLevel, enrichedFlow.riskLabel,
+                                                        enrichedFlow.riskSeverity,
+                                                        enrichedFlow.bytes, enrichedFlow.packetCount,
+                                                        (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
+                                                        enrichedFlow.srcCountry, enrichedFlow.dstCountry,
+                                                        enrichedFlow.srcDomain, enrichedFlow.dstDomain,
+                                                        enrichedFlow.srcOrg, enrichedFlow.dstOrg);
 
-                KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(OUT_TOPIC, f.key, value);
+                                        KafkaProducerRecord<String, String> record = KafkaProducerRecord
+                                                        .create(OUT_TOPIC, enrichedFlow.key, value);
 
-                producer.write(record, ar -> {
-                        if (ar.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}", f.key,
-                                                ar.cause().getMessage());
-                        } else {
-                                // f.display();
-                        }
-                });
+                                        producer.write(record, ar -> {
+                                                if (ar.failed()) {
+                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
+                                                                        enrichedFlow.key,
+                                                                        ar.cause().getMessage());
+                                                }
+                                        });
+                                })
+                                .onFailure(err -> {
+                                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
+                                                        f.key, err.getMessage());
+                                        // Publier quand même le flow non enrichi
+                                        JsonObject jo = f.getJsonObject();
+                                        producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key, jo.encode()));
+                                });
 
         }
 

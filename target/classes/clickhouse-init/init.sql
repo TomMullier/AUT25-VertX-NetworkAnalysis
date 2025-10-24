@@ -63,7 +63,13 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     riskMask Nullable(Int32),
     riskLabel Array(String),
     riskSeverity Nullable(String),
-    ndpiFlowPtr Nullable(UInt64)
+    ndpiFlowPtr Nullable(UInt64),
+    srcCountry Nullable(String),
+    dstCountry Nullable(String),
+    srcDomain Nullable(String),
+    dstDomain Nullable(String),
+    srcOrg Nullable(String),
+    dstOrg Nullable(String)
 ) ENGINE = MergeTree()
 ORDER BY (firstSeen, flowKey);
 

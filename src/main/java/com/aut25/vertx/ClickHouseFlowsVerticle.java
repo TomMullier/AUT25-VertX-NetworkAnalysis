@@ -132,6 +132,13 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
                                 String reasonOfFlowEnd = json.getString("reasonOfFlowEnd", "");
 
+                                String srcCountry = json.getString("srcCountry", "N/A");
+                                String dstCountry = json.getString("dstCountry", "N/A");
+                                String srcDomain = json.getString("srcDomain", "N/A");
+                                String dstDomain = json.getString("dstDomain", "N/A");
+                                String srcOrg = json.getString("srcOrg", "N/A");
+                                String dstOrg = json.getString("dstOrg", "N/A");
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
@@ -145,9 +152,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "interArrivalTimeMean, interArrivalTimeStdDev, interArrivalTimeMin, interArrivalTimeMax, "
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
-                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries, reasonOfFlowEnd) "
+                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -206,6 +213,13 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
 
                                         pstmt.setString(46, reasonOfFlowEnd);
+
+                                        pstmt.setString(47, srcCountry);
+                                        pstmt.setString(48, dstCountry);
+                                        pstmt.setString(49, srcDomain);
+                                        pstmt.setString(50, dstDomain);
+                                        pstmt.setString(51, srcOrg);
+                                        pstmt.setString(52, dstOrg);
 
                                         pstmt.executeUpdate();
                                         logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Inserted flow into ClickHouse: srcIp={}, dstIp={}, protocol={}, firstSeen={}, lastSeen={}",
