@@ -87,7 +87,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 + Colors.RESET);
 
                 // Init enrich services if needed
-                geoIPService = new GeoIPService();
+                geoIPService = new GeoIPService("src/main/resources/GeoLite2-City.mmdb",
+                                "src/main/resources/GeoLite2-ASN.mmdb");
                 dnsService = new DnsService();
                 whoisService = new WhoisService();
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Enrichment services initialized."

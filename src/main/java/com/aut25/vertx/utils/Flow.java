@@ -11,6 +11,8 @@ import org.pcap4j.packet.factory.PacketFactories;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,6 +22,12 @@ import io.vertx.core.CompositeFuture;
 import com.aut25.vertx.services.GeoIPService;
 import com.aut25.vertx.services.DnsService;
 import com.aut25.vertx.services.WhoisService;
+import com.maxmind.geoip2.exception.AddressNotFoundException;
+import com.maxmind.geoip2.model.CityResponse;
+import com.maxmind.geoip2.DatabaseReader;
+import com.maxmind.geoip2.model.CityResponse;
+import com.maxmind.geoip2.model.AsnResponse;
+import com.maxmind.geoip2.exception.AddressNotFoundException;
 
 /**
  * Internal Flow class to hold flow state
@@ -572,12 +580,19 @@ public class Flow {
                 vertx.executeBlocking(fut -> {
                         try {
                                 String org = service.lookupBlocking(ip);
+                                org = parseWhoisOrg(org);
                                 if (org == null || org.isEmpty()) {
                                         whoisCache.put(ip, "N/A");
                                         fut.complete("N/A");
                                 } else if (org.contains("No match")) {
-                                        whoisCache.put(ip, "Unknown");
-                                        fut.complete("Unknown");
+                                        GeoIPService geoIPService = new GeoIPService(
+                                                        "src/main/resources/GeoLite2-City.mmdb",
+                                                        "src/main/resources/GeoLite2-ASN.mmdb");
+                                        String asnOrg = geoIPService.getOrgByIP(ip);
+                                        whoisCache.put(ip, asnOrg);
+                                        System.out.println("WHOIS lookup failed for IP " + ip
+                                                        + ", falling back to GeoIP ASN: " + asnOrg);
+                                        fut.complete(asnOrg);
                                 } else {
                                         whoisCache.put(ip, org);
                                         fut.complete(org);
@@ -588,4 +603,24 @@ public class Flow {
                 }, false, p);
                 return p.future().recover(err -> Future.succeededFuture("N/A"));
         }
+
+        /**
+         * Parse the organization name from the raw WHOIS response.
+         * 
+         * @param whoisRaw The raw WHOIS response.
+         * @return The organization name or "No match" if not found.
+         */
+        private String parseWhoisOrg(String whoisRaw) {
+                if (whoisRaw == null)
+                        return "N/A";
+                String[] lines = whoisRaw.split("\n");
+                for (String line : lines) {
+                        line = line.trim();
+                        if (line.startsWith("OrgName:") || line.startsWith("Organization:")) {
+                                return line.split(":", 2)[1].trim();
+                        }
+                }
+                return "No match";
+        }
+
 }

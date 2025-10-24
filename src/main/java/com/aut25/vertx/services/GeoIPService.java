@@ -6,45 +6,64 @@ import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.model.CityResponse;
 import java.io.IOException;
 import java.net.UnknownHostException;
+import com.maxmind.geoip2.DatabaseReader;
+import com.maxmind.geoip2.exception.AddressNotFoundException;
+import com.maxmind.geoip2.model.CityResponse;
+import com.maxmind.geoip2.model.AsnResponse;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.InetAddress;
 
 /**
  * GeoIPService provides methods to get geographical information about an IP
  * address
  * using the MaxMind GeoLite2 database.
  */
-public class GeoIPService {
-        private DatabaseReader reader;
 
-        /**
-         * Constructor that initializes the DatabaseReader with the GeoLite2-City.mmdb
-         * database.
-         * 
-         * @throws IOException if the database file cannot be read.
-         */
-        public GeoIPService() throws IOException {
-                File database = new File("src/main/resources/GeoLite2-City.mmdb");
-                reader = new DatabaseReader.Builder(database).build();
+public class GeoIPService {
+        private final DatabaseReader cityReader;
+        private final DatabaseReader asnReader;
+
+        public GeoIPService(String cityDbPath, String asnDbPath) throws IOException {
+                this.cityReader = new DatabaseReader.Builder(new File(cityDbPath)).build();
+                this.asnReader = new DatabaseReader.Builder(new File(asnDbPath)).build();
         }
 
-        /**
-         * Get the country name associated with the given IP address.
-         * 
-         * @param ip The IP address to look up.
-         * @return Country name as a String.
-         */
         public String getCountryByIP(String ip) {
+
                 if (!isValidIP(ip)) {
-                        return "N/A";
+                        return "Invalid IP";
                 }
                 if (isPrivateIp(ip)) {
                         return "Private IP";
                 }
                 try {
-                        InetAddress ipAddress = InetAddress.getByName(ip);
-                        CityResponse response = reader.city(ipAddress);
-                        return response.getCountry().getName();
+                        InetAddress inet = InetAddress.getByName(ip);
+                        CityResponse city = cityReader.city(inet);
+                        return city.getCountry().getName();
+                } catch (AddressNotFoundException e) {
+                        return "Private IP";
                 } catch (Exception e) {
-                        e.printStackTrace();
+                        return "Unknown";
+                }
+        }
+
+        public String getOrgByIP(String ip) {
+
+                if (!isValidIP(ip)) {
+                        return "Invalid IP";
+                }
+                if (isPrivateIp(ip)) {
+                        return "Private IP";
+                }
+                try {
+                        InetAddress inet = InetAddress.getByName(ip);
+                        AsnResponse asn = asnReader.asn(inet);
+                        return asn.getAutonomousSystemOrganization();
+                } catch (AddressNotFoundException e) {
+                        return "Private IP";
+                } catch (Exception e) {
                         return "Unknown";
                 }
         }
