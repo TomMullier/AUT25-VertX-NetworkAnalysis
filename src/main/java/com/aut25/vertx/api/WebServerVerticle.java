@@ -3,62 +3,68 @@ package com.aut25.vertx.api;
 import io.netty.handler.codec.http.cors.CorsHandler;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.ServerWebSocket;
 import io.vertx.core.json.JsonObject;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.aut25.vertx.api.utils.FlowConsumerVerticle;
 import com.aut25.vertx.utils.Colors;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.*;
 import io.vertx.core.http.HttpMethod;
+import io.vertx.core.Promise;
 
 public class WebServerVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(WebServerVerticle.class);
+        private final Set<ServerWebSocket> clients = ConcurrentHashMap.newKeySet();
 
         @Override
-        public void start() throws Exception {
-                // Lire depuis config()
-                JsonObject config;
-                try {
-                        config = config();
-                        logger.debug("[ WEBSERVER VERTICLE ]            Configuration loaded: "
-                                        + config.encodePrettily());
-                } catch (Exception e) {
-                        logger.error("[ WEBSERVER VERTICLE ]            Failed to load configuration: "
-                                        + e.getMessage());
-                        return;
-                }
-
+        public void start(Promise<Void> startPromise) {
+                JsonObject config = config();
                 int port = config.getInteger("http.port", 8888);
-                logger.info(Colors.MAGENTA + "[ WEBSERVER VERTICLE ]            Starting HTTP server on port " + port
-                                + Colors.RESET);
 
                 Router router = Router.router(vertx);
-
-                router.route("/").handler(StaticHandler.create("web").setCachingEnabled(false));
-
-                Router apiRouter = Router.router(vertx);
-                // apiRouter.get("/flows").handler(this::getFlows);
-                // apiRouter.get("/stats").handler(this::getStats);
-                router.mountSubRouter("/api", apiRouter);
+                router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 
                 HttpServer server = vertx.createHttpServer();
 
-                server.requestHandler(router).listen(port, ar -> {
-                        if (ar.succeeded()) {
-                                logger.info(Colors.MAGENTA
-                                                + "[ WEBSERVER VERTICLE ]            HTTP server started on port "
-                                                + port + Colors.RESET);
-                        } else {
-                                logger.error("[ WEBSERVER VERTICLE ]            Failed to start HTTP server: "
-                                                + ar.cause());
+                server.webSocketHandler(ws -> {
+                        if (!"/".equals(ws.path())) {
+                                ws.reject();
+                                return;
                         }
+
+                        logger.info("[WS] Nouveau client connecté");
+                        clients.add(ws);
+
+                        ws.closeHandler(v -> clients.remove(ws));
                 });
 
+                // 🔹 Ecoute des messages sur l'EventBus
+                vertx.eventBus().consumer("flows.data", msg -> {
+                        String data = msg.body().toString();
+                        clients.forEach(ws -> {
+                                if (!ws.isClosed())
+                                        ws.writeTextMessage(data);
+                        });
+                });
+
+                server.requestHandler(router)
+                                .listen(port)
+                                .onSuccess(s -> {
+                                        logger.info(Colors.MAGENTA + "[ WEBSERVER ] Started on port " + port
+                                                        + Colors.RESET);
+                                        startPromise.complete();
+                                })
+                                .onFailure(startPromise::fail);
         }
 
         @Override

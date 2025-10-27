@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Kafka Realtime Dashboard</title>
+
+        <!-- Tailwind (via CDN pour le moment) -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="bg-gray-50 text-gray-900 flex flex-col min-h-screen">
+
+        <!-- Header -->
+        <header class="bg-indigo-600 text-white p-4 shadow-lg">
+                <h1 class="text-2xl font-semibold text-center">📊 Kafka Real-Time Dashboard</h1>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">
+                <section id="status" class="p-4 bg-white rounded-2xl shadow">
+                        <h2 class="text-xl font-semibold mb-2">État de la connexion WebSocket</h2>
+                        <p id="connectionStatus" class="font-mono text-gray-700">🔄 Connexion en cours...</p>
+                </section>
+
+                <section id="data" class="p-4 bg-white rounded-2xl shadow">
+                        <h2 class="text-xl font-semibold mb-2">Messages reçus</h2>
+                        <div id="messageContainer"
+                                class="font-mono text-sm overflow-y-auto max-h-[400px] p-2 border rounded bg-gray-100">
+                        </div>
+                </section>
+
+                <!-- Section future : Graphiques -->
+                <section id="charts" class="p-4 bg-white rounded-2xl shadow">
+                        <h2 class="text-xl font-semibold mb-2">Visualisations</h2>
+                        <canvas id="chart" width="400" height="200"></canvas>
+                        <p class="text-gray-500 text-sm mt-2">Graphiques à venir...</p>
+                </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-gray-200 text-center p-4 text-sm">
+                © 2025 - Dashboard temps réel Vert.x + Kafka
+        </footer>
+
+        <script src="js/app.js"></script>
+</body>
+
+</html>

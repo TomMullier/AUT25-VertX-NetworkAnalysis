@@ -19,6 +19,7 @@ import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
 import com.aut25.vertx.utils.NdpiFlowWrapper;
 import com.aut25.vertx.api.*;
+import com.aut25.vertx.api.utils.*;
 
 import java.util.Scanner;
 import java.io.BufferedWriter;
@@ -173,6 +174,7 @@ public class Main extends AbstractVerticle {
         verticles.add(new IngestionVerticle());
         // verticles.add(new AnalyseVerticle());
         verticles.add(new FlowAggregatorVerticle());
+        verticles.add(new FlowConsumerVerticle());
         verticles.add(new WebServerVerticle());
 
         if (store) {

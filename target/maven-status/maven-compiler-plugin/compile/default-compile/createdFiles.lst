@@ -1,6 +1,7 @@
 com/aut25/vertx/IngestionVerticle$1.class
 com/aut25/vertx/utils/NDPIWrapper.class
 com/aut25/vertx/services/GeoIPService.class
+com/aut25/vertx/api/utils/FlowConsumerVerticle.class
 com/aut25/vertx/services/WhoisService.class
 com/aut25/vertx/utils/NdpiFlowWrapper.class
 com/aut25/vertx/ClickHouseFlowsVerticle.class
