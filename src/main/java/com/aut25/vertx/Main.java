@@ -18,6 +18,7 @@ import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
 import com.aut25.vertx.utils.NdpiFlowWrapper;
+import com.aut25.vertx.api.*;
 
 import java.util.Scanner;
 import java.io.BufferedWriter;
@@ -70,14 +71,16 @@ public class Main extends AbstractVerticle {
                 try {
                     choice = Integer.parseInt(scanner.nextLine());
                 } catch (NumberFormatException e) {
-                    logger.error("Invalid input. Please enter a number between 1 and 4.");
+                    logger.error("                 Invalid input. Please enter a number between 1 and 4.");
                 }
             }
 
             switch (choice) {
                 case 1: // JSON
-                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] JSON ingestion method selected." + Colors.RESET);
-                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] Enter JSON file path (or type 'menu' to return): "
+                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 JSON ingestion method selected."
+                            + Colors.RESET);
+                    logger.info(Colors.MAGENTA
+                            + "[ MAIN VERTICLE ]                 Enter JSON file path (or type 'menu' to return): "
                             + Colors.RESET);
                     String jsonPath = scanner.nextLine();
                     if ("menu".equalsIgnoreCase(jsonPath.trim())) {
@@ -86,18 +89,22 @@ public class Main extends AbstractVerticle {
                     if (jsonPath.trim().isEmpty()) {
                         jsonPath = config.getJsonObject("json").getString("file-path",
                                 "src/main/resources/data/network-data.json");
-                        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] No input provided. Using default path: "
+                        logger.info(Colors.YELLOW
+                                + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
                                 + jsonPath + Colors.RESET);
                     }
                     config.put("mode", "json");
                     config.put("json.file-path", jsonPath);
-                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] JSON file path set to: " + jsonPath + Colors.RESET);
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 JSON file path set to: " + jsonPath
+                            + Colors.RESET);
                     exitMenu = true;
                     break;
 
                 case 2: // PCAP
-                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] PCAP ingestion method selected." + Colors.RESET);
-                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ] Enter PCAP file path (or type 'menu' to return): "
+                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 PCAP ingestion method selected."
+                            + Colors.RESET);
+                    logger.info(Colors.MAGENTA
+                            + "[ MAIN VERTICLE ]                 Enter PCAP file path (or type 'menu' to return): "
                             + Colors.RESET);
                     String pcapPath = scanner.nextLine();
                     if ("menu".equalsIgnoreCase(pcapPath.trim())) {
@@ -106,18 +113,21 @@ public class Main extends AbstractVerticle {
                     if (pcapPath.trim().isEmpty()) {
                         pcapPath = config.getJsonObject("pcap").getString("file-path",
                                 "src/main/resources/data/benign+slowloris_net_packets.pcap");
-                        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] No input provided. Using default path: "
+                        logger.info(Colors.YELLOW
+                                + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
                                 + pcapPath + Colors.RESET);
                     }
                     config.put("mode", "pcap");
                     config.put("pcap.file-path", pcapPath);
-                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] PCAP file path set to: " + pcapPath + Colors.RESET);
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 PCAP file path set to: " + pcapPath
+                            + Colors.RESET);
                     exitMenu = true;
                     break;
 
                 case 3: // Realtime
                     logger.info(
-                            Colors.MAGENTA + "[ MAIN VERTICLE ] Realtime ingestion method selected." + Colors.RESET);
+                            Colors.MAGENTA + "[ MAIN VERTICLE ]                 Realtime ingestion method selected."
+                                    + Colors.RESET);
                     config.put("mode", "realtime");
                     exitMenu = true;
                     break;
@@ -125,15 +135,17 @@ public class Main extends AbstractVerticle {
                 case 4: // Exit
                     exitMenu = true;
                     exitProgram = true;
-                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ] Exiting menu." + Colors.RESET);
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Exiting menu." + Colors.RESET);
                     vertx.close(ar -> {
                         if (ar.succeeded()) {
 
-                            logger.info(Colors.GREEN + "[ MAIN VERTICLE ] Vert.x closed successfully. Goodbye!"
+                            logger.info(Colors.GREEN
+                                    + "[ MAIN VERTICLE ]                 Vert.x closed successfully. Goodbye!"
                                     + Colors.RESET);
                         } else {
-                            logger.error(Colors.RED + "[ MAIN VERTICLE ] Error closing Vert.x: " + ar.cause()
-                                    + Colors.RESET);
+                            logger.error(
+                                    Colors.RED + "[ MAIN VERTICLE ]                 Error closing Vert.x: " + ar.cause()
+                                            + Colors.RESET);
                         }
                     });
 
@@ -161,7 +173,7 @@ public class Main extends AbstractVerticle {
         verticles.add(new IngestionVerticle());
         // verticles.add(new AnalyseVerticle());
         verticles.add(new FlowAggregatorVerticle());
-        // verticles.add(new ApiVerticle());
+        verticles.add(new WebServerVerticle());
 
         if (store) {
             verticles.add(new ClickHousePacketVerticle());

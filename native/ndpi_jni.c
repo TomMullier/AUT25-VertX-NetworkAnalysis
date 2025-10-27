@@ -52,13 +52,13 @@ static void check_proto_file()
  */
 JNIEXPORT jlong JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_init(JNIEnv *env, jobject obj)
 {
-        printf("\033[35m           [ C ]                             Initializing nDPI...\033[0m\n");
+        printf("\033[35m                        [ C ]                             Initializing nDPI...\033[0m\n");
 
         // Initialize nDPI
         ndpi_mod = ndpi_init_detection_module(NULL);
         if (!ndpi_mod)
         {
-                printf("\033[35m           [ C ]                             Failed to init detection module\033[0m\n");
+                printf("\033[35m                        [ C ]                             Failed to init detection module\033[0m\n");
                 return 0;
         }
 
@@ -66,7 +66,7 @@ JNIEXPORT jlong JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_init(JNIEnv *env,
         check_proto_file();
         if (ndpi_load_protocols_file(ndpi_mod, proto_file_path) < 0)
         {
-                printf("\033[35m           [ C ]                             Failed to load protocols file: %s\033[0m\n", proto_file_path);
+                printf("\033[35m                        [ C ]                             Failed to load protocols file: %s\033[0m\n", proto_file_path);
                 ndpi_exit_detection_module(ndpi_mod);
                 ndpi_mod = NULL;
                 return 0;
@@ -74,7 +74,7 @@ JNIEXPORT jlong JNICALL Java_com_aut25_vertx_utils_NDPIWrapper_init(JNIEnv *env,
 
         // Finalize nDPI initialization
         ndpi_finalize_initialization(ndpi_mod);
-        printf("\033[35m           [ C ]                             nDPI initialized successfully with %u protocols.\033[0m\n",
+        printf("\033[35m                        [ C ]                             nDPI initialized successfully with %u protocols.\033[0m\n",
                ndpi_get_num_protocols(ndpi_mod));
 
         // Create and return a default flow

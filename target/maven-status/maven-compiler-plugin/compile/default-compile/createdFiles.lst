@@ -7,6 +7,7 @@ com/aut25/vertx/ClickHouseFlowsVerticle.class
 com/aut25/vertx/FlowAggregatorVerticle.class
 com/aut25/vertx/FlowAggregatorVerticle$Ports.class
 com/aut25/vertx/ClickHousePacketVerticle.class
+com/aut25/vertx/api/WebServerVerticle.class
 com/aut25/vertx/Main.class
 com/aut25/vertx/IngestionVerticle$Task.class
 com/aut25/vertx/utils/Colors.class

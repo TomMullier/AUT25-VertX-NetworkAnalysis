@@ -283,7 +283,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 if (clickhouseConn != null)
                         clickhouseConn.close();
                 Logger logger = LoggerFactory.getLogger(ClickHouseFlowsVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle stopped."
+                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle stopped!"
                                 + Colors.RESET);
         }
 
