@@ -16,4 +16,5 @@ com/aut25/vertx/services/DnsService.class
 com/aut25/vertx/utils/Flow.class
 com/aut25/vertx/AnalyseVerticle.class
 com/aut25/vertx/IngestionVerticle.class
+com/aut25/vertx/api/utils/PacketConsumerVerticle.class
 com/aut25/vertx/ApiVerticle.class

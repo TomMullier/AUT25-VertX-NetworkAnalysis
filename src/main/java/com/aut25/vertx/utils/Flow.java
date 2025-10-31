@@ -34,6 +34,9 @@ import com.maxmind.geoip2.exception.AddressNotFoundException;
  * Represents a network flow with its attributes and timestamps.
  */
 public class Flow {
+
+        // logger
+
         public String srcIp = "";
         public String dstIp = "";
         public Integer srcPort = -1;
@@ -520,6 +523,7 @@ public class Flow {
         public Future<Flow> enrich(GeoIPService geoIPService, DnsService dnsService, WhoisService whoisService,
                         Vertx vertx) {
                 Promise<Flow> promise = Promise.promise();
+                logger.debug("Enriching flow: srcIp={}, dstIp={}", srcIp, dstIp);
 
                 CompositeFuture.all(
                                 lookupGeo(geoIPService, vertx, srcIp),
@@ -542,6 +546,7 @@ public class Flow {
 
         // Méthodes auxiliaires privées
         private Future<String> lookupGeo(GeoIPService service, Vertx vertx, String ip) {
+                logger.debug("Looking up GeoIP for IP: {}", ip);
                 if (geoCache.containsKey(ip))
                         return Future.succeededFuture(geoCache.get(ip));
                 Promise<String> p = Promise.promise();
@@ -549,8 +554,10 @@ public class Flow {
                         try {
                                 String country = service.getCountryByIP(ip);
                                 geoCache.put(ip, country);
+                                logger.debug("GeoIP lookup result for IP {}: {}", ip, country);
                                 fut.complete(country);
                         } catch (Exception e) {
+                                logger.debug("Error during GeoIP lookup for IP {}: {}", ip, e.getMessage());
                                 fut.complete("N/A");
                         }
                 }, false, p);
@@ -558,6 +565,8 @@ public class Flow {
         }
 
         private Future<String> lookupDns(DnsService service, Vertx vertx, String ip) {
+
+                logger.debug("Looking up DNS for IP: {}", ip);
                 if (dnsCache.containsKey(ip))
                         return Future.succeededFuture(dnsCache.get(ip));
                 Promise<String> p = Promise.promise();
@@ -565,8 +574,10 @@ public class Flow {
                         try {
                                 String host = service.reverseLookupBlocking(ip);
                                 dnsCache.put(ip, host);
+                                logger.debug("DNS lookup result for IP {}: {}", ip, host);
                                 fut.complete(host);
                         } catch (Exception e) {
+                                logger.debug("Error during DNS lookup for IP {}: {}", ip, e.getMessage());
                                 fut.complete("N/A");
                         }
                 }, false, p);
@@ -574,12 +585,14 @@ public class Flow {
         }
 
         private Future<String> lookupWhois(WhoisService service, Vertx vertx, String ip) {
+                logger.debug("Looking up WHOIS for IP: {}", ip);
                 if (whoisCache.containsKey(ip))
                         return Future.succeededFuture(whoisCache.get(ip));
                 Promise<String> p = Promise.promise();
                 vertx.executeBlocking(fut -> {
                         try {
                                 String org = service.lookupBlocking(ip);
+                                logger.debug("WHOIS lookup result for IP {}: {}", ip, org);
                                 org = parseWhoisOrg(org);
                                 if (org == null || org.isEmpty()) {
                                         whoisCache.put(ip, "N/A");
@@ -590,14 +603,13 @@ public class Flow {
                                                         "src/main/resources/GeoLite2-ASN.mmdb");
                                         String asnOrg = geoIPService.getOrgByIP(ip);
                                         whoisCache.put(ip, asnOrg);
-                                        System.out.println("WHOIS lookup failed for IP " + ip
-                                                        + ", falling back to GeoIP ASN: " + asnOrg);
                                         fut.complete(asnOrg);
                                 } else {
                                         whoisCache.put(ip, org);
                                         fut.complete(org);
                                 }
                         } catch (Exception e) {
+                                logger.debug("Error during WHOIS lookup for IP {}: {}", ip, e.getMessage());
                                 fut.complete("N/A");
                         }
                 }, false, p);

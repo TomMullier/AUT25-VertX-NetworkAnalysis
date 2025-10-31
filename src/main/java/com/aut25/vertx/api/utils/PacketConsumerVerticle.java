@@ -2,6 +2,7 @@ package com.aut25.vertx.api.utils;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
+import io.vertx.core.json.Json;
 import io.vertx.kafka.client.consumer.KafkaConsumer;
 
 import java.util.*;
@@ -13,10 +14,10 @@ import com.aut25.vertx.api.WebServerVerticle;
 import com.aut25.vertx.utils.Colors;
 import io.vertx.core.json.JsonObject;
 
-public class FlowConsumerVerticle extends AbstractVerticle {
+public class PacketConsumerVerticle extends AbstractVerticle {
 
     private final List<io.vertx.core.http.ServerWebSocket> clients = new ArrayList<>();
-    private static final Logger logger = LoggerFactory.getLogger(FlowConsumerVerticle.class);
+    private static final Logger logger = LoggerFactory.getLogger(PacketConsumerVerticle.class);
 
     public void registerClient(io.vertx.core.http.ServerWebSocket ws) {
         clients.add(ws);
@@ -37,24 +38,23 @@ public class FlowConsumerVerticle extends AbstractVerticle {
 
         consumer.handler(record -> {
             try {
-                JsonObject flow = new JsonObject(record.value());
-                vertx.eventBus().publish("flows.data", flow);
-                logger.debug("[ FLOW CONSUMER VERTICLE ]        Processed flow: {}", flow.encode());
+                JsonObject packet = new JsonObject(record.value());
+                vertx.eventBus().publish("packets.data", packet);
+                logger.debug("[ PACKET CONSUMER VERTICLE ]      Processed packet: {}", packet.encode());
             } catch (Exception e) {
-                logger.error("[ FLOW CONSUMER VERTICLE ]        Error processing flow: {}", e.getMessage());
+                logger.error("[ PACKET CONSUMER VERTICLE ]      Error processing packet: {}", e.getMessage());
             }
         });
 
-        consumer.subscribe("network-flows")
+        consumer.subscribe("network-data")
                 .onSuccess(ok -> {
-                    logger.info(Colors.CYAN + "[ FLOW CONSUMER VERTICLE ]        Subscribed to topic 'network-flows'"
+                    logger.info(Colors.CYAN + "[ PACKET CONSUMER VERTICLE ]      Subscribed to topic 'network-data'"
                             + Colors.RESET);
                     startPromise.complete();
                 })
-                // On failure fail and log error
                 .onFailure(failure -> {
                     logger.error(Colors.RED
-                            + "[ FLOW CONSUMER VERTICLE ]        Failed to subscribe to topic 'network-flows': "
+                            + "[ PACKET CONSUMER VERTICLE ]      Failed to subscribe to topic 'network-data': "
                             + failure.getMessage() + Colors.RESET);
                     startPromise.fail(failure);
                 });
