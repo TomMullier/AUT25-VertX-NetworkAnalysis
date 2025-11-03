@@ -44,7 +44,7 @@ public class Main extends AbstractVerticle {
         // Load configuration from JSON file
         config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
-        sharedData = loadSharedData(vertx);
+        sharedData = loadSharedData(vertx, config);
 
         logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + sharedData.getLocalMap("config").toString());
 
@@ -374,29 +374,33 @@ public class Main extends AbstractVerticle {
         });
     }
 
-    private SharedData loadSharedData(io.vertx.core.Vertx vertx) {
+    private SharedData loadSharedData(io.vertx.core.Vertx vertx, JsonObject config) {
         SharedData sharedData = vertx.sharedData();
-        sharedData.getLocalMap("config").put("ingestionMethod", "none");
+        sharedData.getLocalMap("config").put("ingestionMethod", config.getString("ingestionMethod", "none"));
         // Put all elements in shared data config
-        sharedData.getLocalMap("config").put("http.port", 8080);
-        sharedData.getLocalMap("config").put("store", "true");
-        sharedData.getLocalMap("config").put("mode", "menu");
+        sharedData.getLocalMap("config").put("http.port", config.getInteger("http.port", 8080));
+        sharedData.getLocalMap("config").put("store", config.getString("store", "true"));
+        sharedData.getLocalMap("config").put("mode", config.getString("mode", "menu"));
 
-        JsonObject jsonConfig = new JsonObject()
+        JsonObject jsonConfig = config.getJsonObject("json", new JsonObject()
                 .put("file-path", "src/main/resources/data/network-data.json")
-                .put("ingestion-interval-ms", 1000);
+                .put("ingestion-interval-ms", 1000));
         sharedData.getLocalMap("config").put("json", jsonConfig);
 
-        JsonObject pcapConfig = new JsonObject()
-                .put("file-path", "src/main/resources/data/benign+slowloris_net_packets.pcap");
+        JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject()
+                .put("file-path", "src/main/resources/data/benign+slowloris_net_packets.pcap"));
         sharedData.getLocalMap("config").put("pcap", pcapConfig);
 
-        JsonObject realtimeTestConfig = new JsonObject()
-                .put("interface", "ens160");
+        JsonObject realtimeTestConfig = config.getJsonObject("realtime_test", new JsonObject()
+                .put("interface", "ens160"));
         sharedData.getLocalMap("config").put("realtime_test", realtimeTestConfig);
 
-        JsonObject realtimeConfig = new JsonObject();
+        JsonObject realtimeConfig = config.getJsonObject("realtime", new JsonObject());
         sharedData.getLocalMap("config").put("realtime", realtimeConfig);
+
+        logger.info("[ MAIN VERTICLE ]                 Based configuration : "
+                + sharedData.getLocalMap("config").toString());
+
         return sharedData;
     }
 }

@@ -2,6 +2,8 @@ package com.aut25.vertx;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.LocalMap;
+
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -56,7 +58,8 @@ public class IngestionVerticle extends AbstractVerticle {
                 // Config file : get debug mode
                 JsonObject config;
                 try {
-                        config = config();
+                        LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+                        config = new JsonObject(map);
                         logger.debug("[ INGESTION VERTICLE ] Loaded configuration: " + config.encodePrettily());
 
                 } catch (Exception e) {
@@ -73,9 +76,9 @@ public class IngestionVerticle extends AbstractVerticle {
                  * - realtime
                  */
                 String mode;
-                JsonObject settings = (JsonObject) vertx.sharedData().getLocalMap("settings").get("config");
-                if (settings != null && settings.containsKey("ingestionMethod")) {
-                        mode = settings.getString("ingestionMethod", "json").toLowerCase();
+                
+                if (config != null && config.containsKey("ingestionMethod")) {
+                        mode = config.getString("ingestionMethod", "json").toLowerCase();
                 } else {
                         mode = config.getString("mode", "json").toLowerCase();
                 }

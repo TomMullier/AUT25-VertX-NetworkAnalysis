@@ -38,9 +38,11 @@ public class WebServerVerticle extends AbstractVerticle {
         public void start(Promise<Void> startPromise) {
                 logger.info(Colors.BLUE + "[ WEBSERVER ]                     Starting WebSocket and HTTP server"
                                 + Colors.RESET);
+                JsonObject config;
 
                 try {
-                        JsonObject config = config();
+                        LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+                        config = new JsonObject(map);
                         int port = config.getInteger("http.port", 8888);
 
                         Router router = Router.router(vertx);

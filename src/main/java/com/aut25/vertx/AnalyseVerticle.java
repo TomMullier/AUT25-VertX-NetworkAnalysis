@@ -2,6 +2,8 @@ package com.aut25.vertx;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.LocalMap;
+
 import org.apache.kafka.clients.consumer.*;
 import org.pcap4j.packet.IpPacket;
 import org.slf4j.Logger;
@@ -37,8 +39,10 @@ public class AnalyseVerticle extends AbstractVerticle {
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..."
                                 + Colors.RESET);
-                // Get mode from config, default to "pcap"
-                JsonObject config = config();
+                // Get mode from config shared map
+                LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+                JsonObject config = new JsonObject(map);
+
                 mode = config.getString("mode", "pcap").toLowerCase();
 
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
