@@ -102,7 +102,7 @@ document.getElementById("SettingsForm").addEventListener("submit", async (e) => 
 /**
  * This function fetches the current ingestion method from the server and updates the corresponding radio button.
  */
-async function fetchIngestionMethod() {
+export async function fetchIngestionMethod() {
         try {
                 const response = await fetch("/api/getIngestionMethod");
                 if (response.ok) {
@@ -165,7 +165,7 @@ async function loadPcapFilesAndActive() {
 /**
  * This function updates the visibility of the PCAP file select based on the selected ingestion method.
  */
-async function updatePcapAndInterfacesVisibility() {
+export async function updatePcapAndInterfacesVisibility() {
         const pcapSelectContainer = document.getElementById("pcapSelectContainer");
         const realtimeSelectContainer = document.getElementById("realtimeSelectContainer");
         const selected = document.querySelector('input[name="ingestionMethod"]:checked');
@@ -226,21 +226,3 @@ async function loadNetworkInterfacesAndActive() {
         }
 }
 
-
-
-/**
- * This function handles the reset of the dashboard, clearing all data and resetting the input fields.
- */
-document.addEventListener('DOMContentLoaded', async () => {
-        await fetchIngestionMethod();
-
-        const ingestionRadios = document.querySelectorAll('input[name="ingestionMethod"]');
-
-        // Add change event listeners to ingestion method radios
-        ingestionRadios.forEach(radio => {
-                radio.addEventListener("change", updatePcapAndInterfacesVisibility);
-        });
-
-        // Initial update on page load
-        await updatePcapAndInterfacesVisibility();
-});

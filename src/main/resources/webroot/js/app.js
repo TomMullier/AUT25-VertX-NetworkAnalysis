@@ -1,3 +1,19 @@
+import {
+        severityCount,
+        riskCount,
+        incrementCount,
+        updateCharts,
+        initCharts
+
+} from "./stats.js";
+
+import {
+        fetchIngestionMethod,
+        updatePcapAndInterfacesVisibility
+} from "./changeSettings.js";
+
+
+
 /* -------------------------------- VARIABLE -------------------------------- */
 const ws = new WebSocket(`ws://${location.host}/`);
 const statusEl = document.getElementById("connectionStatus");
@@ -19,6 +35,16 @@ ws.onmessage = (event) => {
 
                 if (data.type === "flow") {
                         addFlowRow(data);
+                        const severity = data.riskSeverity;
+                        const riskLabel = data.riskLabel.split(", ");
+
+                        if (severity) incrementCount(severityCount, severity);
+                        riskLabel.forEach(label => {
+                                incrementCount(riskCount, label);
+                        });
+
+                        // Update charts
+                        updateCharts();
                 } else if (data.type === "packet") {
                         //ToDO No display for packets because of performances issues with high ingestion rates 
 
@@ -28,7 +54,7 @@ ws.onmessage = (event) => {
                         // packetsEl.prepend(pre);
                 }
         } catch (e) {
-                console.error("Error processing WebSocket message:", e);
+                console.error("Error processing WebSocket message:" + event.data, e);
         }
 };
 
@@ -150,4 +176,21 @@ document.getElementById("resetButton").addEventListener("click", () => {
         setTimeout(() => {
                 document.getElementById("resetMessage").textContent = "";
         }, 3000);
+});
+
+
+// On DOM load, initialize charts
+document.addEventListener("DOMContentLoaded", async () => {
+        await fetchIngestionMethod();
+
+        const ingestionRadios = document.querySelectorAll('input[name="ingestionMethod"]');
+
+        // Add change event listeners to ingestion method radios
+        ingestionRadios.forEach(radio => {
+                radio.addEventListener("change", updatePcapAndInterfacesVisibility);
+        });
+
+        // Initial update on page load
+        await updatePcapAndInterfacesVisibility();
+        initCharts();
 });
