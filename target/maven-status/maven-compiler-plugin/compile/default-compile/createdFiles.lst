@@ -1,4 +1,5 @@
 com/aut25/vertx/api/utils/FlowConsumerVerticle.class
+com/aut25/vertx/api/routes/UtilsRoute.class
 com/aut25/vertx/FlowAggregatorVerticle.class
 com/aut25/vertx/api/WebServerVerticle.class
 com/aut25/vertx/IngestionVerticle$Task.class
@@ -6,6 +7,8 @@ com/aut25/vertx/utils/Colors.class
 com/aut25/vertx/services/DnsService.class
 com/aut25/vertx/IngestionVerticle.class
 com/aut25/vertx/ApiVerticle.class
+com/aut25/vertx/api/routes/PcapRoute.class
+com/aut25/vertx/api/routes/SettingsRoute.class
 com/aut25/vertx/IngestionVerticle$1.class
 com/aut25/vertx/utils/NDPIWrapper.class
 com/aut25/vertx/services/GeoIPService.class
@@ -15,6 +18,7 @@ com/aut25/vertx/ClickHouseFlowsVerticle.class
 com/aut25/vertx/FlowAggregatorVerticle$Ports.class
 com/aut25/vertx/ClickHousePacketVerticle.class
 com/aut25/vertx/Main.class
+com/aut25/vertx/api/routes/NetworkRoute.class
 com/aut25/vertx/utils/Flow.class
 com/aut25/vertx/AnalyseVerticle.class
 com/aut25/vertx/api/utils/PacketConsumerVerticle.class

@@ -23,12 +23,14 @@ import io.vertx.core.json.JsonArray;
 
 import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.Main;
+import com.aut25.vertx.api.routes.*;
 
 public class WebServerVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(WebServerVerticle.class);
         private final Set<ServerWebSocket> clients = ConcurrentHashMap.newKeySet();
         private final Main mainVerticle;
+        private JsonObject config;
 
         public WebServerVerticle(Main mainVerticle) {
                 this.mainVerticle = mainVerticle;
@@ -38,7 +40,6 @@ public class WebServerVerticle extends AbstractVerticle {
         public void start(Promise<Void> startPromise) {
                 logger.info(Colors.BLUE + "[ WEBSERVER ]                     Starting WebSocket and HTTP server"
                                 + Colors.RESET);
-                JsonObject config;
 
                 try {
                         LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
@@ -47,204 +48,12 @@ public class WebServerVerticle extends AbstractVerticle {
 
                         Router router = Router.router(vertx);
                         router.route().handler(BodyHandler.create());
-                        router.post("/api/settings").handler(this::handleSettingsUpdate);
-                        router.get("/api/settings").handler(ctx -> {
-                                SharedData sharedData = vertx.sharedData();
-                                JsonObject settings = (JsonObject) sharedData.getLocalMap("config");
-                                if (settings == null) {
-                                        settings = new JsonObject();
-                                }
-                                ctx.response()
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(settings.encode());
-                        });
 
-                        router.get("/api/checkFileExists").handler(ctx -> {
-                                String fileName = ctx.request().getParam("file");
-
-                                if (fileName == null || fileName.isEmpty()) {
-                                        ctx.response()
-                                                        .setStatusCode(400)
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(new io.vertx.core.json.JsonObject()
-                                                                        .put("error", "Missing 'file' parameter")
-                                                                        .encode());
-                                        return;
-                                }
-
-                                String pcapDirPath = "src/main/resources/data";
-                                java.nio.file.Path filePath = java.nio.file.Paths.get(pcapDirPath, fileName);
-
-                                boolean exists = java.nio.file.Files.exists(filePath);
-
-                                ctx.response()
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(new io.vertx.core.json.JsonObject().put("exists", exists)
-                                                                .encode());
-                        });
-
-                        router.get("/api/pcapInfo").handler(ctx -> {
-                                try {
-                                        // Récupère les paramètres globaux depuis le config
-                                        SharedData sharedData = vertx.sharedData();
-                                        LocalMap<String, Object> settings = sharedData.getLocalMap("config");
-
-                                        String activeFile = null;
-                                        if (settings != null) {
-                                                JsonObject settingsPcap = (JsonObject) settings.get("pcap");
-                                                if (settingsPcap != null) {
-                                                        activeFile = settingsPcap.getString("file-path", null);
-                                                        // Ne garder que le nom du fichier
-                                                        if (activeFile != null) {
-                                                                activeFile = activeFile.substring(
-                                                                                activeFile.lastIndexOf('/') + 1);
-                                                        }
-                                                }
-                                        }
-
-                                        // Récupère la liste des fichiers PCAP
-                                        String dataDirPath = "src/main/resources/data";
-                                        File dataDir = new File(dataDirPath);
-                                        JsonArray filesArray = new JsonArray();
-
-                                        if (dataDir.exists() && dataDir.isDirectory()) {
-                                                File[] files = dataDir.listFiles(
-                                                                (dir, name) -> name.toLowerCase().endsWith(".pcap"));
-                                                if (files != null) {
-                                                        for (File file : files) {
-                                                                filesArray.add(file.getName());
-                                                        }
-                                                }
-                                        }
-
-                                        // Crée la réponse combinée
-                                        JsonObject response = new JsonObject()
-                                                        .put("files", filesArray)
-                                                        .put("activePcapFile", activeFile);
-
-                                        ctx.response()
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(response.encode());
-
-                                } catch (Exception e) {
-                                        ctx.response()
-                                                        .setStatusCode(500)
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(new JsonObject()
-                                                                        .put("error", e.getMessage())
-                                                                        .encode());
-                                }
-                        });
-
-                        router.get("/api/networkInfo").handler(ctx -> {
-                                try {
-                                        // Récupère les interfaces réseau up, non-loopback, non-virtuelles
-                                        java.util.List<String> interfaces = new java.util.ArrayList<>();
-                                        java.util.Enumeration<java.net.NetworkInterface> nets = java.net.NetworkInterface
-                                                        .getNetworkInterfaces();
-                                        while (nets.hasMoreElements()) {
-                                                java.net.NetworkInterface netIf = nets.nextElement();
-                                                if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
-                                                        interfaces.add(netIf.getName());
-                                                }
-                                        }
-
-                                        // Récupère l'interface active depuis le sharedData
-                                        io.vertx.core.shareddata.LocalMap<String, Object> map_ = ctx.vertx()
-                                                        .sharedData().getLocalMap("config");
-                                        io.vertx.core.json.JsonObject config_ = new io.vertx.core.json.JsonObject(map_);
-
-                                        String activeInterface = null;
-                                        if (config_.containsKey("realtime")) {
-                                                io.vertx.core.json.JsonObject realtime = config_
-                                                                .getJsonObject("realtime");
-                                                activeInterface = realtime.getString("interface", null);
-                                        }
-
-                                        JsonObject response = new JsonObject()
-                                                        .put("interfaces", interfaces)
-                                                        .put("activeInterface", activeInterface);
-
-                                        ctx.response()
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(response.encode());
-
-                                } catch (Exception e) {
-                                        ctx.response()
-                                                        .setStatusCode(500)
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(new JsonObject().put("error", e.getMessage()).encode());
-                                }
-                        });
-
-                        router.get("/api/getIngestionMethod").handler(ctx -> {
-                                LocalMap<String, Object> config_ = vertx.sharedData().getLocalMap("config");
-                                String method = (String) config_.getOrDefault("ingestionMethod", "none");
-
-                                ctx.response()
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(new JsonObject().put("ingestionMethod", method).encode());
-                        });
-                        // router.get("/api/listNetworkInterfaces").handler(ctx -> {
-                        // try {
-                        // java.net.NetworkInterface.getNetworkInterfaces().asIterator()
-                        // .forEachRemaining(iface -> {
-                        // // we get only up, non-loopback, non-virtual interfaces
-                        // try {
-                        // if (iface.isUp() && !iface.isLoopback()
-                        // && !iface.isVirtual()) {
-                        // logger.debug("[ WEBSERVER ] Found interface: {}",
-                        // iface.getName());
-                        // }
-                        // } catch (Exception e) {
-                        // logger.error("[ WEBSERVER ] Error checking interface {}: {}",
-                        // iface.getName(),
-                        // e.getMessage());
-                        // }
-                        // });
-
-                        // java.util.List<String> interfaces = new java.util.ArrayList<>();
-                        // java.util.Enumeration<java.net.NetworkInterface> nets =
-                        // java.net.NetworkInterface
-                        // .getNetworkInterfaces();
-                        // while (nets.hasMoreElements()) {
-                        // java.net.NetworkInterface netIf = nets.nextElement();
-                        // if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
-                        // interfaces.add(netIf.getName());
-                        // }
-                        // }
-
-                        // ctx.response()
-                        // .putHeader("Content-Type", "application/json")
-                        // .end(new io.vertx.core.json.JsonObject()
-                        // .put("interfaces", interfaces).encode());
-                        // } catch (Exception e) {
-                        // ctx.response().setStatusCode(500)
-                        // .putHeader("Content-Type", "application/json")
-                        // .end(new io.vertx.core.json.JsonObject()
-                        // .put("error", e.getMessage()).encode());
-                        // }
-                        // });
-
-                        // router.get("/api/getActiveInterface").handler(ctx -> {
-                        // io.vertx.core.shareddata.LocalMap<String, Object> map_ =
-                        // ctx.vertx().sharedData()
-                        // .getLocalMap("config");
-                        // io.vertx.core.json.JsonObject config_ = new
-                        // io.vertx.core.json.JsonObject(map_);
-
-                        // String activeInterface = null;
-                        // if (config_.containsKey("realtime")) {
-                        // io.vertx.core.json.JsonObject realtime = config_.getJsonObject("realtime");
-                        // activeInterface = realtime.getString("interface", "");
-                        // }
-
-                        // ctx.response()
-                        // .putHeader("Content-Type", "application/json")
-                        // .end(new io.vertx.core.json.JsonObject()
-                        // .put("activeInterface", activeInterface).encode());
-                        // });
-
+                        // Routes API
+                        new SettingsRoute(vertx, mainVerticle).mount(router);
+                        new PcapRoute(vertx, mainVerticle).mount(router);
+                        new NetworkRoute(vertx, mainVerticle).mount(router);
+                        new UtilsRoute(vertx, mainVerticle).mount(router);                    
                         router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 
                         HttpServer server = vertx.createHttpServer();
@@ -338,101 +147,6 @@ public class WebServerVerticle extends AbstractVerticle {
                                 ws.close();
                 });
                 clients.clear();
-        }
-
-        private void handleSettingsUpdate(RoutingContext ctx) {
-                JsonObject body = ctx.body().asJsonObject();
-                logger.info("[ WEBSERVER ]                     Received settings update: {}",
-                                body != null ? body.encode() : "null");
-
-                if (body == null) {
-                        ctx.response()
-                                        .setStatusCode(400)
-                                        .putHeader("Content-Type", "application/json")
-                                        .end(new JsonObject().put("error", "Invalid JSON").encode());
-                        return;
-                }
-                if (!body.containsKey("ingestionMethod")) {
-                        ctx.response()
-                                        .setStatusCode(400)
-                                        .putHeader("Content-Type", "application/json")
-                                        .end(new JsonObject().put("error", "Missing 'ingestionMethod' field").encode());
-                        return;
-                }
-                String ingestionMethod = body.getString("ingestionMethod");
-                if (!ingestionMethod.equals("pcap") &&
-                                !ingestionMethod.equals("realtime")) {
-                        ctx.response()
-                                        .setStatusCode(400)
-                                        .putHeader("Content-Type", "application/json")
-                                        .end(new JsonObject().put("error", "Invalid 'ingestionMethod' value").encode());
-                        return;
-                }
-
-                // Récupère les autres paramètres avec des valeurs par défaut
-                if (!body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_TCP") ||
-                                !body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_UDP") ||
-                                !body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_OTHER") ||
-                                !body.containsKey("FLOW_MAX_AGE_MS_TCP") ||
-                                !body.containsKey("FLOW_MAX_AGE_MS_UDP") ||
-                                !body.containsKey("FLOW_MAX_AGE_MS_OTHER")) {
-                        ctx.response()
-                                        .setStatusCode(400)
-                                        .putHeader("Content-Type", "application/json")
-                                        .end(new JsonObject().put("error", "Missing flow timeout or max age fields")
-                                                        .encode());
-                        return;
-                }
-                long tcpTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_TCP", 300000L);
-                long udpTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_UDP", 300000L);
-                long otherTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER", 300000L);
-                long tcpMaxAge = body.getLong("FLOW_MAX_AGE_MS_TCP", 3600000L);
-                long udpMaxAge = body.getLong("FLOW_MAX_AGE_MS_UDP", 3600000L);
-                long otherMaxAge = body.getLong("FLOW_MAX_AGE_MS_OTHER", 3600000L);
-
-                // retrieve pcap file if ingestion method is pcap
-                String activePcapFile = null;
-                if (ingestionMethod.equals("pcap")) {
-                        if (!body.containsKey("pcapFilePath")) {
-                                ctx.response()
-                                                .setStatusCode(400)
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(new JsonObject().put("error", "Missing 'pcapFilePath' field")
-                                                                .encode());
-                                return;
-                        }
-                        activePcapFile = "src/main/resources/data/" + body.getString("pcapFilePath");
-                }
-
-                // Stocke ces valeurs dans le sharedData (pour être accessibles aux autres
-                // Verticles)
-                JsonObject settings = new JsonObject()
-                                .put("ingestionMethod", ingestionMethod)
-                                .put("FLOW_INACTIVITY_TIMEOUT_MS_TCP", tcpTimeout)
-                                .put("FLOW_INACTIVITY_TIMEOUT_MS_UDP", udpTimeout)
-                                .put("FLOW_INACTIVITY_TIMEOUT_MS_OTHER", otherTimeout)
-                                .put("FLOW_MAX_AGE_MS_TCP", tcpMaxAge)
-                                .put("FLOW_MAX_AGE_MS_UDP", udpMaxAge)
-                                .put("FLOW_MAX_AGE_MS_OTHER", otherMaxAge)
-                                .put("pcap", new JsonObject().put("file-path",
-                                                ingestionMethod.equals("pcap") ? activePcapFile : ""));
-
-                vertx.sharedData().getLocalMap("config").putAll(settings.getMap());
-
-                logger.info(Colors.BLUE + "[ WEBSERVER ]                     Settings updated: "
-                                + vertx.sharedData().getLocalMap("config").toString() + Colors.RESET);
-
-                ctx.response().setStatusCode(200).end();
-
-                // Redeploy async
-                vertx.executeBlocking(promise -> {
-                        if (mainVerticle != null) {
-                                mainVerticle.redeployIngestionVerticle();
-                                mainVerticle.redeployFlowAggregatorVerticle();
-                        }
-                        promise.complete();
-                }, res -> {
-                });
         }
 
 }
