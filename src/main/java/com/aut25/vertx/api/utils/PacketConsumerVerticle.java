@@ -38,7 +38,14 @@ public class PacketConsumerVerticle extends AbstractVerticle {
 
         consumer.handler(record -> {
             try {
-                JsonObject packet = new JsonObject(record.value());
+                String value = record.value();
+
+                if (value == null || value.isEmpty() || value.equals("reset")) {
+                    logger.debug("[ PACKET CONSUMER VERTICLE ]      Received reset packet: {}", record);
+                    return;
+                }
+
+                JsonObject packet = new JsonObject(value);
                 vertx.eventBus().publish("packets.data", packet);
                 logger.debug("[ PACKET CONSUMER VERTICLE ]      Processed packet: {}", packet.encode());
             } catch (Exception e) {

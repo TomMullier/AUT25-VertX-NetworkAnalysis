@@ -72,11 +72,19 @@ public class IngestionVerticle extends AbstractVerticle {
                  * - pcap
                  * - realtime
                  */
-                String mode = config.getString("mode", "json");
+                String mode;
+                JsonObject settings = (JsonObject) vertx.sharedData().getLocalMap("settings").get("config");
+                if (settings != null && settings.containsKey("ingestionMethod")) {
+                        mode = settings.getString("ingestionMethod", "json").toLowerCase();
+                } else {
+                        mode = config.getString("mode", "json").toLowerCase();
+                }
                 if (!List.of("json", "pcap", "realtime").contains(mode)) {
                         logger.error("[ INGESTION VERTICLE ]            Invalid mode specified: " + mode);
                         return;
                 }
+                logger.info(Colors.GREEN + "[ INGESTION VERTICLE ]            Ingestion mode: " + mode.toUpperCase()
+                                + Colors.RESET);
 
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
@@ -463,8 +471,9 @@ public class IngestionVerticle extends AbstractVerticle {
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
 
-                // logger.debug("[ INGESTION VERTICLE ]            Processing packet at timestamp: {} with delay: {} ms",
-                //                 packetTimestamp, delay);
+                // logger.debug("[ INGESTION VERTICLE ] Processing packet at timestamp: {} with
+                // delay: {} ms",
+                // packetTimestamp, delay);
 
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
                                 record.encode());

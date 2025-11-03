@@ -4,6 +4,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Promise;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.SharedData;
 
 import static java.lang.Thread.sleep;
 
@@ -28,7 +29,9 @@ public class Main extends AbstractVerticle {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     // List to track deployed verticle IDs
-    private final List<String> deploymentIds = new ArrayList<>();
+    public String ingestionMethod;
+    public final List<String> deploymentIds = new ArrayList<>();
+    public List<AbstractVerticle> verticles = new ArrayList<>();
     private JsonObject config;
     private Scanner scanner;
 
@@ -78,6 +81,8 @@ public class Main extends AbstractVerticle {
 
             switch (choice) {
                 case 1: // JSON
+
+                    ingestionMethod = "json";
                     logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 JSON ingestion method selected."
                             + Colors.RESET);
                     logger.info(Colors.MAGENTA
@@ -102,6 +107,7 @@ public class Main extends AbstractVerticle {
                     break;
 
                 case 2: // PCAP
+                    ingestionMethod = "pcap";
                     logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 PCAP ingestion method selected."
                             + Colors.RESET);
                     logger.info(Colors.MAGENTA
@@ -126,6 +132,7 @@ public class Main extends AbstractVerticle {
                     break;
 
                 case 3: // Realtime
+                    ingestionMethod = "realtime";
                     logger.info(
                             Colors.MAGENTA + "[ MAIN VERTICLE ]                 Realtime ingestion method selected."
                                     + Colors.RESET);
@@ -164,19 +171,23 @@ public class Main extends AbstractVerticle {
             return; // empêche la suite du start()
         }
 
+        SharedData sharedData = vertx.sharedData();
+        sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
+
         // Determine if ClickHouse storage is enabled
         boolean store = config.getString("store", "false").equalsIgnoreCase(
                 "true");
         logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Store configuration: " + store + Colors.RESET);
 
         // Créer la liste de verticles à déployer
-        List<AbstractVerticle> verticles = new ArrayList<>();
+
         verticles.add(new IngestionVerticle());
         // verticles.add(new AnalyseVerticle());
         verticles.add(new FlowAggregatorVerticle());
         verticles.add(new FlowConsumerVerticle());
         verticles.add(new PacketConsumerVerticle());
-        verticles.add(new WebServerVerticle());
+        WebServerVerticle webServerVerticle = new WebServerVerticle(this);
+        verticles.add(webServerVerticle);
 
         if (store) {
             verticles.add(new ClickHousePacketVerticle());
@@ -240,5 +251,63 @@ public class Main extends AbstractVerticle {
             stopPromise.complete();
             return;
         }
+    }
+
+    public void redeployIngestionVerticle(String mode) {
+        logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Redeploying ingestion verticle..."
+                + Colors.RESET);
+        // update config
+        config.put("mode", mode);
+        // Update options
+        DeploymentOptions options = new DeploymentOptions();
+        options.setConfig(config);
+
+        // Find and undeploy existing IngestionVerticle
+        for (String id : deploymentIds) {
+            vertx.deploymentIDs().forEach(deploymentId -> {
+                vertx.getOrCreateContext().get("mainVerticle");
+            });
+        }
+
+        vertx.deployVerticle(new IngestionVerticle(), options).onComplete(res -> {
+            if (res.succeeded()) {
+                logger.info(Colors.GREEN
+                        + "[ MAIN VERTICLE ]                 IngestionVerticle redeployed successfully!"
+                        + Colors.RESET);
+            } else {
+                logger.error(
+                        Colors.RED + "[ MAIN VERTICLE ]                 Failed to redeploy IngestionVerticle: "
+                                + res.cause() + Colors.RESET);
+            }
+        });
+    }
+
+    public void redeployFlowAggregatorVerticle(String mode) {
+        logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Redeploying FlowAggregator verticle..."
+                + Colors.RESET);
+        // update config
+        config.put("mode", mode);
+        // Update options
+        DeploymentOptions options = new DeploymentOptions();
+        options.setConfig(config);
+
+        // Find and undeploy existing FlowAggregatorVerticle
+        for (String id : deploymentIds) {
+            vertx.deploymentIDs().forEach(deploymentId -> {
+                vertx.getOrCreateContext().get("mainVerticle");
+            });
+        }
+
+        vertx.deployVerticle(new FlowAggregatorVerticle(), options).onComplete(res -> {
+            if (res.succeeded()) {
+                logger.info(Colors.GREEN
+                        + "[ MAIN VERTICLE ]                 FlowAggregatorVerticle redeployed successfully!"
+                        + Colors.RESET);
+            } else {
+                logger.error(
+                        Colors.RED + "[ MAIN VERTICLE ]                 Failed to redeploy FlowAggregatorVerticle: "
+                                + res.cause() + Colors.RESET);
+            }
+        });
     }
 }

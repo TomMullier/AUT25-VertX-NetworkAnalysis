@@ -17,9 +17,10 @@ ws.onmessage = (event) => {
                 if (data.type === "flow") {
                         addFlowRow(data);
                 } else if (data.type === "packet") {
-                        const packetItem = document.createElement("div");
-                        packetItem.textContent = JSON.stringify(data);
-                        packetsEl.prepend(packetItem);
+                        const pre = document.createElement("pre");
+                        pre.textContent = JSON.stringify(data, null, 2);
+                        pre.className = "bg-gray-100 p-2 rounded mb-2 overflow-x-auto text-sm";
+                        packetsEl.prepend(pre);
                 }
         } catch (e) {
                 console.error("Error processing WebSocket message:", e);
@@ -38,8 +39,7 @@ ws.onclose = () => {
         statusEl.classList.add("text-red-600");
 };
 
-// ---------- TABLE FLOWS ----------
-
+/* ------------------------------- Table flows ------------------------------ */
 function addFlowRow(flow) {
         const row = document.createElement("tr");
 

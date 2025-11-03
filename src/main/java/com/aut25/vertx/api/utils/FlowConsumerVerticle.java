@@ -37,7 +37,15 @@ public class FlowConsumerVerticle extends AbstractVerticle {
 
         consumer.handler(record -> {
             try {
-                JsonObject flow = new JsonObject(record.value());
+                String value = record.value();
+                if (value == null || value.isEmpty() || value.equals("reset")) {
+                    // Display flow info
+                    logger.debug("[ FLOW CONSUMER VERTICLE ]        Received reset flow: {}",
+                            record);
+
+                    return;
+                }
+                JsonObject flow = new JsonObject(value);
                 vertx.eventBus().publish("flows.data", flow);
                 logger.debug("[ FLOW CONSUMER VERTICLE ]        Processed flow: {}", flow.encode());
             } catch (Exception e) {

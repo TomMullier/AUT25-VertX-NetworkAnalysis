@@ -300,3 +300,20 @@ fi
 echo -e "${CYAN}=== Starting the application ===${NC}"
 mvn compile vertx:run 
 echo -e "${MAGENTA}=== Application has stopped ===${NC}"
+
+# === Autocompletion for flags ===
+_autocomplete_flags() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="--skip-deps --quiet"
+
+    # Si tu veux plus tard ajouter d’autres flags, ajoute-les ici :
+    # opts="--skip-deps --quiet --no-cache --force"
+
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+
+# Lie la fonction d’autocomplétion au script
+complete -F _autocomplete_flags ./start.sh

@@ -49,10 +49,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 5_000; // 5 seconds
-        private static final long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
-        private static final long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 30 seconds
-        private static final long FLOW_MAX_AGE_MS_UDP = 120_000; // 2 minutes
+        private long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 5_000; // 5 seconds
+        private long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
+        private long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 30 seconds
+        private long FLOW_MAX_AGE_MS_UDP = 120_000; // 2 minutes
+        private long FLOW_INACTIVITY_TIMEOUT_MS_OTHER = 60_000; // 60 seconds
+        private long FLOW_MAX_AGE_MS_OTHER = 300_000; // 5 minutes
 
         private static final long FLOW_CLEAN_PERIOD_MS = 1_000;
 
@@ -85,7 +87,30 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
-
+                JsonObject settings = (JsonObject) vertx.sharedData().getLocalMap("settings").get("config");
+                if (settings == null) {
+                        logger.error(Colors.RED
+                                        + "[ FLOWAGGREGATOR VERTICLE ]       Keeping default settings as no config found in shared map."
+                                        + Colors.RESET);
+                } else {
+                        FLOW_INACTIVITY_TIMEOUT_MS_TCP = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_TCP",
+                                        FLOW_INACTIVITY_TIMEOUT_MS_TCP);
+                        FLOW_MAX_AGE_MS_TCP = settings.getLong("FLOW_MAX_AGE_MS_TCP", FLOW_MAX_AGE_MS_TCP);
+                        FLOW_INACTIVITY_TIMEOUT_MS_UDP = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_UDP",
+                                        FLOW_INACTIVITY_TIMEOUT_MS_UDP);
+                        FLOW_MAX_AGE_MS_UDP = settings.getLong("FLOW_MAX_AGE_MS_UDP", FLOW_MAX_AGE_MS_UDP);
+                        FLOW_INACTIVITY_TIMEOUT_MS_OTHER = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER",
+                                        FLOW_INACTIVITY_TIMEOUT_MS_OTHER);
+                        FLOW_MAX_AGE_MS_OTHER = settings.getLong("FLOW_MAX_AGE_MS_OTHER", FLOW_MAX_AGE_MS_OTHER);
+                        logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Loaded settings from shared map."
+                                        + Colors.RESET);
+                }
+                logger.info(Colors.GREEN
+                                + "[ FLOWAGGREGATOR VERTICLE ]       Flow timeouts: TCP inactivity={}ms, TCP max age={}ms, UDP inactivity={}ms, UDP max age={}ms, OTHER inactivity={}ms, OTHER max age={}ms"
+                                + Colors.RESET,
+                                FLOW_INACTIVITY_TIMEOUT_MS_TCP, FLOW_MAX_AGE_MS_TCP,
+                                FLOW_INACTIVITY_TIMEOUT_MS_UDP, FLOW_MAX_AGE_MS_UDP,
+                                FLOW_INACTIVITY_TIMEOUT_MS_OTHER, FLOW_MAX_AGE_MS_OTHER);
                 // Init enrich services if needed
                 geoIPService = new GeoIPService("src/main/resources/GeoLite2-City.mmdb",
                                 "src/main/resources/GeoLite2-ASN.mmdb");
@@ -215,25 +240,27 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Map<String, Long> protocolCounts = toFlush.stream()
                                         .collect(Collectors.groupingBy(f -> f.protocol, Collectors.counting()));
 
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows (TCP : {} | UDP : {})",
-                                        toFlush.size(),
-                                        tcpCountToFlush,
-                                        udpCountToFlush);
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows (TCP : {} | UDP :
+                        // {})",
+                        // toFlush.size(),
+                        // tcpCountToFlush,
+                        // udpCountToFlush);
 
-                        protocolCounts.forEach((protocol, count) -> {
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed {} flows for protocol: {}",
-                                                count, protocol);
-                        });
+                        // protocolCounts.forEach((protocol, count) -> {
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows for protocol: {}",
+                        // count, protocol);
+                        // });
 
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Flushed early (FIN/RST) {} flows",
-                                        flushedEarlyCount);
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       >> Active flows: {} (TCP : {} | UDP : {})",
-                                        flows.size(),
-                                        tcpCount,
-                                        udpCount);
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       >> Not IP packets processed: {}",
-                                        notIpPacketCount);
-                        logger.info("---------------------------------------------------------------------------------------------");
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed early (FIN/RST) {} flows",
+                        // flushedEarlyCount);
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] >> Active flows: {} (TCP : {} | UDP
+                        // : {})",
+                        // flows.size(),
+                        // tcpCount,
+                        // udpCount);
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] >> Not IP packets processed: {}",
+                        // notIpPacketCount);
+                        // logger.info("---------------------------------------------------------------------------------------------");
 
                 });
         }
@@ -265,8 +292,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_UDP;
                                 maxAge = FLOW_MAX_AGE_MS_UDP;
                         } else {
-                                inactivityTimeout = 10_000;
-                                maxAge = 120_000;
+                                inactivityTimeout = FLOW_INACTIVITY_TIMEOUT_MS_OTHER;
+                                maxAge = FLOW_MAX_AGE_MS_OTHER;
                         }
 
                         boolean inactive = (referenceTimeMs - f.lastSeen) >= inactivityTimeout;
@@ -803,7 +830,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         JsonObject jo = enrichedFlow.getJsonObject();
                                         String value = jo.encode();
 
-                                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
+                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
                                                         enrichedFlow.key, enrichedFlow.protocol,
                                                         enrichedFlow.appProtocol,
                                                         enrichedFlow.riskLevel, enrichedFlow.riskLabel,

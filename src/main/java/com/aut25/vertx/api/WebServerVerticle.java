@@ -5,8 +5,11 @@ import io.vertx.core.Promise;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.ServerWebSocket;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.LocalMap;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.StaticHandler;
+import io.vertx.ext.web.handler.BodyHandler;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -16,10 +19,17 @@ import org.slf4j.LoggerFactory;
 
 import com.aut25.vertx.utils.Colors;
 
+import com.aut25.vertx.Main;
+
 public class WebServerVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(WebServerVerticle.class);
         private final Set<ServerWebSocket> clients = ConcurrentHashMap.newKeySet();
+        private final Main mainVerticle;
+
+        public WebServerVerticle(Main mainVerticle) {
+                this.mainVerticle = mainVerticle;
+        }
 
         @Override
         public void start(Promise<Void> startPromise) {
@@ -31,6 +41,27 @@ public class WebServerVerticle extends AbstractVerticle {
                         int port = config.getInteger("http.port", 8888);
 
                         Router router = Router.router(vertx);
+                        router.route().handler(BodyHandler.create());
+                        router.post("/api/settings").handler(this::handleSettingsUpdate);
+                        router.get("/api/settings").handler(ctx -> {
+                                LocalMap<String, Object> settingsMap = vertx.sharedData().getLocalMap("settings");
+                                JsonObject settings = (JsonObject) settingsMap.get("config");
+                                if (settings == null) {
+                                        settings = new JsonObject();
+                                }
+                                ctx.response()
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(settings.encode());
+                        });
+                        router.get("/api/getIngestionMethod").handler(ctx -> {
+                                LocalMap<String, Object> config_ = vertx.sharedData().getLocalMap("config");
+                                String method = (String) config_.getOrDefault("ingestionMethod", "none");
+
+                                ctx.response()
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(new JsonObject().put("ingestionMethod", method).encode());
+                        });
+
                         router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 
                         HttpServer server = vertx.createHttpServer();
@@ -125,4 +156,75 @@ public class WebServerVerticle extends AbstractVerticle {
                 });
                 clients.clear();
         }
+
+        private void handleSettingsUpdate(RoutingContext ctx) {
+                JsonObject body = ctx.body().asJsonObject();
+                logger.info("[ WEBSERVER ]                     Received settings update: {}",
+                                body != null ? body.encode() : "null");
+
+                if (body == null) {
+                        ctx.response()
+                                        .setStatusCode(400)
+                                        .putHeader("Content-Type", "application/json")
+                                        .end(new JsonObject().put("error", "Invalid JSON").encode());
+                        return;
+                }
+                if (!body.containsKey("ingestionMethod")) {
+                        ctx.response()
+                                        .setStatusCode(400)
+                                        .putHeader("Content-Type", "application/json")
+                                        .end(new JsonObject().put("error", "Missing 'ingestionMethod' field").encode());
+                        return;
+                }
+                String ingestionMethod = body.getString("ingestionMethod");
+                if (!ingestionMethod.equals("pcap") &&
+                                !ingestionMethod.equals("realtime")) {
+                        ctx.response()
+                                        .setStatusCode(400)
+                                        .putHeader("Content-Type", "application/json")
+                                        .end(new JsonObject().put("error", "Invalid 'ingestionMethod' value").encode());
+                        return;
+                }
+
+                // Récupère les autres paramètres avec des valeurs par défaut
+                if (!body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_TCP") ||
+                                !body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_UDP") ||
+                                !body.containsKey("FLOW_INACTIVITY_TIMEOUT_MS_OTHER") ||
+                                !body.containsKey("FLOW_MAX_AGE_MS_TCP") ||
+                                !body.containsKey("FLOW_MAX_AGE_MS_UDP") ||
+                                !body.containsKey("FLOW_MAX_AGE_MS_OTHER")) {
+                        ctx.response()
+                                        .setStatusCode(400)
+                                        .putHeader("Content-Type", "application/json")
+                                        .end(new JsonObject().put("error", "Missing flow timeout or max age fields")
+                                                        .encode());
+                        return;
+                }
+                long tcpTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_TCP", 300000L);
+                long udpTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_UDP", 300000L);
+                long otherTimeout = body.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER", 300000L);
+                long tcpMaxAge = body.getLong("FLOW_MAX_AGE_MS_TCP", 3600000L);
+                long udpMaxAge = body.getLong("FLOW_MAX_AGE_MS_UDP", 3600000L);
+                long otherMaxAge = body.getLong("FLOW_MAX_AGE_MS_OTHER", 3600000L);
+                // Stocke ces valeurs dans le sharedData (pour être accessibles aux autres
+                // Verticles)
+                JsonObject settings = new JsonObject()
+                                .put("ingestionMethod", ingestionMethod)
+                                .put("FLOW_INACTIVITY_TIMEOUT_MS_TCP", tcpTimeout)
+                                .put("FLOW_INACTIVITY_TIMEOUT_MS_UDP", udpTimeout)
+                                .put("FLOW_INACTIVITY_TIMEOUT_MS_OTHER", otherTimeout)
+                                .put("FLOW_MAX_AGE_MS_TCP", tcpMaxAge)
+                                .put("FLOW_MAX_AGE_MS_UDP", udpMaxAge)
+                                .put("FLOW_MAX_AGE_MS_OTHER", otherMaxAge);
+
+                vertx.sharedData().getLocalMap("settings").put("config", settings);
+
+                // redeploy ingestion
+                if (mainVerticle != null) {
+                        mainVerticle.redeployIngestionVerticle(ingestionMethod);
+                        mainVerticle.redeployFlowAggregatorVerticle(ingestionMethod);
+                }
+                ctx.response().setStatusCode(200).end();
+        }
+
 }
