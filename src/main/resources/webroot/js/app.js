@@ -9,6 +9,8 @@ ws.onopen = () => {
         statusEl.textContent = "🟢 Connected to WebSocket server";
         statusEl.classList.remove("text-red-600");
         statusEl.classList.add("text-green-600");
+
+        console.log("WebSocket connection established : ", ws);
 };
 
 ws.onmessage = (event) => {
@@ -18,6 +20,8 @@ ws.onmessage = (event) => {
                 if (data.type === "flow") {
                         addFlowRow(data);
                 } else if (data.type === "packet") {
+                        //ToDO No display for packets because of performances issues with high ingestion rates 
+
                         // const pre = document.createElement("pre");
                         // pre.textContent = JSON.stringify(data, null, 2);
                         // pre.className = "bg-gray-100 p-2 rounded mb-2 overflow-x-auto text-sm";
@@ -32,12 +36,16 @@ ws.onerror = (err) => {
         statusEl.textContent = "❌ WebSocket error: " + err.message;
         statusEl.classList.remove("text-green-600");
         statusEl.classList.add("text-red-600");
+
+        console.error("WebSocket error:", err);
 };
 
 ws.onclose = () => {
         statusEl.textContent = "🔴 Disconnected from WebSocket server";
         statusEl.classList.remove("text-green-600");
         statusEl.classList.add("text-red-600");
+
+        console.warn("WebSocket connection closed");
 };
 
 /* ------------------------------- Table flows ------------------------------ */
@@ -103,11 +111,6 @@ function addFlowRow(flow) {
 
         // Add cells to the row
         flowTableBody.prepend(row);
-
-        // Keep max 100 rows
-        // if (flowTableBody.children.length > 100) {
-        //         flowTableBody.removeChild(flowTableBody.lastChild);
-        // }
 }
 
 /** 

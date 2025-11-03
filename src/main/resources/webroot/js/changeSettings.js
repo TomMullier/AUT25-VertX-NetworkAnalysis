@@ -13,14 +13,12 @@ async function updateSettings(settings) {
                 });
 
                 if (response.ok) {
-                        console.log("[✅ SETTINGS UPDATED]", settings);
-                        console.log("✅ Settings updated successfully");
+                        console.log("[SETTINGS UPDATED SUCCESSFULLY]" + JSON.stringify(settings));
                 } else {
-                        console.log("❌ Failed to update settings");
+                        console.error("Failed to update settings");
                 }
         } catch (err) {
                 console.error("Error updating settings:", err);
-                console.log("❌ Error updating settings");
         }
 }
 
@@ -96,9 +94,9 @@ document.getElementById("SettingsForm").addEventListener("submit", async (e) => 
                 FLOW_MAX_AGE_MS_UDP: parseInt(document.getElementById("udpMaxAge").value),
                 FLOW_MAX_AGE_MS_OTHER: parseInt(document.getElementById("otherMaxAge").value),
         };
-        console.log("Updating settings:", settings);
+        console.log("[UPDATING]:", settings);
 
-        updateSettings(settings);
+        await updateSettings(settings);
 });
 
 /**
@@ -110,7 +108,7 @@ async function fetchIngestionMethod() {
                 if (response.ok) {
                         const data = await response.json();
                         const method = data.ingestionMethod;
-                        console.log("Fetched ingestion method:", method);
+                        console.log("Fetched ingestion method :", method);
                         if (method) {
                                 const radioToCheck = document.querySelector(`input[name="ingestionMethod"][value="${method}"]`);
                                 if (radioToCheck) {
@@ -183,6 +181,9 @@ async function updatePcapAndInterfacesVisibility() {
                 realtimeSelectContainer.style.display = "block";
                 loadNetworkInterfacesAndActive();
         }
+
+        console.log("Updated PCAP and Network Interface visibility based on ingestion method");
+        console.log("Current selected ingestion method:", selected ? selected.value : "none");
 }
 
 /**
