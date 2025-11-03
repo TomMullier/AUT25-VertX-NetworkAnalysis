@@ -58,26 +58,7 @@ public class WebServerVerticle extends AbstractVerticle {
                                                 .putHeader("Content-Type", "application/json")
                                                 .end(settings.encode());
                         });
-                        router.get("/api/listPcapFiles").handler(ctx -> {
-                                String dataDirPath = "src/main/resources/data";
-                                File dataDir = new File(dataDirPath);
 
-                                JsonArray filesArray = new JsonArray();
-
-                                if (dataDir.exists() && dataDir.isDirectory()) {
-                                        File[] files = dataDir
-                                                        .listFiles((dir, name) -> name.toLowerCase().endsWith(".pcap"));
-                                        if (files != null) {
-                                                for (File file : files) {
-                                                        filesArray.add(file.getName());
-                                                }
-                                        }
-                                }
-
-                                ctx.response()
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(new JsonObject().put("files", filesArray).encode());
-                        });
                         router.get("/api/checkFileExists").handler(ctx -> {
                                 String fileName = ctx.request().getParam("file");
 
@@ -102,8 +83,7 @@ public class WebServerVerticle extends AbstractVerticle {
                                                                 .encode());
                         });
 
-                        // --- GET ACTIVE PCAP FILE --- //
-                        router.get("/api/getActivePcapFile").handler(ctx -> {
+                        router.get("/api/pcapInfo").handler(ctx -> {
                                 try {
                                         // Récupère les paramètres globaux depuis le config
                                         SharedData sharedData = vertx.sharedData();
@@ -114,21 +94,86 @@ public class WebServerVerticle extends AbstractVerticle {
                                                 JsonObject settingsPcap = (JsonObject) settings.get("pcap");
                                                 if (settingsPcap != null) {
                                                         activeFile = settingsPcap.getString("file-path", null);
+                                                        // Ne garder que le nom du fichier
+                                                        if (activeFile != null) {
+                                                                activeFile = activeFile.substring(
+                                                                                activeFile.lastIndexOf('/') + 1);
+                                                        }
                                                 }
                                         }
 
-                                        io.vertx.core.json.JsonObject response = new io.vertx.core.json.JsonObject()
+                                        // Récupère la liste des fichiers PCAP
+                                        String dataDirPath = "src/main/resources/data";
+                                        File dataDir = new File(dataDirPath);
+                                        JsonArray filesArray = new JsonArray();
+
+                                        if (dataDir.exists() && dataDir.isDirectory()) {
+                                                File[] files = dataDir.listFiles(
+                                                                (dir, name) -> name.toLowerCase().endsWith(".pcap"));
+                                                if (files != null) {
+                                                        for (File file : files) {
+                                                                filesArray.add(file.getName());
+                                                        }
+                                                }
+                                        }
+
+                                        // Crée la réponse combinée
+                                        JsonObject response = new JsonObject()
+                                                        .put("files", filesArray)
                                                         .put("activePcapFile", activeFile);
 
                                         ctx.response()
                                                         .putHeader("Content-Type", "application/json")
                                                         .end(response.encode());
+
                                 } catch (Exception e) {
                                         ctx.response()
                                                         .setStatusCode(500)
                                                         .putHeader("Content-Type", "application/json")
-                                                        .end(new io.vertx.core.json.JsonObject()
-                                                                        .put("error", e.getMessage()).encode());
+                                                        .end(new JsonObject()
+                                                                        .put("error", e.getMessage())
+                                                                        .encode());
+                                }
+                        });
+
+                        router.get("/api/networkInfo").handler(ctx -> {
+                                try {
+                                        // Récupère les interfaces réseau up, non-loopback, non-virtuelles
+                                        java.util.List<String> interfaces = new java.util.ArrayList<>();
+                                        java.util.Enumeration<java.net.NetworkInterface> nets = java.net.NetworkInterface
+                                                        .getNetworkInterfaces();
+                                        while (nets.hasMoreElements()) {
+                                                java.net.NetworkInterface netIf = nets.nextElement();
+                                                if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
+                                                        interfaces.add(netIf.getName());
+                                                }
+                                        }
+
+                                        // Récupère l'interface active depuis le sharedData
+                                        io.vertx.core.shareddata.LocalMap<String, Object> map_ = ctx.vertx()
+                                                        .sharedData().getLocalMap("config");
+                                        io.vertx.core.json.JsonObject config_ = new io.vertx.core.json.JsonObject(map_);
+
+                                        String activeInterface = null;
+                                        if (config_.containsKey("realtime")) {
+                                                io.vertx.core.json.JsonObject realtime = config_
+                                                                .getJsonObject("realtime");
+                                                activeInterface = realtime.getString("interface", null);
+                                        }
+
+                                        JsonObject response = new JsonObject()
+                                                        .put("interfaces", interfaces)
+                                                        .put("activeInterface", activeInterface);
+
+                                        ctx.response()
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(response.encode());
+
+                                } catch (Exception e) {
+                                        ctx.response()
+                                                        .setStatusCode(500)
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(new JsonObject().put("error", e.getMessage()).encode());
                                 }
                         });
 
@@ -140,62 +185,65 @@ public class WebServerVerticle extends AbstractVerticle {
                                                 .putHeader("Content-Type", "application/json")
                                                 .end(new JsonObject().put("ingestionMethod", method).encode());
                         });
-                        router.get("/api/listNetworkInterfaces").handler(ctx -> {
-                                try {
-                                        java.net.NetworkInterface.getNetworkInterfaces().asIterator()
-                                                        .forEachRemaining(iface -> {
-                                                                // we get only up, non-loopback, non-virtual interfaces
-                                                                try {
-                                                                        if (iface.isUp() && !iface.isLoopback()
-                                                                                        && !iface.isVirtual()) {
-                                                                                logger.debug("[ WEBSERVER ]                     Found interface: {}",
-                                                                                                iface.getName());
-                                                                        }
-                                                                } catch (Exception e) {
-                                                                        logger.error("[ WEBSERVER ]                     Error checking interface {}: {}",
-                                                                                        iface.getName(),
-                                                                                        e.getMessage());
-                                                                }
-                                                        });
+                        // router.get("/api/listNetworkInterfaces").handler(ctx -> {
+                        // try {
+                        // java.net.NetworkInterface.getNetworkInterfaces().asIterator()
+                        // .forEachRemaining(iface -> {
+                        // // we get only up, non-loopback, non-virtual interfaces
+                        // try {
+                        // if (iface.isUp() && !iface.isLoopback()
+                        // && !iface.isVirtual()) {
+                        // logger.debug("[ WEBSERVER ] Found interface: {}",
+                        // iface.getName());
+                        // }
+                        // } catch (Exception e) {
+                        // logger.error("[ WEBSERVER ] Error checking interface {}: {}",
+                        // iface.getName(),
+                        // e.getMessage());
+                        // }
+                        // });
 
-                                        java.util.List<String> interfaces = new java.util.ArrayList<>();
-                                        java.util.Enumeration<java.net.NetworkInterface> nets = java.net.NetworkInterface
-                                                        .getNetworkInterfaces();
-                                        while (nets.hasMoreElements()) {
-                                                java.net.NetworkInterface netIf = nets.nextElement();
-                                                if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
-                                                        interfaces.add(netIf.getName());
-                                                }
-                                        }
+                        // java.util.List<String> interfaces = new java.util.ArrayList<>();
+                        // java.util.Enumeration<java.net.NetworkInterface> nets =
+                        // java.net.NetworkInterface
+                        // .getNetworkInterfaces();
+                        // while (nets.hasMoreElements()) {
+                        // java.net.NetworkInterface netIf = nets.nextElement();
+                        // if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
+                        // interfaces.add(netIf.getName());
+                        // }
+                        // }
 
-                                        ctx.response()
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(new io.vertx.core.json.JsonObject()
-                                                                        .put("interfaces", interfaces).encode());
-                                } catch (Exception e) {
-                                        ctx.response().setStatusCode(500)
-                                                        .putHeader("Content-Type", "application/json")
-                                                        .end(new io.vertx.core.json.JsonObject()
-                                                                        .put("error", e.getMessage()).encode());
-                                }
-                        });
+                        // ctx.response()
+                        // .putHeader("Content-Type", "application/json")
+                        // .end(new io.vertx.core.json.JsonObject()
+                        // .put("interfaces", interfaces).encode());
+                        // } catch (Exception e) {
+                        // ctx.response().setStatusCode(500)
+                        // .putHeader("Content-Type", "application/json")
+                        // .end(new io.vertx.core.json.JsonObject()
+                        // .put("error", e.getMessage()).encode());
+                        // }
+                        // });
 
-                        router.get("/api/getActiveInterface").handler(ctx -> {
-                                io.vertx.core.shareddata.LocalMap<String, Object> map_ = ctx.vertx().sharedData()
-                                                .getLocalMap("config");
-                                io.vertx.core.json.JsonObject config_ = new io.vertx.core.json.JsonObject(map_);
+                        // router.get("/api/getActiveInterface").handler(ctx -> {
+                        // io.vertx.core.shareddata.LocalMap<String, Object> map_ =
+                        // ctx.vertx().sharedData()
+                        // .getLocalMap("config");
+                        // io.vertx.core.json.JsonObject config_ = new
+                        // io.vertx.core.json.JsonObject(map_);
 
-                                String activeInterface = null;
-                                if (config_.containsKey("realtime")) {
-                                        io.vertx.core.json.JsonObject realtime = config_.getJsonObject("realtime");
-                                        activeInterface = realtime.getString("interface", "");
-                                }
+                        // String activeInterface = null;
+                        // if (config_.containsKey("realtime")) {
+                        // io.vertx.core.json.JsonObject realtime = config_.getJsonObject("realtime");
+                        // activeInterface = realtime.getString("interface", "");
+                        // }
 
-                                ctx.response()
-                                                .putHeader("Content-Type", "application/json")
-                                                .end(new io.vertx.core.json.JsonObject()
-                                                                .put("activeInterface", activeInterface).encode());
-                        });
+                        // ctx.response()
+                        // .putHeader("Content-Type", "application/json")
+                        // .end(new io.vertx.core.json.JsonObject()
+                        // .put("activeInterface", activeInterface).encode());
+                        // });
 
                         router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 
@@ -374,12 +422,17 @@ public class WebServerVerticle extends AbstractVerticle {
                 logger.info(Colors.BLUE + "[ WEBSERVER ]                     Settings updated: "
                                 + vertx.sharedData().getLocalMap("config").toString() + Colors.RESET);
 
-                // redeploy ingestion
-                if (mainVerticle != null) {
-                        mainVerticle.redeployIngestionVerticle();
-                        mainVerticle.redeployFlowAggregatorVerticle();
-                }
                 ctx.response().setStatusCode(200).end();
+
+                // Redeploy async
+                vertx.executeBlocking(promise -> {
+                        if (mainVerticle != null) {
+                                mainVerticle.redeployIngestionVerticle();
+                                mainVerticle.redeployFlowAggregatorVerticle();
+                        }
+                        promise.complete();
+                }, res -> {
+                });
         }
 
 }

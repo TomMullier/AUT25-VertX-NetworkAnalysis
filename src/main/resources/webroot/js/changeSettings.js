@@ -125,56 +125,44 @@ async function fetchIngestionMethod() {
         }
 }
 
-/**
- * This function loads the currently active PCAP file from the server and sets it in the select element.
- */
-async function loadActivePcapFile() {
+
+async function loadPcapFilesAndActive() {
         try {
-                await fetch("/api/getActivePcapFile")
-                        .then(response => response.json())
-                        .then(data => {
-                                const path = data.activePcapFile;
-                                const activeFile = path ? path.split('/').pop() : null;
-                                console.log("Active PCAP file:", activeFile);
-                                if (activeFile) {
-                                        const pcapSelect = document.getElementById("pcapFile");
-                                        const optionToSelect = Array.from(pcapSelect.options).find(option => option.value === activeFile);
-                                        if (optionToSelect) {
-                                                optionToSelect.selected = true;
-                                        }
-                                }
+                const response = await fetch("/api/pcapInfo");
+                const data = await response.json();
+
+                const pcapSelect = document.getElementById("pcapFile");
+                pcapSelect.innerHTML = "";
+
+                // Ajouter les fichiers
+                if (data.files && data.files.length > 0) {
+                        data.files.forEach(file => {
+                                const option = document.createElement("option");
+                                option.value = file;
+                                option.textContent = file;
+                                pcapSelect.appendChild(option);
                         });
+                } else {
+                        const option = document.createElement("option");
+                        option.textContent = "Aucun fichier trouvé";
+                        option.disabled = true;
+                        pcapSelect.appendChild(option);
+                }
+
+                // Sélectionner le fichier actif
+                if (data.activePcapFile) {
+                        const optionToSelect = Array.from(pcapSelect.options)
+                                .find(option => option.value === data.activePcapFile);
+                        if (optionToSelect) optionToSelect.selected = true;
+                }
+
+                console.log("Loaded PCAP files and active file:", data);
+
         } catch (err) {
-                console.error("Error loading active PCAP file:", err);
+                console.error("Error loading PCAP files and active file:", err);
         }
 }
 
-/**
- * This function loads the available PCAP files from the server and populates the select element.
- */
-async function loadPcapFiles() {
-        const pcapSelect = document.getElementById("pcapFile");
-
-        await fetch("/api/listPcapFiles")
-                .then(response => response.json())
-                .then(data => {
-                        pcapSelect.innerHTML = ""; // Clear existing options
-                        if (data.files && data.files.length > 0) {
-                                data.files.forEach(file => {
-                                        const option = document.createElement("option");
-                                        option.value = file;
-                                        option.textContent = file;
-                                        pcapSelect.appendChild(option);
-                                });
-                        } else {
-                                const option = document.createElement("option");
-                                option.textContent = "Aucun fichier trouvé";
-                                option.disabled = true;
-                                pcapSelect.appendChild(option);
-                        }
-                })
-                .catch(err => console.error("Erreur lors du chargement des fichiers PCAP :", err));
-}
 
 /**
  * This function updates the visibility of the PCAP file select based on the selected ingestion method.
@@ -187,48 +175,56 @@ async function updatePcapAndInterfacesVisibility() {
         if (selected && selected.value === "pcap") {
                 realtimeSelectContainer.style.display = "none";
                 pcapSelectContainer.style.display = "block";
-                await loadPcapFiles();
-                await loadActivePcapFile();
+                // await loadPcapFiles();
+                // await loadActivePcapFile();
+                loadPcapFilesAndActive();
         } else if (selected && selected.value === "realtime") {
                 pcapSelectContainer.style.display = "none";
                 realtimeSelectContainer.style.display = "block";
-                await loadNetworkInterfaces();
+                loadNetworkInterfacesAndActive();
         }
 }
 
 /**
  * Récupère les interfaces réseau depuis le backend et remplit le <select>
  */
-async function loadNetworkInterfaces() {
+async function loadNetworkInterfacesAndActive() {
         try {
-                const response = await fetch("/api/listNetworkInterfaces");
+                const response = await fetch("/api/networkInfo");
                 const data = await response.json();
 
                 const select = document.getElementById("realtimeInterface");
                 select.innerHTML = "";
 
-                data.interfaces.forEach(iface => {
+                // Ajouter les interfaces
+                if (data.interfaces && data.interfaces.length > 0) {
+                        data.interfaces.forEach(iface => {
+                                const option = document.createElement("option");
+                                option.value = iface;
+                                option.textContent = iface;
+                                select.appendChild(option);
+                        });
+                } else {
                         const option = document.createElement("option");
-                        option.value = iface;
-                        option.textContent = iface;
+                        option.textContent = "Aucune interface trouvée";
+                        option.disabled = true;
                         select.appendChild(option);
-                });
+                }
 
-                // Charger l’interface actuellement active
-                const activeResponse = await fetch("/api/getActiveInterface");
-                const activeData = await activeResponse.json();
-                const activeInterface = activeData.activeInterface;
-
-                if (activeInterface) {
+                // Sélectionner l’interface active
+                if (data.activeInterface) {
                         const optionToSelect = Array.from(select.options)
-                                .find(o => o.value === activeInterface);
+                                .find(o => o.value === data.activeInterface);
                         if (optionToSelect) optionToSelect.selected = true;
                 }
 
+                console.log("Loaded network interfaces and active interface:", data);
+
         } catch (err) {
-                console.error("Error loading network interfaces:", err);
+                console.error("Error loading network interfaces and active interface:", err);
         }
 }
+
 
 
 /**
