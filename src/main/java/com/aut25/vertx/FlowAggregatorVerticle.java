@@ -89,7 +89,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 + Colors.RESET);
                 JsonObject settings = (JsonObject) vertx.sharedData().getLocalMap("settings").get("config");
                 if (settings == null) {
-                        logger.error(Colors.RED
+                        logger.info(Colors.MAGENTA
                                         + "[ FLOWAGGREGATOR VERTICLE ]       Keeping default settings as no config found in shared map."
                                         + Colors.RESET);
                 } else {

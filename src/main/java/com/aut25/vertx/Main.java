@@ -4,6 +4,7 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Promise;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.LocalMap;
 import io.vertx.core.shareddata.SharedData;
 
 import static java.lang.Thread.sleep;
@@ -29,10 +30,12 @@ public class Main extends AbstractVerticle {
     private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     // List to track deployed verticle IDs
+
     public String ingestionMethod;
     public final List<String> deploymentIds = new ArrayList<>();
     public List<AbstractVerticle> verticles = new ArrayList<>();
     private JsonObject config;
+    private SharedData sharedData;
     private Scanner scanner;
 
     @Override
@@ -41,7 +44,9 @@ public class Main extends AbstractVerticle {
         // Load configuration from JSON file
         config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
-        logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + config.encodePrettily());
+        sharedData = loadSharedData(vertx);
+
+        logger.debug("[ MAIN VERTICLE ] Loaded configuration: " + sharedData.getLocalMap("config").toString());
 
         // Check the mode in the configuration
         String mode = config.getString("mode", "menu");
@@ -101,6 +106,15 @@ public class Main extends AbstractVerticle {
                     }
                     config.put("mode", "json");
                     config.put("json.file-path", jsonPath);
+
+                    JsonObject jsonConfig = new JsonObject()
+                            .put("file-path", jsonPath)
+                            .put("ingestion-interval-ms",
+                                    config.getJsonObject("json").getInteger("ingestion-interval-ms", 1000));
+                    sharedData.getLocalMap("config").put("json", jsonConfig);
+                    sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
+                    sharedData.getLocalMap("config").put("mode", "json");
+
                     logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 JSON file path set to: " + jsonPath
                             + Colors.RESET);
                     exitMenu = true;
@@ -123,9 +137,22 @@ public class Main extends AbstractVerticle {
                         logger.info(Colors.YELLOW
                                 + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
                                 + pcapPath + Colors.RESET);
+                    } else {
+                        if (!Files.exists(Paths.get(pcapPath))) {
+                            logger.error(Colors.RED + "[ MAIN VERTICLE ]                 PCAP file not found at: "
+                                    + pcapPath + Colors.RESET);
+                            break; // revient au menu principal
+                        }
                     }
                     config.put("mode", "pcap");
                     config.put("pcap.file-path", pcapPath);
+
+                    JsonObject pcapConfig = new JsonObject()
+                            .put("file-path", pcapPath);
+                    sharedData.getLocalMap("config").put("pcap", pcapConfig);
+                    sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
+                    sharedData.getLocalMap("config").put("mode", "pcap");
+
                     logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 PCAP file path set to: " + pcapPath
                             + Colors.RESET);
                     exitMenu = true;
@@ -137,6 +164,11 @@ public class Main extends AbstractVerticle {
                             Colors.MAGENTA + "[ MAIN VERTICLE ]                 Realtime ingestion method selected."
                                     + Colors.RESET);
                     config.put("mode", "realtime");
+
+                    JsonObject realtimeConfig = new JsonObject();
+                    sharedData.getLocalMap("config").put("realtime", realtimeConfig);
+                    sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
+                    sharedData.getLocalMap("config").put("mode", "realtime");
                     exitMenu = true;
                     break;
 
@@ -171,8 +203,9 @@ public class Main extends AbstractVerticle {
             return; // empêche la suite du start()
         }
 
-        SharedData sharedData = vertx.sharedData();
-        sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
+        // log shared data config
+        logger.info("[ MAIN VERTICLE ]                 Shared Data Config: "
+                + sharedData.getLocalMap("config").toString());
 
         // Determine if ClickHouse storage is enabled
         boolean store = config.getString("store", "false").equalsIgnoreCase(
@@ -253,11 +286,33 @@ public class Main extends AbstractVerticle {
         }
     }
 
-    public void redeployIngestionVerticle(String mode) {
-        logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Redeploying ingestion verticle..."
-                + Colors.RESET);
+    public void redeployIngestionVerticle() {
+        logger.info(
+                Colors.GREEN + "[ MAIN VERTICLE ]                 Redeploying ingestion verticle with new settings..."
+                        + Colors.RESET);
         // update config
+        LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+        JsonObject c = new JsonObject(map);
+
+        String mode = c.getString("ingestionMethod");
+        String filePath = c.getJsonObject(mode).getString("file-path");
+
+        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ]                 New settings for ingestion: mode=" + mode
+                + ", file-path=" + filePath + Colors.RESET);
+
         config.put("mode", mode);
+        sharedData.getLocalMap("config").put("mode", mode);
+        if (mode.equals("pcap")) {
+            config.put("pcap.file-path", filePath);
+            sharedData.getLocalMap("config").put("pcap", new JsonObject().put("file-path", filePath));
+        } else if (mode.equals("json")) {
+            config.put("json.file-path", filePath);
+            sharedData.getLocalMap("config").put("json",
+                    new JsonObject()
+                            .put("file-path", filePath)
+                            .put("ingestion-interval-ms",
+                                    config.getJsonObject("json").getInteger("ingestion-interval-ms", 1000)));
+        }
         // Update options
         DeploymentOptions options = new DeploymentOptions();
         options.setConfig(config);
@@ -282,10 +337,18 @@ public class Main extends AbstractVerticle {
         });
     }
 
-    public void redeployFlowAggregatorVerticle(String mode) {
+    public void redeployFlowAggregatorVerticle() {
         logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Redeploying FlowAggregator verticle..."
                 + Colors.RESET);
         // update config
+        LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+        JsonObject c = new JsonObject(map);
+
+        String mode = c.getString("ingestionMethod");
+        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ]                 New settings for FlowAggregator: mode=" + mode
+                + Colors.RESET);
+
+        sharedData.getLocalMap("config").put("mode", mode);
         config.put("mode", mode);
         // Update options
         DeploymentOptions options = new DeploymentOptions();
@@ -309,5 +372,31 @@ public class Main extends AbstractVerticle {
                                 + res.cause() + Colors.RESET);
             }
         });
+    }
+
+    private SharedData loadSharedData(io.vertx.core.Vertx vertx) {
+        SharedData sharedData = vertx.sharedData();
+        sharedData.getLocalMap("config").put("ingestionMethod", "none");
+        // Put all elements in shared data config
+        sharedData.getLocalMap("config").put("http.port", 8080);
+        sharedData.getLocalMap("config").put("store", "true");
+        sharedData.getLocalMap("config").put("mode", "menu");
+
+        JsonObject jsonConfig = new JsonObject()
+                .put("file-path", "src/main/resources/data/network-data.json")
+                .put("ingestion-interval-ms", 1000);
+        sharedData.getLocalMap("config").put("json", jsonConfig);
+
+        JsonObject pcapConfig = new JsonObject()
+                .put("file-path", "src/main/resources/data/benign+slowloris_net_packets.pcap");
+        sharedData.getLocalMap("config").put("pcap", pcapConfig);
+
+        JsonObject realtimeTestConfig = new JsonObject()
+                .put("interface", "ens160");
+        sharedData.getLocalMap("config").put("realtime_test", realtimeTestConfig);
+
+        JsonObject realtimeConfig = new JsonObject();
+        sharedData.getLocalMap("config").put("realtime", realtimeConfig);
+        return sharedData;
     }
 }

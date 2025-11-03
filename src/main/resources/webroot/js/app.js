@@ -1,9 +1,10 @@
+/* -------------------------------- VARIABLE -------------------------------- */
 const ws = new WebSocket(`ws://${location.host}/`);
-
 const statusEl = document.getElementById("connectionStatus");
 const flowTableBody = document.getElementById("flowTableBody");
 const packetsEl = document.getElementById("packetContainer");
 
+/* ----------------------------- WEBSOCKET LOGIC ----------------------------- */
 ws.onopen = () => {
         statusEl.textContent = "🟢 Connected to WebSocket server";
         statusEl.classList.remove("text-red-600");
@@ -40,6 +41,10 @@ ws.onclose = () => {
 };
 
 /* ------------------------------- Table flows ------------------------------ */
+/**
+ * Add a flow row to the table
+ * @param {*} flow 
+ */
 function addFlowRow(flow) {
         const row = document.createElement("tr");
 
@@ -105,7 +110,9 @@ function addFlowRow(flow) {
         // }
 }
 
-// Table filtering function
+/** 
+ * Search filter for flow table
+ */
 document.getElementById("searchInput").addEventListener("input", function () {
         const filter = this.value.toLowerCase();
         const rows = document.querySelectorAll("#flowTableBody tr");
@@ -117,7 +124,9 @@ document.getElementById("searchInput").addEventListener("input", function () {
 });
 
 
-// Reset button: clear search and clear data 
+/**
+ * This function handles the reset of the dashboard, clearing all data and resetting the input fields.
+ */
 document.getElementById("resetButton").addEventListener("click", () => {
         // 1. Reset input field
         const searchInput = document.getElementById("searchInput");

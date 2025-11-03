@@ -10,6 +10,7 @@ import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.core.shareddata.SharedData;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,8 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.aut25.vertx.utils.Colors;
+import java.io.File;
+import io.vertx.core.json.JsonArray;
 
+import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.Main;
 
 public class WebServerVerticle extends AbstractVerticle {
@@ -44,8 +47,8 @@ public class WebServerVerticle extends AbstractVerticle {
                         router.route().handler(BodyHandler.create());
                         router.post("/api/settings").handler(this::handleSettingsUpdate);
                         router.get("/api/settings").handler(ctx -> {
-                                LocalMap<String, Object> settingsMap = vertx.sharedData().getLocalMap("settings");
-                                JsonObject settings = (JsonObject) settingsMap.get("config");
+                                SharedData sharedData = vertx.sharedData();
+                                JsonObject settings = (JsonObject) sharedData.getLocalMap("config");
                                 if (settings == null) {
                                         settings = new JsonObject();
                                 }
@@ -53,6 +56,80 @@ public class WebServerVerticle extends AbstractVerticle {
                                                 .putHeader("Content-Type", "application/json")
                                                 .end(settings.encode());
                         });
+                        router.get("/api/listPcapFiles").handler(ctx -> {
+                                String dataDirPath = "src/main/resources/data";
+                                File dataDir = new File(dataDirPath);
+
+                                JsonArray filesArray = new JsonArray();
+
+                                if (dataDir.exists() && dataDir.isDirectory()) {
+                                        File[] files = dataDir
+                                                        .listFiles((dir, name) -> name.toLowerCase().endsWith(".pcap"));
+                                        if (files != null) {
+                                                for (File file : files) {
+                                                        filesArray.add(file.getName());
+                                                }
+                                        }
+                                }
+
+                                ctx.response()
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(new JsonObject().put("files", filesArray).encode());
+                        });
+                        router.get("/api/checkFileExists").handler(ctx -> {
+                                String fileName = ctx.request().getParam("file");
+
+                                if (fileName == null || fileName.isEmpty()) {
+                                        ctx.response()
+                                                        .setStatusCode(400)
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(new io.vertx.core.json.JsonObject()
+                                                                        .put("error", "Missing 'file' parameter")
+                                                                        .encode());
+                                        return;
+                                }
+
+                                String pcapDirPath = "src/main/resources/data";
+                                java.nio.file.Path filePath = java.nio.file.Paths.get(pcapDirPath, fileName);
+
+                                boolean exists = java.nio.file.Files.exists(filePath);
+
+                                ctx.response()
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(new io.vertx.core.json.JsonObject().put("exists", exists)
+                                                                .encode());
+                        });
+
+                        // --- GET ACTIVE PCAP FILE --- //
+                        router.get("/api/getActivePcapFile").handler(ctx -> {
+                                try {
+                                        // Récupère les paramètres globaux depuis le config
+                                        SharedData sharedData = vertx.sharedData();
+                                        LocalMap<String, Object> settings = sharedData.getLocalMap("config");
+
+                                        String activeFile = null;
+                                        if (settings != null) {
+                                                JsonObject settingsPcap = (JsonObject) settings.get("pcap");
+                                                if (settingsPcap != null) {
+                                                        activeFile = settingsPcap.getString("file-path", null);
+                                                }
+                                        }
+
+                                        io.vertx.core.json.JsonObject response = new io.vertx.core.json.JsonObject()
+                                                        .put("activePcapFile", activeFile);
+
+                                        ctx.response()
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(response.encode());
+                                } catch (Exception e) {
+                                        ctx.response()
+                                                        .setStatusCode(500)
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(new io.vertx.core.json.JsonObject()
+                                                                        .put("error", e.getMessage()).encode());
+                                }
+                        });
+
                         router.get("/api/getIngestionMethod").handler(ctx -> {
                                 LocalMap<String, Object> config_ = vertx.sharedData().getLocalMap("config");
                                 String method = (String) config_.getOrDefault("ingestionMethod", "none");
@@ -206,6 +283,21 @@ public class WebServerVerticle extends AbstractVerticle {
                 long tcpMaxAge = body.getLong("FLOW_MAX_AGE_MS_TCP", 3600000L);
                 long udpMaxAge = body.getLong("FLOW_MAX_AGE_MS_UDP", 3600000L);
                 long otherMaxAge = body.getLong("FLOW_MAX_AGE_MS_OTHER", 3600000L);
+
+                // retrieve pcap file if ingestion method is pcap
+                String activePcapFile = null;
+                if (ingestionMethod.equals("pcap")) {
+                        if (!body.containsKey("pcapFilePath")) {
+                                ctx.response()
+                                                .setStatusCode(400)
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(new JsonObject().put("error", "Missing 'pcapFilePath' field")
+                                                                .encode());
+                                return;
+                        }
+                        activePcapFile = "src/main/resources/data/" + body.getString("pcapFilePath");
+                }
+
                 // Stocke ces valeurs dans le sharedData (pour être accessibles aux autres
                 // Verticles)
                 JsonObject settings = new JsonObject()
@@ -215,14 +307,19 @@ public class WebServerVerticle extends AbstractVerticle {
                                 .put("FLOW_INACTIVITY_TIMEOUT_MS_OTHER", otherTimeout)
                                 .put("FLOW_MAX_AGE_MS_TCP", tcpMaxAge)
                                 .put("FLOW_MAX_AGE_MS_UDP", udpMaxAge)
-                                .put("FLOW_MAX_AGE_MS_OTHER", otherMaxAge);
+                                .put("FLOW_MAX_AGE_MS_OTHER", otherMaxAge)
+                                .put("pcap", new JsonObject().put("file-path",
+                                                ingestionMethod.equals("pcap") ? activePcapFile : ""));
 
-                vertx.sharedData().getLocalMap("settings").put("config", settings);
+                vertx.sharedData().getLocalMap("config").putAll(settings.getMap());
+
+                logger.info(Colors.BLUE + "[ WEBSERVER ]                     Settings updated: "
+                                + vertx.sharedData().getLocalMap("config").toString() + Colors.RESET);
 
                 // redeploy ingestion
                 if (mainVerticle != null) {
-                        mainVerticle.redeployIngestionVerticle(ingestionMethod);
-                        mainVerticle.redeployFlowAggregatorVerticle(ingestionMethod);
+                        mainVerticle.redeployIngestionVerticle();
+                        mainVerticle.redeployFlowAggregatorVerticle();
                 }
                 ctx.response().setStatusCode(200).end();
         }
