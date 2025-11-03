@@ -140,6 +140,62 @@ public class WebServerVerticle extends AbstractVerticle {
                                                 .putHeader("Content-Type", "application/json")
                                                 .end(new JsonObject().put("ingestionMethod", method).encode());
                         });
+                        router.get("/api/listNetworkInterfaces").handler(ctx -> {
+                                try {
+                                        java.net.NetworkInterface.getNetworkInterfaces().asIterator()
+                                                        .forEachRemaining(iface -> {
+                                                                // we get only up, non-loopback, non-virtual interfaces
+                                                                try {
+                                                                        if (iface.isUp() && !iface.isLoopback()
+                                                                                        && !iface.isVirtual()) {
+                                                                                logger.debug("[ WEBSERVER ]                     Found interface: {}",
+                                                                                                iface.getName());
+                                                                        }
+                                                                } catch (Exception e) {
+                                                                        logger.error("[ WEBSERVER ]                     Error checking interface {}: {}",
+                                                                                        iface.getName(),
+                                                                                        e.getMessage());
+                                                                }
+                                                        });
+
+                                        java.util.List<String> interfaces = new java.util.ArrayList<>();
+                                        java.util.Enumeration<java.net.NetworkInterface> nets = java.net.NetworkInterface
+                                                        .getNetworkInterfaces();
+                                        while (nets.hasMoreElements()) {
+                                                java.net.NetworkInterface netIf = nets.nextElement();
+                                                if (netIf.isUp() && !netIf.isLoopback() && !netIf.isVirtual()) {
+                                                        interfaces.add(netIf.getName());
+                                                }
+                                        }
+
+                                        ctx.response()
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(new io.vertx.core.json.JsonObject()
+                                                                        .put("interfaces", interfaces).encode());
+                                } catch (Exception e) {
+                                        ctx.response().setStatusCode(500)
+                                                        .putHeader("Content-Type", "application/json")
+                                                        .end(new io.vertx.core.json.JsonObject()
+                                                                        .put("error", e.getMessage()).encode());
+                                }
+                        });
+
+                        router.get("/api/getActiveInterface").handler(ctx -> {
+                                io.vertx.core.shareddata.LocalMap<String, Object> map_ = ctx.vertx().sharedData()
+                                                .getLocalMap("config");
+                                io.vertx.core.json.JsonObject config_ = new io.vertx.core.json.JsonObject(map_);
+
+                                String activeInterface = null;
+                                if (config_.containsKey("realtime")) {
+                                        io.vertx.core.json.JsonObject realtime = config_.getJsonObject("realtime");
+                                        activeInterface = realtime.getString("interface", "");
+                                }
+
+                                ctx.response()
+                                                .putHeader("Content-Type", "application/json")
+                                                .end(new io.vertx.core.json.JsonObject()
+                                                                .put("activeInterface", activeInterface).encode());
+                        });
 
                         router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 

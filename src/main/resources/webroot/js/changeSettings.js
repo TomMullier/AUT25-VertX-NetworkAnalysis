@@ -128,9 +128,9 @@ async function fetchIngestionMethod() {
 /**
  * This function loads the currently active PCAP file from the server and sets it in the select element.
  */
-function loadActivePcapFile() {
+async function loadActivePcapFile() {
         try {
-                fetch("/api/getActivePcapFile")
+                await fetch("/api/getActivePcapFile")
                         .then(response => response.json())
                         .then(data => {
                                 const path = data.activePcapFile;
@@ -152,10 +152,10 @@ function loadActivePcapFile() {
 /**
  * This function loads the available PCAP files from the server and populates the select element.
  */
-function loadPcapFiles() {
+async function loadPcapFiles() {
         const pcapSelect = document.getElementById("pcapFile");
 
-        fetch("/api/listPcapFiles")
+        await fetch("/api/listPcapFiles")
                 .then(response => response.json())
                 .then(data => {
                         pcapSelect.innerHTML = ""; // Clear existing options
@@ -179,18 +179,57 @@ function loadPcapFiles() {
 /**
  * This function updates the visibility of the PCAP file select based on the selected ingestion method.
  */
-function updatePcapVisibility() {
+async function updatePcapAndInterfacesVisibility() {
         const pcapSelectContainer = document.getElementById("pcapSelectContainer");
+        const realtimeSelectContainer = document.getElementById("realtimeSelectContainer");
         const selected = document.querySelector('input[name="ingestionMethod"]:checked');
 
         if (selected && selected.value === "pcap") {
+                realtimeSelectContainer.style.display = "none";
                 pcapSelectContainer.style.display = "block";
-                loadPcapFiles();
-                loadActivePcapFile();
-        } else {
+                await loadPcapFiles();
+                await loadActivePcapFile();
+        } else if (selected && selected.value === "realtime") {
                 pcapSelectContainer.style.display = "none";
+                realtimeSelectContainer.style.display = "block";
+                await loadNetworkInterfaces();
         }
 }
+
+/**
+ * Récupère les interfaces réseau depuis le backend et remplit le <select>
+ */
+async function loadNetworkInterfaces() {
+        try {
+                const response = await fetch("/api/listNetworkInterfaces");
+                const data = await response.json();
+
+                const select = document.getElementById("realtimeInterface");
+                select.innerHTML = "";
+
+                data.interfaces.forEach(iface => {
+                        const option = document.createElement("option");
+                        option.value = iface;
+                        option.textContent = iface;
+                        select.appendChild(option);
+                });
+
+                // Charger l’interface actuellement active
+                const activeResponse = await fetch("/api/getActiveInterface");
+                const activeData = await activeResponse.json();
+                const activeInterface = activeData.activeInterface;
+
+                if (activeInterface) {
+                        const optionToSelect = Array.from(select.options)
+                                .find(o => o.value === activeInterface);
+                        if (optionToSelect) optionToSelect.selected = true;
+                }
+
+        } catch (err) {
+                console.error("Error loading network interfaces:", err);
+        }
+}
+
 
 /**
  * This function handles the reset of the dashboard, clearing all data and resetting the input fields.
@@ -202,9 +241,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Add change event listeners to ingestion method radios
         ingestionRadios.forEach(radio => {
-                radio.addEventListener("change", updatePcapVisibility);
+                radio.addEventListener("change", updatePcapAndInterfacesVisibility);
         });
 
         // Initial update on page load
-        updatePcapVisibility();
+        await updatePcapAndInterfacesVisibility();
 });

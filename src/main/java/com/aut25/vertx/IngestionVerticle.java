@@ -76,7 +76,7 @@ public class IngestionVerticle extends AbstractVerticle {
                  * - realtime
                  */
                 String mode;
-                
+
                 if (config != null && config.containsKey("ingestionMethod")) {
                         mode = config.getString("ingestionMethod", "json").toLowerCase();
                 } else {
@@ -176,6 +176,9 @@ public class IngestionVerticle extends AbstractVerticle {
                                 }
                                 logger.debug("[ INGESTION VERTICLE ][ CONFIG ] Network Interface: "
                                                 + networkInterface);
+                                // Put in shared data
+                                vertx.sharedData().getLocalMap("config").put("realtime", new JsonObject()
+                                                .put("interface", networkInterface));
                                 ingestInRealTime(networkInterface);
                                 break;
                         case "none":

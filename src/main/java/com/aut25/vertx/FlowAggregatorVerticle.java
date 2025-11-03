@@ -2,6 +2,8 @@ package com.aut25.vertx;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.shareddata.LocalMap;
+
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.*;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -87,21 +89,22 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
-                JsonObject settings = (JsonObject) vertx.sharedData().getLocalMap("settings").get("config");
-                if (settings == null) {
+                LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+                JsonObject config = new JsonObject(map);
+                if (config == null) {
                         logger.info(Colors.MAGENTA
                                         + "[ FLOWAGGREGATOR VERTICLE ]       Keeping default settings as no config found in shared map."
                                         + Colors.RESET);
                 } else {
-                        FLOW_INACTIVITY_TIMEOUT_MS_TCP = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_TCP",
+                        FLOW_INACTIVITY_TIMEOUT_MS_TCP = config.getLong("FLOW_INACTIVITY_TIMEOUT_MS_TCP",
                                         FLOW_INACTIVITY_TIMEOUT_MS_TCP);
-                        FLOW_MAX_AGE_MS_TCP = settings.getLong("FLOW_MAX_AGE_MS_TCP", FLOW_MAX_AGE_MS_TCP);
-                        FLOW_INACTIVITY_TIMEOUT_MS_UDP = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_UDP",
+                        FLOW_MAX_AGE_MS_TCP = config.getLong("FLOW_MAX_AGE_MS_TCP", FLOW_MAX_AGE_MS_TCP);
+                        FLOW_INACTIVITY_TIMEOUT_MS_UDP = config.getLong("FLOW_INACTIVITY_TIMEOUT_MS_UDP",
                                         FLOW_INACTIVITY_TIMEOUT_MS_UDP);
-                        FLOW_MAX_AGE_MS_UDP = settings.getLong("FLOW_MAX_AGE_MS_UDP", FLOW_MAX_AGE_MS_UDP);
-                        FLOW_INACTIVITY_TIMEOUT_MS_OTHER = settings.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER",
+                        FLOW_MAX_AGE_MS_UDP = config.getLong("FLOW_MAX_AGE_MS_UDP", FLOW_MAX_AGE_MS_UDP);
+                        FLOW_INACTIVITY_TIMEOUT_MS_OTHER = config.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER",
                                         FLOW_INACTIVITY_TIMEOUT_MS_OTHER);
-                        FLOW_MAX_AGE_MS_OTHER = settings.getLong("FLOW_MAX_AGE_MS_OTHER", FLOW_MAX_AGE_MS_OTHER);
+                        FLOW_MAX_AGE_MS_OTHER = config.getLong("FLOW_MAX_AGE_MS_OTHER", FLOW_MAX_AGE_MS_OTHER);
                         logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Loaded settings from shared map."
                                         + Colors.RESET);
                 }
