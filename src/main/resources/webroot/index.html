@@ -67,7 +67,9 @@
                                                 <div>
                                                         <label for="tcpTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">TCP
-                                                                Timeout (ms)</label>
+                                                                Timeout (ms) <span
+                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        5000)</span></label>
                                                         <input type="number" id="tcpTimeout" name="tcpTimeout"
                                                                 placeholder="5000" value="5000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -75,7 +77,9 @@
                                                 <div>
                                                         <label for="udpTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">UDP
-                                                                Timeout (ms)</label>
+                                                                Timeout (ms) <span
+                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        30000)</span></label>
                                                         <input type="number" id="udpTimeout" name="udpTimeout"
                                                                 placeholder="30000" value="30000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -83,8 +87,9 @@
                                                 <div>
                                                         <label for="otherTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">Other
-                                                                Timeout
-                                                                (ms)</label>
+                                                                Timeout (ms) <span
+                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        60000)</span></label>
                                                         <input type="number" id="otherTimeout" name="otherTimeout"
                                                                 placeholder="60000" value="60000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -96,7 +101,9 @@
                                                 <div>
                                                         <label for="tcpMaxAge"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">TCP
-                                                                Max Age (ms)</label>
+                                                                Max Age (ms) <span
+                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        300000)</span></label>
                                                         <input type="number" id="tcpMaxAge" name="tcpMaxAge"
                                                                 placeholder="300000" value="300000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -104,7 +111,9 @@
                                                 <div>
                                                         <label for="udpMaxAge"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">UDP
-                                                                Max Age (ms)</label>
+                                                                Max Age (ms) <span
+                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        120000)</span></label>
                                                         <input type="number" id="udpMaxAge" name="udpMaxAge"
                                                                 placeholder="120000" value="120000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -114,7 +123,8 @@
                                                                 class="block text-sm font-medium text-gray-700 mb-2">Other
                                                                 Max
                                                                 Age
-                                                                (ms)</label>
+                                                                (ms) <span class="text-gray-500 text-xs">(Default:
+                                                                        300000)</span></label>
                                                         <input type="number" id="otherMaxAge" name="otherMaxAge"
                                                                 placeholder="300000" value="300000"
                                                                 class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -226,12 +236,12 @@
                 </section>
 
                 <!-- --------------------------- Packet section ---------------------------- -->
-                <section id="packets" class="p-4 bg-white rounded-2xl shadow">
+                <!-- <section id="packets" class="p-4 bg-white rounded-2xl shadow">
                         <h2 class="text-xl font-semibold mb-2">Received Packets</h2>
                         <div id="packetContainer"
                                 class="font-mono text-sm overflow-y-auto max-h-[400px] p-2 border rounded bg-gray-100">
                         </div>
-                </section>
+                </section> -->
 
                 <!-- --------------------------- Charts section ---------------------------- -->
                 <section id="charts" class="p-4 bg-white rounded-2xl shadow">
