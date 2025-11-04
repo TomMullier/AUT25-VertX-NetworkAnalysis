@@ -1,11 +1,16 @@
 import {
         severityCount,
         riskCount,
+        protocolCount,
+        countryLinks,
         incrementCount,
+        addCountryLink,
         updateCharts,
-        initCharts
-
-} from "./stats.js";
+        initCharts,
+        updateMapLinks,
+        initMap,
+        fetchCountryCoords
+} from "./stats.js";;
 
 import {
         fetchIngestionMethod,
@@ -61,16 +66,31 @@ ws.onmessage = (event) => {
 
                 if (data.type === "flow") {
                         addFlowRow(data);
+
+                        // === Risque et sévérité ===
                         const severity = data.riskSeverity;
-                        const riskLabel = data.riskLabel.split(", ");
+                        const riskLabel = data.riskLabel ? data.riskLabel.split(", ") : [];
 
                         if (severity) incrementCount(severityCount, severity);
                         riskLabel.forEach(label => {
-                                incrementCount(riskCount, label);
+                                if (label && label.trim() !== "") incrementCount(riskCount, label);
                         });
 
-                        // Update charts
+                        // === Protocoles ===
+                        const protocolKey = data.appProtocol || data.protocol || "Unknown";
+                        incrementCount(protocolCount, protocolKey);
+
+
+
+                        // === Carte du trafic ===
+                        const srcCountry = data.srcCountry || "Unknown";
+                        const dstCountry = data.dstCountry || "Unknown";
+                        addCountryLink(srcCountry, dstCountry);
+                        updateMapLinks();
+
+                        // === Rafraîchir les graphiques ===
                         updateCharts();
+
                 } else if (data.type === "packet") {
                         //ToDO No display for packets because of performances issues with high ingestion rates 
 
@@ -139,7 +159,7 @@ function addFlowRow(flow) {
                 flow.dstCountry,
                 flow.srcOrg,
                 flow.dstOrg,
-                flow.protocol,
+                flow.appProtocol,
                 flow.packetCount,
                 flow.bytes,
                 flow.flowDurationMs,
@@ -266,6 +286,10 @@ function updateTableVisibility() {
  * DOMContentLoaded event to initialize settings and charts
  */
 document.addEventListener("DOMContentLoaded", async () => {
+        initCharts();
+        initMap(); // Initialise Leaflet
+        await fetchCountryCoords(); // Récupère toutes les coordonnées
+
         updateTableVisibility();
         await fetchIngestionMethod();
 
@@ -278,5 +302,4 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Initial update on page load
         await updatePcapAndInterfacesVisibility();
-        initCharts();
 });
