@@ -543,6 +543,21 @@
                                 </div>
                         </section>
 
+                        <!-- ------------------------------- Modale -------------------------------- -->
+                        <div id="flowModal"
+                                class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                                <div class="bg-white rounded-xl shadow-xl p-6 max-w-4xl w-full relative"
+                                        style="margin:auto; margin-top:10vh; max-height:80vh; overflow-y:auto;">
+                                        <button id="closeModal"
+                                                class="absolute top-2 right-2 text-gray-500 hover:text-black text-xl font-bold">
+                                                &times;
+                                        </button>
+                                        <h3 class="text-lg font-semibold mb-4" id="modalTitle">Flow Details</h3>
+                                        <pre id="jsonContent"
+                                                class="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[70vh] text-sm font-mono"></pre>
+                                </div>
+                        </div>
+
         </main>
 
         <!-- ------------------------------- Footer -------------------------------- -->

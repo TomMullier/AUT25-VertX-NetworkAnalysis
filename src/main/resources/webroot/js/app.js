@@ -12,6 +12,12 @@ import {
         updatePcapAndInterfacesVisibility
 } from "./changeSettings.js";
 
+import {
+        openModal,
+        closeModal
+}
+from "./popup.js";
+
 
 
 /* -------------------------------- VARIABLE -------------------------------- */
@@ -95,6 +101,12 @@ ws.onclose = () => {
 };
 
 /* ------------------------------- Table flows ------------------------------ */
+function flowClickedInfos(flow) {
+        const title = `Flow Details - ${flow.flowKey}`;
+        openModal(title, flow, "json");
+}
+
+
 /**
  * Add a flow row to the table
  * @param {*} flow 
@@ -171,6 +183,7 @@ function addFlowRow(flow) {
         const text = row.textContent.toLowerCase();
         row.style.display = text.includes(filter) ? "" : "none";
         // Prepend the new row to have the latest on top
+        row.addEventListener('click', flowClickedInfos.bind(null, flow));
         switch (flow.riskSeverity) {
                 case "Emergency":
                         flowTableBodyEmergency.prepend(row);
