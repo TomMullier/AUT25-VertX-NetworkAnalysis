@@ -136,6 +136,9 @@ function addFlowRow(flow) {
         }
 
         // Add cells to the row
+        const filter = document.getElementById("searchInput").value.toLowerCase();
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? "" : "none";
         flowTableBody.prepend(row);
 }
 
