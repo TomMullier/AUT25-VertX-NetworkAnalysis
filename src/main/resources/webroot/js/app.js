@@ -17,7 +17,24 @@ import {
 /* -------------------------------- VARIABLE -------------------------------- */
 const ws = new WebSocket(`ws://${location.host}/`);
 const statusEl = document.getElementById("connectionStatus");
-const flowTableBody = document.getElementById("flowTableBody");
+const flowTableBodyEmergency = document.getElementById("table-Emergency");
+const flowTableBodyCritical = document.getElementById("table-Critical");
+const flowTableBodyHigh = document.getElementById("table-High");
+const flowTableBodySevere = document.getElementById("table-Severe");
+const flowTableBodyMedium = document.getElementById("table-Medium");
+const flowTableBodyLow = document.getElementById("table-Low");
+const flowTableBodyNoRisk = document.getElementById("table-None");
+
+const tables = [
+        flowTableBodyEmergency,
+        flowTableBodyCritical,
+        flowTableBodyHigh,
+        flowTableBodySevere,
+        flowTableBodyMedium,
+        flowTableBodyLow,
+        flowTableBodyNoRisk
+];
+
 const packetsEl = document.getElementById("packetContainer");
 
 const flowsList = [];
@@ -141,17 +158,44 @@ function addFlowRow(flow) {
                 row.appendChild(td);
         }
 
-        // Maintain only the latest flowsLimit flows
-        if (flowsList.length > flowsLimit) {
-                flowsList.shift(); // Remove the oldest flow
-                flowTableBody.removeChild(flowTableBody.lastChild); // Remove the last row from the table
-        }
+        // Maintain only the latest flowsLimit flows for every table 
+        tables.forEach(table => {
+                while (table.children.length >= flowsLimit) {
+                        table.removeChild(table.lastChild);
+                }
+        });
+
 
         // Add cells to the row
         const filter = document.getElementById("searchInput").value.toLowerCase();
         const text = row.textContent.toLowerCase();
         row.style.display = text.includes(filter) ? "" : "none";
-        flowTableBody.prepend(row);
+        // Prepend the new row to have the latest on top
+        switch (flow.riskSeverity) {
+                case "Emergency":
+                        flowTableBodyEmergency.prepend(row);
+                        break;
+                case "Critical":
+                        flowTableBodyCritical.prepend(row);
+                        break;
+                case "High":
+                        flowTableBodyHigh.prepend(row);
+                        break;
+                case "Severe":
+                        flowTableBodySevere.prepend(row);
+                        break;
+                case "Medium":
+                        flowTableBodyMedium.prepend(row);
+                        break;
+                case "Low":
+                        flowTableBodyLow.prepend(row);
+                        break;
+                default:
+                        flowTableBodyNoRisk.prepend(row);
+                        break;
+        }
+        updateTableVisibility();
+
 }
 
 /** 
@@ -159,12 +203,16 @@ function addFlowRow(flow) {
  */
 document.getElementById("searchInput").addEventListener("input", function () {
         const filter = this.value.toLowerCase();
-        const rows = document.querySelectorAll("#flowTableBody tr");
 
-        rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(filter) ? "" : "none";
+        tables.forEach(table => {
+                const rows = table.querySelectorAll("tr");
+                rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(filter) ? "" : "none";
+                });
         });
+        updateTableVisibility();
+
 });
 
 
@@ -172,19 +220,16 @@ document.getElementById("searchInput").addEventListener("input", function () {
  * This function handles the reset of the dashboard, clearing all data and resetting the input fields.
  */
 document.getElementById("resetButton").addEventListener("click", () => {
-        // 1. Reset input field
         const searchInput = document.getElementById("searchInput");
         searchInput.value = "";
-        const rows = document.querySelectorAll("#flowTableBody tr");
-        rows.forEach(row => (row.style.display = ""));
 
-        // 2. Clear flow table
-        const flowBody = document.getElementById("flowTableBody");
-        flowBody.innerHTML = "";
+        tables.forEach(table => {
+                table.innerHTML = "";
+        });
+        updateTableVisibility();
 
-        // 3. Clear packets
-        const packetContainer = document.getElementById("packetContainer");
-        packetContainer.innerHTML = "";
+        // const packetContainer = document.getElementById("packetContainer");
+        // packetContainer.innerHTML = "";
 
         document.getElementById("resetMessage").textContent =
                 "Cleared all data from dashboard.";
@@ -193,9 +238,22 @@ document.getElementById("resetButton").addEventListener("click", () => {
         }, 3000);
 });
 
+function updateTableVisibility() {
+        // Update visibiity of table if items are in body 
+        tables.forEach(table => {
+                if (table.children.length === 0) {
+                        table.parentElement.parentElement.parentElement.style.display = "none";
+                } else {
+                        table.parentElement.parentElement.parentElement.style.display = "";
+                }
+        });
+}
 
-// On DOM load, initialize charts
+/**
+ * DOMContentLoaded event to initialize settings and charts
+ */
 document.addEventListener("DOMContentLoaded", async () => {
+        updateTableVisibility();
         await fetchIngestionMethod();
 
         const ingestionRadios = document.querySelectorAll('input[name="ingestionMethod"]');
