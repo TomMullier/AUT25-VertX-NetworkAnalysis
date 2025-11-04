@@ -20,6 +20,9 @@ const statusEl = document.getElementById("connectionStatus");
 const flowTableBody = document.getElementById("flowTableBody");
 const packetsEl = document.getElementById("packetContainer");
 
+const flowsList = [];
+const flowsLimit = 100;
+
 /* ----------------------------- WEBSOCKET LOGIC ----------------------------- */
 ws.onopen = () => {
         statusEl.textContent = "🟢 Connected to WebSocket server";
@@ -80,6 +83,9 @@ ws.onclose = () => {
  * @param {*} flow 
  */
 function addFlowRow(flow) {
+        // Maintain only the latest flowsLimit flows
+        flowsList.push(flow);
+
         const row = document.createElement("tr");
 
         const formatDate = (ts) => {
@@ -133,6 +139,12 @@ function addFlowRow(flow) {
                         else td.classList.add("text-gray-500");
                 }
                 row.appendChild(td);
+        }
+
+        // Maintain only the latest flowsLimit flows
+        if (flowsList.length > flowsLimit) {
+                flowsList.shift(); // Remove the oldest flow
+                flowTableBody.removeChild(flowTableBody.lastChild); // Remove the last row from the table
         }
 
         // Add cells to the row
