@@ -36,6 +36,14 @@ const flowTableBodyMedium = document.getElementById("table-Medium");
 const flowTableBodyLow = document.getElementById("table-Low");
 const flowTableBodyNoRisk = document.getElementById("table-None");
 
+const flowTableEmergencyCounter = document.getElementById("count-Emergency");
+const flowTableCriticalCounter = document.getElementById("count-Critical");
+const flowTableHighCounter = document.getElementById("count-High");
+const flowTableSevereCounter = document.getElementById("count-Severe");
+const flowTableMediumCounter = document.getElementById("count-Medium");
+const flowTableLowCounter = document.getElementById("count-Low");
+const flowTableNoRiskCounter = document.getElementById("count-None");
+
 const tables = [
         flowTableBodyEmergency,
         flowTableBodyCritical,
@@ -45,6 +53,16 @@ const tables = [
         flowTableBodyLow,
         flowTableBodyNoRisk
 ];
+
+const counts = {
+        "Emergency": 0,
+        "Critical": 0,
+        "High": 0,
+        "Severe": 0,
+        "Medium": 0,
+        "Low": 0,
+        "None": 0
+};
 
 const packetsEl = document.getElementById("packetContainer");
 
@@ -159,7 +177,7 @@ function addFlowRow(flow) {
                 flow.dstCountry,
                 flow.srcOrg,
                 flow.dstOrg,
-                flow.appProtocol,
+                flow.protocol,
                 flow.packetCount,
                 flow.bytes,
                 flow.flowDurationMs,
@@ -207,24 +225,38 @@ function addFlowRow(flow) {
         switch (flow.riskSeverity) {
                 case "Emergency":
                         flowTableBodyEmergency.prepend(row);
+                        counts["Emergency"] += 1;
+                        flowTableEmergencyCounter.innerText = `Count : ${counts["Emergency"]}`;
                         break;
                 case "Critical":
                         flowTableBodyCritical.prepend(row);
+                        counts["Critical"] += 1;
+                        flowTableCriticalCounter.innerText = `Count : ${counts["Critical"]}`;
                         break;
                 case "High":
                         flowTableBodyHigh.prepend(row);
+                        counts["High"] += 1;
+                        flowTableHighCounter.innerText = `Count : ${counts["High"]}`;
                         break;
                 case "Severe":
                         flowTableBodySevere.prepend(row);
+                        counts["Severe"] += 1;
+                        flowTableSevereCounter.innerText = `Count : ${counts["Severe"]}`;
                         break;
                 case "Medium":
                         flowTableBodyMedium.prepend(row);
+                        counts["Medium"] += 1;
+                        flowTableMediumCounter.innerText = `Count : ${counts["Medium"]}`;
                         break;
                 case "Low":
                         flowTableBodyLow.prepend(row);
+                        counts["Low"] += 1;
+                        flowTableLowCounter.innerText = `Count : ${counts["Low"]}`;
                         break;
                 default:
                         flowTableBodyNoRisk.prepend(row);
+                        counts["None"] += 1;
+                        flowTableNoRiskCounter.innerText = `Count : ${counts["None"]}`;
                         break;
         }
         updateTableVisibility();

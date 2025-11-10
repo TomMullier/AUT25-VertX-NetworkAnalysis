@@ -833,7 +833,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         JsonObject jo = enrichedFlow.getJsonObject();
                                         String value = jo.encode();
 
-                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
+                                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
                                                         enrichedFlow.key, enrichedFlow.protocol,
                                                         enrichedFlow.appProtocol,
                                                         enrichedFlow.riskLevel, enrichedFlow.riskLabel,
