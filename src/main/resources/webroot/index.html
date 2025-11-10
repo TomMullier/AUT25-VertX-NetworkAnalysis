@@ -29,7 +29,12 @@
 
                 <!-- --------------------------- Settings section ---------------------------- -->
                 <section id="settings" class="p-4 bg-white rounded-2xl shadow">
-                        <h2 class="text-xl font-semibold mb-4">Settings</h2>
+                        <h2 class="text-xl font-semibold mb-4 flex justify-between items-center cursor-pointer"
+                                id="settingsToggle">
+                                <span>Settings</span>
+                                <span id="settingsArrow" class="ml-2">▼</span>
+                        </h2>
+
 
                         <!-- Ingestion Method -->
                         <form id="SettingsForm" class="space-y-4">
@@ -532,11 +537,12 @@
                         </div>
 
                         <!-- ---------------------------- Current flows ---------------------------- -->
-                        <div class="currentFlowContainer" data-severity="CurrentFlow">
-                                <h3
-                                        class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                        <div class="currentFlowContainer mb-4" data-severity="CurrentFlow">
+                                <h3 id="currentFlowTitle"
+                                        class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between cursor-pointer">
                                         <span>Current Flow</span>
                                         <span id="count-CurrentFlow" class="text-sm font-normal">Count : 0</span>
+                                        <span id="arrow-CurrentFlow" class="ml-2">▼</span>
                                 </h3>
                                 <div class="overflow-y-auto border border-gray-400 rounded-b-lg max-h-[25vh]">
                                         <table class="min-w-full text-xs text-left border-collapse">

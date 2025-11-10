@@ -344,3 +344,32 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Initial update on page load
         await updatePcapAndInterfacesVisibility();
 });
+
+
+
+document.getElementById('settingsToggle').addEventListener('click', () => {
+        const settingsSection = document.getElementById('SettingsForm');
+        const settingsArrow = document.getElementById('settingsArrow');
+        if (settingsSection.style.display === 'none') {
+                settingsSection.style.display = 'block';
+                settingsArrow.textContent = '▼';
+        } else {
+                settingsSection.style.display = 'none';
+                settingsArrow.textContent = '▶';
+        }
+});
+
+function toggleSection(sectionId, arrowIconId) {
+        const section = document.getElementsByClassName(sectionId)[0];
+        if (section.children[1].style.display === "none") {
+                section.children[1].style.display = "block";
+                document.getElementById(arrowIconId).innerText = "▼";
+        } else {
+                section.children[1].style.display = "none";
+                document.getElementById(arrowIconId).innerText = "▶";
+        }
+}
+
+document.getElementById("currentFlowTitle").addEventListener("click", () => {
+        toggleSection("currentFlowContainer", "arrow-CurrentFlow");
+});
