@@ -512,7 +512,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         // Publish malformed packet to the event bus
                         JsonObject malformedPacket = new JsonObject()
                                         .put("error", "Not an Ethernet packet")
-                                        .put("rawData", rawData);
+                                        .put("rawData", packet.toString());
                         vertx.eventBus().publish("malformedPackets.data", malformedPacket);
                         return;
                 }
@@ -544,7 +544,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}. Raw data: {}",
                                                 Integer.toHexString(etherType),
                                                 Base64.getEncoder().encodeToString(rawData));
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       packet {}", packet.toString());
+                                JsonObject malformedPacket = new JsonObject()
+                                                .put("error", "Unsupported EtherType: 0x"
+                                                                + Integer.toHexString(etherType))
+                                                .put("rawData", packet.toString());
+                                vertx.eventBus().publish("malformedPackets.data", malformedPacket);
                                 unknownPacketCount++;
                 }
 

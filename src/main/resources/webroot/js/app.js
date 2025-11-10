@@ -366,7 +366,8 @@ function toggleSection(sectionId, arrowIconId) {
 }
 
 document.getElementById('settingsToggle').addEventListener('click', () => {
-        toggleSection("SettingsForm", "settingsArrow");
+        toggleSection("settings", "settingsArrow");
+
 });
 document.getElementById("currentFlowTitle").addEventListener("click", () => {
         toggleSection("currentFlowContainer", "arrow-CurrentFlow");
