@@ -201,7 +201,8 @@ function addFlowRow(flow) {
                 } else {
                         td.textContent = cells[i] !== undefined ? cells[i] : "-";
                 }
-                td.className = "p-2 border";
+                td.className = "p-2 border-b";
+                row.classList.add("hover:bg-gray-100", "cursor-pointer");
                 // 🎨 Color on the risk column
                 if (i === 14) {
                         td.classList.add("font-semibold");

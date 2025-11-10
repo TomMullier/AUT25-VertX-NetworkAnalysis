@@ -501,7 +501,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Parsed packet: " + packet);
                 EthernetPacket eth = packet.get(EthernetPacket.class);
                 if (eth == null) {
-                        logger.warn("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
+                        logger.error("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
                                         Base64.getEncoder().encodeToString(rawData));
                         nonEthernetCount++;
                         return;
@@ -575,10 +575,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 String dstIp = getPacketDstIp(ipPacket);
                 String protocol = getPacketProtocol(ipPacket);
                 // ICMP DEBUG
-                if ("ICMPv4".equals(protocol)) {
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ICMP packet detected: srcIp={} dstIp={}", srcIp,
-                                        dstIp);
-                }
+                // if ("ICMPv4".equals(protocol)) {
+                // logger.info("[ FLOWAGGREGATOR VERTICLE ] ICMP packet detected: srcIp={}
+                // dstIp={}", srcIp,
+                // dstIp);
+                // }
 
                 Long ts = json.getLong("timestamp", System.currentTimeMillis());
                 Long bytes = json.getLong("length", (long) rawData.length);

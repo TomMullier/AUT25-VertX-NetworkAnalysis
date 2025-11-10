@@ -1,8 +1,21 @@
+import {
+        openModal,
+        closeModal
+}
+from "./popup.js";
+
 const currentFlows = [];
+const currentFlowContainer = document.getElementById("currentFlowContainer");
 const currentFlowTable = document.getElementById("currentFlowTable");
 const currentFlowCountEl = document.getElementById("count-CurrentFlow");
 
 export function updateCurrentFlowTable() {
+        if (!currentFlowTable || !currentFlowCountEl) return;
+        if (currentFlows.length === 0) {
+                currentFlowTable.innerHTML = `<tr><td class="p-2 border-b text-center" colspan="7">No current flows available</td></tr>`;
+                currentFlowCountEl.textContent = "Count : 0";
+                return;
+        }
         // Clear existing rows
         currentFlowTable.innerHTML = "";
 
@@ -12,18 +25,21 @@ export function updateCurrentFlowTable() {
 
         currentFlows.forEach(flow => {
                 const row = document.createElement("tr");
-
+                row.classList.add("hover:bg-gray-100", "cursor-pointer");
                 row.innerHTML = `
-                                <td>${new Date(flow.firstSeen).toLocaleString()}</td>
-                                <td>${new Date(flow.lastSeen).toLocaleString()}</td>
-                                <td>${flow.srcIp}</td>
-                                <td>${flow.dstIp}</td>
-                                <td>${flow.srcPort}</td>
-                                <td>${flow.dstPort}</td>
-                                <td>${flow.protocol}</td>`;
-
+                                <td class="p-2 border-b ">${new Date(flow.firstSeen).toLocaleString()}</td>
+                                <td class="p-2 border-b ">${new Date(flow.lastSeen).toLocaleString()}</td>
+                                <td class="p-2 border-b ">${flow.srcIp}</td>
+                                <td class="p-2 border-b ">${flow.dstIp}</td>
+                                <td class="p-2 border-b ">${flow.srcPort}</td>
+                                <td class="p-2 border-b ">${flow.dstPort}</td>
+                                <td class="p-2 border-b ">${flow.protocol}</td>`;
 
                 currentFlowTable.appendChild(row);
+
+                row.addEventListener("click", () => {
+                        showFlowDetails(flow);
+                });
         });
         // Update count display
         currentFlowCountEl.textContent = `Count : ${currentFlows.length}`;
@@ -37,4 +53,9 @@ export function handleCurrentFlowData(data) {
 
         // Update the table display
         updateCurrentFlowTable();
+}
+
+function showFlowDetails(flow) {
+        const title = `Flow Details - ${flow.flowKey}`;
+        openModal(title, flow, "json");
 }
