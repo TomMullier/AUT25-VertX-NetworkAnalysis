@@ -23,6 +23,10 @@ import {
 }
 from "./popup.js";
 
+import {
+        handleCurrentFlowData
+} from "./currentFlows.js";
+
 
 
 /* -------------------------------- VARIABLE -------------------------------- */
@@ -116,6 +120,10 @@ ws.onmessage = (event) => {
                         // pre.textContent = JSON.stringify(data, null, 2);
                         // pre.className = "bg-gray-100 p-2 rounded mb-2 overflow-x-auto text-sm";
                         // packetsEl.prepend(pre);
+                } else if (data.type === "currentFlow") {
+                        handleCurrentFlowData(data);
+                } else {
+                        console.warn("Unknown WebSocket message type:", data.type);
                 }
         } catch (e) {
                 console.error("Error processing WebSocket message:" + event.data, e);
@@ -177,7 +185,7 @@ function addFlowRow(flow) {
                 flow.dstCountry,
                 flow.srcOrg,
                 flow.dstOrg,
-                flow.protocol,
+                flow.appProtocol,
                 flow.packetCount,
                 flow.bytes,
                 flow.flowDurationMs,

@@ -218,7 +218,7 @@ public class Main extends AbstractVerticle {
         // verticles.add(new AnalyseVerticle());
         verticles.add(new FlowAggregatorVerticle());
         verticles.add(new FlowConsumerVerticle());
-        verticles.add(new PacketConsumerVerticle());
+        // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         verticles.add(webServerVerticle);
 

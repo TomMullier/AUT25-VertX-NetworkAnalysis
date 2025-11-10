@@ -90,11 +90,19 @@ public class WebServerVerticle extends AbstractVerticle {
                                 broadcast(data);
                         });
 
-                        vertx.eventBus().consumer("packets.data", msg -> {
+                        // vertx.eventBus().consumer("packets.data", msg -> {
+                        //         if (!(msg.body() instanceof JsonObject))
+                        //                 return;
+                        //         JsonObject data = ((JsonObject) msg.body()).copy();
+                        //         data.put("type", "packet");
+                        //         broadcast(data);
+                        // });
+
+                        vertx.eventBus().consumer("currentFlows.data", msg -> {
                                 if (!(msg.body() instanceof JsonObject))
                                         return;
                                 JsonObject data = ((JsonObject) msg.body()).copy();
-                                data.put("type", "packet");
+                                data.put("type", "currentFlow");
                                 broadcast(data);
                         });
 

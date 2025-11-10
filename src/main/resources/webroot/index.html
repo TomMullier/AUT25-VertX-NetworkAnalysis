@@ -524,6 +524,30 @@
                                 </div>
                         </div>
 
+                        <!-- ---------------------------- Current flows ---------------------------- -->
+                        <div class="severity-section" data-severity="CurrentFlow">
+                                        <h3 class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>Current Flow</span>
+                                                        <span id="count-CurrentFlow" class="text-sm font-normal">Count : 0</span>
+                                        </h3>
+                                        <div class="overflow-y-auto border border-gray-400 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                        <thead class="bg-gray-100 font-semibold sticky top-0 z-10">
+                                                                                        <tr>
+                                                                                                        <th class="p-2 border text-center">First Seen</th>
+                                                                                                        <th class="p-2 border text-center">Last Seen</th>
+                                                                                                        <th class="p-2 border text-center">Source IP</th>
+                                                                                                        <th class="p-2 border text-center">Destination IP</th>
+                                                                                                        <th class="p-2 border text-center">Source Port</th>
+                                                                                                        <th class="p-2 border text-center">Destination Port</th>
+                                                                                                        <th class="p-2 border text-center">Protocol</th>
+                                                                                        </tr>
+                                                                        </thead>
+                                                                        <tbody id="currentFlowTable"></tbody>
+                                                        </table>
+                                        </div>
+                        </div>
+
                         <!-- --------------------------- Packet section ---------------------------- -->
                         <!-- <section id="packets" class="p-4 bg-white rounded-2xl shadow">
                         <h2 class="text-xl font-semibold mb-2">Received Packets</h2>

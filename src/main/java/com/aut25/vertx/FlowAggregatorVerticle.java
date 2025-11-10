@@ -65,6 +65,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private final Map<String, Flow> flows = new ConcurrentHashMap<>();
         private List<Flow> toFlush = new ArrayList<>();
+        private List<Flow> currentFlows = new ArrayList<>();
         private final AtomicBoolean running = new AtomicBoolean(true);
         private long notIpPacketCount = 0;
         private long flushedEarlyCount = 0;
@@ -141,6 +142,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 consumerConfig.put("auto.offset.reset", "earliest");
                 consumerConfig.put("enable.auto.commit", "false");
+                consumerConfig.put("max.poll.records", "5000"); // Increase batch size for better throughput
+                consumerConfig.put("fetch.max.bytes", "52428800"); // 50 MB to handle larger payloads
+                consumerConfig.put("fetch.min.bytes", "1048576"); // 1 MB to reduce fetch requests
+                consumerConfig.put("fetch.max.wait.ms", "500"); // Wait longer to fill fetch requests
+                consumerConfig.put("session.timeout.ms", "60000"); // 60 seconds for better fault tolerance
+                consumerConfig.put("heartbeat.interval.ms", "20000"); // Adjust heartbeat interval
+                consumerConfig.put("request.timeout.ms", "70000"); // Ensure requests don't time out prematurely
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
@@ -185,9 +193,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 JsonObject json = new JsonObject(value);
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Processing record: {}",
                                                 json.encodePrettily());
-
                                 processRecord(json);
-
                         } catch (Exception e) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
                                                 e.getMessage());
@@ -319,9 +325,29 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // remove from ndpiFlows as well
                                 ndpiFlows.remove(entry.getKey());
                                 toFlush.add(f);
+                        } else {
+                                // Collect all ongoing flows that are not finished
+                                List<Flow> ongoingFlows = flows.values().stream()
+                                                .filter(flow -> !toFlush.contains(flow))
+                                                .collect(Collectors.toList());
+
+                                // Create a JSON array to represent the ongoing flows
+                                JsonObject ongoingFlowsJson = new JsonObject()
+                                                .put("flows", ongoingFlows.stream()
+                                                                .map(Flow::getJsonObject)
+                                                                .collect(Collectors.toList()));
+
+                                // Check if the current flows are different from the last published flows
+                                if (!ongoingFlowsJson.equals(new JsonObject().put("flows", currentFlows.stream()
+                                                .map(Flow::getJsonObject)
+                                                .collect(Collectors.toList())))) {
+                                        // Update the current flows
+                                        currentFlows = new ArrayList<>(ongoingFlows);
+
+                                        // Send the ongoing flows to the event bus
+                                        vertx.eventBus().publish("currentFlows.data", ongoingFlowsJson);
+                                }
                         }
-                        // NOTE: don't call getNDPIProtocol() here for every flow on flush.
-                        // Prefer to call it when the flow is updated on packet arrival.
                 }
         }
 
@@ -467,22 +493,22 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 try {
                         packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
                 } catch (Throwable t) {
-                        logger.error("[ FLOWAGGREGATOR ] Cannot create Packet from raw bytes: {}",
-                                        t.getMessage());
+                        logger.error("[ FLOWAGGREGATOR ] Cannot create Packet from raw bytes: {}. Raw data: {}",
+                                        t.getMessage(), Base64.getEncoder().encodeToString(rawData));
                         return; // skip this record
                 }
 
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Parsed packet: " + packet);
                 EthernetPacket eth = packet.get(EthernetPacket.class);
                 if (eth == null) {
-                        logger.warn("[FLOWAGGREGATOR] Not an Ethernet packet.");
+                        logger.warn("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
+                                        Base64.getEncoder().encodeToString(rawData));
                         nonEthernetCount++;
                         return;
                 }
 
                 EthernetPacket.EthernetHeader ethHeader = eth.getHeader();
                 int etherType = ethHeader.getType().value() & 0xFFFF;
-
                 switch (etherType) {
                         case 0x0800: // IPv4
                                 logger.debug("[FLOWAGGREGATOR] Ethernet Type: IPv4 (0x0800)");
@@ -505,8 +531,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 break;
 
                         default:
-                                logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}",
-                                                Integer.toHexString(etherType));
+                                logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}. Raw data: {}",
+                                                Integer.toHexString(etherType),
+                                                Base64.getEncoder().encodeToString(rawData));
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       packet {}", packet.toString());
                                 unknownPacketCount++;
                 }
 
@@ -546,6 +574,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 String srcIp = getPacketSrcIp(ipPacket);
                 String dstIp = getPacketDstIp(ipPacket);
                 String protocol = getPacketProtocol(ipPacket);
+                // ICMP DEBUG
+                if ("ICMPv4".equals(protocol)) {
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       ICMP packet detected: srcIp={} dstIp={}", srcIp,
+                                        dstIp);
+                }
 
                 Long ts = json.getLong("timestamp", System.currentTimeMillis());
                 Long bytes = json.getLong("length", (long) rawData.length);
@@ -626,6 +659,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Flow endedFlow = flows.remove(key);
                         ndpiFlows.remove(key);
                         if (endedFlow != null) {
+
                                 endedFlow.appProtocol = getNDPIProcol(endedFlow);
                                 endedFlow.riskLevel = getNDPIFlowRisk(endedFlow);
                                 endedFlow.riskMask = getNDPIFlowRiskMask(endedFlow);
@@ -833,7 +867,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         JsonObject jo = enrichedFlow.getJsonObject();
                                         String value = jo.encode();
 
-                                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
+                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
                                                         enrichedFlow.key, enrichedFlow.protocol,
                                                         enrichedFlow.appProtocol,
                                                         enrichedFlow.riskLevel, enrichedFlow.riskLabel,

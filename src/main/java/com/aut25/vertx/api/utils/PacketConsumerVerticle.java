@@ -53,18 +53,20 @@ public class PacketConsumerVerticle extends AbstractVerticle {
             }
         });
 
-        consumer.subscribe("network-data")
-                .onSuccess(ok -> {
-                    logger.info(Colors.CYAN + "[ PACKET CONSUMER VERTICLE ]      Subscribed to topic 'network-data'"
-                            + Colors.RESET);
-                    startPromise.complete();
-                })
-                .onFailure(failure -> {
-                    logger.error(Colors.RED
-                            + "[ PACKET CONSUMER VERTICLE ]      Failed to subscribe to topic 'network-data': "
-                            + failure.getMessage() + Colors.RESET);
-                    startPromise.fail(failure);
-                });
+        // consumer.subscribe("network-data")
+        // .onSuccess(ok -> {
+        // logger.info(Colors.CYAN + "[ PACKET CONSUMER VERTICLE ] Subscribed to topic
+        // 'network-data'"
+        // + Colors.RESET);
+        // startPromise.complete();
+        // })
+        // .onFailure(failure -> {
+        // logger.error(Colors.RED
+        // + "[ PACKET CONSUMER VERTICLE ] Failed to subscribe to topic 'network-data':
+        // "
+        // + failure.getMessage() + Colors.RESET);
+        // startPromise.fail(failure);
+        // });
 
     }
 }
