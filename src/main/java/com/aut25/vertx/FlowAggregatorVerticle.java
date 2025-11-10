@@ -495,6 +495,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 } catch (Throwable t) {
                         logger.error("[ FLOWAGGREGATOR ] Cannot create Packet from raw bytes: {}. Raw data: {}",
                                         t.getMessage(), Base64.getEncoder().encodeToString(rawData));
+                        // Publish malformed packet to the event bus
+                        JsonObject malformedPacket = new JsonObject()
+                                        .put("error", t.getMessage())
+                                        .put("rawData", rawData);
+                        vertx.eventBus().publish("malformedPackets.data", malformedPacket);
                         return; // skip this record
                 }
 
@@ -504,6 +509,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         logger.error("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
                                         Base64.getEncoder().encodeToString(rawData));
                         nonEthernetCount++;
+                        // Publish malformed packet to the event bus
+                        JsonObject malformedPacket = new JsonObject()
+                                        .put("error", "Not an Ethernet packet")
+                                        .put("rawData", rawData);
+                        vertx.eventBus().publish("malformedPackets.data", malformedPacket);
                         return;
                 }
 

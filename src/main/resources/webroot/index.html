@@ -537,7 +537,7 @@
                         </div>
 
                         <!-- ---------------------------- Current flows ---------------------------- -->
-                        <div class="currentFlowContainer mb-4" data-severity="CurrentFlow">
+                        <div class="currentFlowContainer mb-4" data-severity="CurrentFlow" id="currentFlowContainer">
                                 <h3 id="currentFlowTitle"
                                         class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between cursor-pointer">
                                         <span>Current Flow</span>
@@ -561,6 +561,33 @@
                                                         <tr>
                                                                 <td class="p-2 border-b text-center" colspan="7">No
                                                                         current flows available</td>
+                                                        </tr>
+                                                </tbody>
+                                        </table>
+                                </div>
+                        </div>
+
+                        <!-- --------------------------- Malformed Packets section ---------------------------- -->
+                        <div class="malformedPacketContainer mb-4" data-severity="MalformedPacket"
+                                id="malformedPacketContainer">
+                                <h3 id="malformedPacketTitle"
+                                        class="bg-red-500 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between cursor-pointer">
+                                        <span>Malformed Packets</span>
+                                        <span id="count-MalformedPacket" class="text-sm font-normal">Count : 0</span>
+                                        <span id="arrow-MalformedPacket" class="ml-2">▼</span>
+                                </h3>
+                                <div class="overflow-y-auto border border-red-500 rounded-b-lg max-h-[25vh]">
+                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                <thead class="bg-red-100 font-semibold sticky top-0 z-10">
+                                                        <tr>
+                                                                <th class="p-2 border text-center">Error Details</th>
+                                                                <th class="p-2 border text-center">Raw Data</th>
+                                                        </tr>
+                                                </thead>
+                                                <tbody id="malformedPacketTable">
+                                                        <tr>
+                                                                <td class="p-2 border-b text-center" colspan="2">No
+                                                                        malformed packets available</td>
                                                         </tr>
                                                 </tbody>
                                         </table>

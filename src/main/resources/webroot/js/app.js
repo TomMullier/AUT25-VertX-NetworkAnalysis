@@ -27,6 +27,10 @@ import {
         handleCurrentFlowData
 } from "./currentFlows.js";
 
+import {
+        handleMalformedPacketData
+} from "./malformedPackets.js";
+
 
 
 /* -------------------------------- VARIABLE -------------------------------- */
@@ -122,6 +126,8 @@ ws.onmessage = (event) => {
                         // packetsEl.prepend(pre);
                 } else if (data.type === "currentFlow") {
                         handleCurrentFlowData(data);
+                } else if (data.type === "malformedPacket") {
+                        handleMalformedPacketData(data);
                 } else {
                         console.warn("Unknown WebSocket message type:", data.type);
                 }
@@ -347,20 +353,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
 
-document.getElementById('settingsToggle').addEventListener('click', () => {
-        const settingsSection = document.getElementById('SettingsForm');
-        const settingsArrow = document.getElementById('settingsArrow');
-        if (settingsSection.style.display === 'none') {
-                settingsSection.style.display = 'block';
-                settingsArrow.textContent = '▼';
-        } else {
-                settingsSection.style.display = 'none';
-                settingsArrow.textContent = '▶';
-        }
-});
 
 function toggleSection(sectionId, arrowIconId) {
-        const section = document.getElementsByClassName(sectionId)[0];
+        const section = document.getElementById(sectionId);
         if (section.children[1].style.display === "none") {
                 section.children[1].style.display = "block";
                 document.getElementById(arrowIconId).innerText = "▼";
@@ -370,6 +365,12 @@ function toggleSection(sectionId, arrowIconId) {
         }
 }
 
+document.getElementById('settingsToggle').addEventListener('click', () => {
+        toggleSection("SettingsForm", "settingsArrow");
+});
 document.getElementById("currentFlowTitle").addEventListener("click", () => {
         toggleSection("currentFlowContainer", "arrow-CurrentFlow");
+});
+document.getElementById("malformedPacketTitle").addEventListener("click", () => {
+        toggleSection("malformedPacketContainer", "arrow-MalformedPacket");
 });

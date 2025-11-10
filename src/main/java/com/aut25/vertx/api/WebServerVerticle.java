@@ -106,6 +106,14 @@ public class WebServerVerticle extends AbstractVerticle {
                                 broadcast(data);
                         });
 
+                        vertx.eventBus().consumer("malformedPackets.data", msg -> {
+                                if (!(msg.body() instanceof JsonObject))
+                                        return;
+                                JsonObject data = ((JsonObject) msg.body()).copy();
+                                data.put("type", "malformedPacket");
+                                broadcast(data);
+                        });
+
                         server.requestHandler(router)
                                         .listen(port)
                                         .onSuccess(s -> {
