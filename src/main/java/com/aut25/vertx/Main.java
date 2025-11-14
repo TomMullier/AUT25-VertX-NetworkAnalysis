@@ -215,12 +215,12 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
 
         verticles.add(new IngestionVerticle());
-        // verticles.add(new AnalyseVerticle());
-        verticles.add(new FlowAggregatorVerticle());
-        verticles.add(new FlowConsumerVerticle());
-        // verticles.add(new PacketConsumerVerticle());
+         verticles.add(new AnalyseVerticle());
+        //verticles.add(new FlowAggregatorVerticle());
+        //verticles.add(new FlowConsumerVerticle());
+        //! Too much memory        // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
-        verticles.add(webServerVerticle);
+        //verticles.add(webServerVerticle);
 
         if (store) {
             verticles.add(new ClickHousePacketVerticle());

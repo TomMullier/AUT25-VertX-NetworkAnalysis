@@ -14,11 +14,20 @@ import com.aut25.vertx.utils.Colors;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Thread.sleep;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+
 import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.TcpPacket;
+
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,13 +57,13 @@ public class AnalyseVerticle extends AbstractVerticle {
                 // Start reading from Kafka topic every 2 seconds if mode is pcap
                 switch (mode) {
                         case "pcap":
-                                readFromKafka_ActionEveryDelay("network-data", 2000);
+                                // !Benchmark readFromKafka_ActionEveryDelay("network-data", 200);
                                 break;
                         case "json":
-                                readFromKafka_ActionEveryDelay("network-data", 2000);
+                                // readFromKafka_ActionEveryDelay("network-data", 200);
                                 break;
                         case "realtime":
-                                readFromKafka_ActionEveryDelay("network-data", 2000);
+                                // readFromKafka_ActionEveryDelay("network-data", 200);
                                 break;
                         case "none":
                                 logger.warn(Colors.YELLOW
@@ -69,6 +78,8 @@ public class AnalyseVerticle extends AbstractVerticle {
                                 mode = "pcap";
                 }
         }
+
+        private int lineCount = 0;
 
         /**
          * Reads messages from a Kafka topic at regular intervals if mode is "pcap".
@@ -86,104 +97,111 @@ public class AnalyseVerticle extends AbstractVerticle {
                 config.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 config.put("auto.offset.reset", "earliest");
                 config.put("enable.auto.commit", "false");
-
-                // Équivalents des propriétés avancées
-                config.put("max.poll.interval.ms", "600000"); // 10 minutes
-                config.put("session.timeout.ms", "30000"); // 30s
-                config.put("heartbeat.interval.ms", "10000"); // 10s
+                config.put("max.poll.interval.ms", "600000");
+                config.put("session.timeout.ms", "30000");
+                config.put("heartbeat.interval.ms", "10000");
 
                 KafkaConsumer<String, String> consumer = KafkaConsumer.create(vertx, config);
 
                 consumer.subscribe(topic)
-                                .onSuccess(v -> logger.info(
-                                                Colors.CYAN + "[ ANALYSE VERTICLE ]              Subscribed to topic "
-                                                                + topic
-                                                                + Colors.RESET))
-                                .onFailure(err -> logger.error(
-                                                "[ ANALYSE VERTICLE ]              Failed to subscribe: "
-                                                                + err.getMessage()));
+                                .onSuccess(v -> logger.info("[ANALYSE VERTICLE] Subscribed to topic " + topic))
+                                .onFailure(err -> logger
+                                                .error("[ANALYSE VERTICLE] Failed to subscribe: " + err.getMessage()));
+
+                // CSV setup
+                Path csvPath = Paths.get("_tests/benchmark/01_phase/csv/plateform_analyse_output.csv");
+                BufferedWriter writer;
+                try {
+                        Files.createDirectories(csvPath.getParent());
+                        writer = Files.newBufferedWriter(csvPath, StandardOpenOption.CREATE,
+                                        StandardOpenOption.TRUNCATE_EXISTING);
+                        // Write CSV header compatible with tshark
+                        // writer.write("frame.number,ip.src,ip.dst,tcp.srcport,tcp.dstport,frame.len");
+                        // writer.newLine();
+                        lineCount = 0;
+                } catch (IOException e) {
+                        logger.error("Failed to open CSV file: " + e.getMessage());
+                        return;
+                }
+
+                AtomicInteger frameCounter = new AtomicInteger(1); // frame.number equivalent
 
                 consumer.handler(record -> {
                         vertx.setTimer(delay, tid -> {
+                                if (!running.get())
+                                        return;
+
+                                String value = record.value();
+                                if (value == null || value.isEmpty() || value.equals("reset")) {
+                                        logger.warn("[ANALYSE VERTICLE] Received empty record, skipping.");
+                                        return;
+                                }
+
                                 try {
-                                        if (!running.get())
-                                                return;
-                                        String value = record.value();
-                                        if (value == null || value.isEmpty() || value.equals("reset")) {
-                                                logger.warn("[ ANALYSE VERTICLE ]              Received empty record, skipping.");
-                                                return;
-                                        }
-
                                         JsonObject json = new JsonObject(value);
+                                        String srcIp = "";
+                                        String dstIp = "";
+                                        String protocol = "UNKNOWN";
+                                        int sport = 0;
+                                        int dport = 0;
+                                        int length = 0;
 
-                                        try {
-                                                String srcIp = "";
-                                                String dstIp = "";
-                                                String protocol = "UNKNOWN";
-
-                                                // Parse le paquet brut
-                                                String rawPacketBase64 = json.getString("rawPacket");
-                                                if (rawPacketBase64 == null) {
-                                                        logger.warn("[ ANALYSE VERTICLE ]              No rawPacket field in JSON.");
-                                                        return;
-                                                }
+                                        String rawPacketBase64 = json.getString("rawPacket");
+                                        if (rawPacketBase64 != null) {
                                                 byte[] rawData = Base64.getDecoder().decode(rawPacketBase64);
                                                 Packet packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
+                                                length = packet.length();
 
                                                 if (packet.contains(IpPacket.class)) {
                                                         IpPacket ipPacket = packet.get(IpPacket.class);
                                                         srcIp = ipPacket.getHeader().getSrcAddr().getHostAddress();
                                                         dstIp = ipPacket.getHeader().getDstAddr().getHostAddress();
-                                                        if (ipPacket.getHeader().getProtocol() != null) {
-                                                                protocol = ipPacket.getHeader().getProtocol().name();
+
+                                                        if (ipPacket.contains(TcpPacket.class)) {
+                                                                TcpPacket tcp = ipPacket.get(TcpPacket.class);
+                                                                sport = tcp.getHeader().getSrcPort().valueAsInt();
+                                                                dport = tcp.getHeader().getDstPort().valueAsInt();
                                                         }
+                                                        // Tu peux rajouter UDP si nécessaire
                                                 }
-
-                                                json.put("srcIp", srcIp);
-                                                json.put("dstIp", dstIp);
-                                                json.put("protocol", protocol);
-                                                json.put("bytes", packet.length());
-                                                String ltab = "\t";
-                                                json.put("rawPacket",
-                                                                ltab.concat(packet.toString().replace("\n", "\n\t\t")));
-
-                                        } catch (Exception e) {
-                                                logger.warn("[ INGESTION VERTICLE ] Could not parse IP/transport layer: {}",
-                                                                e.getMessage());
                                         }
 
-                                        // Log le paquet
-                                        logger.debug(Colors.CYAN + "[ ANALYSE VERTICLE ]              Parsed JSON: " +
-                                                        json.encodePrettily() + Colors.RESET);
+                                        // Write CSV line
+                                        try {
+                                                writer.write(frameCounter.getAndIncrement() + "," +
+                                                                srcIp + "," +
+                                                                dstIp + "," +
+                                                                sport + "," +
+                                                                dport + "," +
+                                                                length);
+                                                writer.newLine();
+                                                lineCount++;
+                                                writer.flush();
+                                        } catch (IOException e) {
+                                                logger.error("Failed to write CSV line: " + e.getMessage());
+                                        }
 
-                                        logger.debug(Colors.YELLOW
-                                                        + "[ ANALYSE VERTICLE ]              Raw Packet Data: "
-                                                        + Colors.RESET);
-                                        logger.debug(Colors.YELLOW + json.getValue("rawPacket").toString()
-                                                        + Colors.RESET);
-
-                                        // Commit manuel (async)
-                                        consumer.commit()
-                                                        .onSuccess(v -> logger.debug(
-                                                                        "[ ANALYSE VERTICLE ]              Offsets committed."))
-                                                        .onFailure(err -> {
-                                                                if (err.getMessage() != null) {
-                                                                        logger.error(
-                                                                                        "[ ANALYSE VERTICLE ]              Commit failed: "
-                                                                                                        + err.getMessage());
-                                                                }
-                                                        });
+                                        if (lineCount == 10000) {
+                                                logger.info("[ANALYSE VERTICLE] Written {} lines to CSV.", lineCount);
+                                                // Stop program
+                                                running.set(false);
+                                                // emulate ctrl-c
+                                                vertx.close();
+                                                return;
+                                        }
 
                                 } catch (Exception e) {
-                                        logger.error(Colors.RED
-                                                        + "[ ANALYSE VERTICLE ]              Failed to parse JSON: "
-                                                        + e.getMessage() + Colors.RESET);
-                                        logger.error(Colors.RED + "[ ANALYSE VERTICLE ]              Original record: "
-                                                        + record.value() + Colors.RESET);
+                                        logger.error("[ANALYSE VERTICLE] Failed to parse JSON or packet: "
+                                                        + e.getMessage());
                                 }
+
+                                // Commit manuel async
+                                consumer.commit()
+                                                .onSuccess(v -> logger.debug("[ANALYSE VERTICLE] Offsets committed."))
+                                                .onFailure(err -> logger.error("[ANALYSE VERTICLE] Commit failed: "
+                                                                + err.getMessage()));
                         });
                 });
-
         }
 
         @Override
