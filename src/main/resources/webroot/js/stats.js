@@ -9,6 +9,16 @@ export const severityCount = {
         Emergency: 0,
 };
 
+const colors = {
+        Emergency: "#640000",
+        Critical: "#b61c1c",
+        High: "#FF9800",
+        Severe: "#FFEB3B",
+        Medium: "#81C784",
+        Low: "#2196F3",
+        NoRisk: "#B0BEC5"
+};
+
 export const riskCount = {};
 
 export const protocolCount = {};
@@ -43,10 +53,7 @@ export function initCharts() {
                         labels: Object.keys(severityCount),
                         datasets: [{
                                 data: Object.values(severityCount),
-                                backgroundColor: [
-                                        "#B0BEC5", "#81C784", "#FFEB3B", "#FF9800",
-                                        "#F44336", "#b61c1c", "#640000"
-                                ]
+                                backgroundColor: Object.keys(severityCount).map(key => colors[key])
                         }]
                 },
                 options: {

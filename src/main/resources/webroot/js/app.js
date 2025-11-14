@@ -97,7 +97,14 @@ ws.onmessage = (event) => {
                         const severity = data.riskSeverity;
                         const riskLabel = data.riskLabel ? data.riskLabel.split(", ") : [];
 
-                        if (severity) incrementCount(severityCount, severity);
+
+                        if (severity) {
+                                if (severity == "No risk") {
+                                        incrementCount(severityCount, "NoRisk");
+                                } else if (severity != "Unknown (ARP)") {
+                                        incrementCount(severityCount, severity);
+                                }
+                        }
                         riskLabel.forEach(label => {
                                 if (label && label.trim() !== "") incrementCount(riskCount, label);
                         });
