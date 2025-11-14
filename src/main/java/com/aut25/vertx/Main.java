@@ -215,7 +215,7 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
 
         verticles.add(new IngestionVerticle());
-         verticles.add(new AnalyseVerticle());
+        verticles.add(new BenchmarkVerticle());
         //verticles.add(new FlowAggregatorVerticle());
         //verticles.add(new FlowConsumerVerticle());
         //! Too much memory        // verticles.add(new PacketConsumerVerticle());

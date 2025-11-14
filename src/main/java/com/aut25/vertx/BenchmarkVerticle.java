@@ -37,57 +37,25 @@ import io.vertx.kafka.client.consumer.KafkaConsumer;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecord;
 
-public class AnalyseVerticle extends AbstractVerticle {
+public class BenchmarkVerticle extends AbstractVerticle {
 
-        private static final Logger logger = LoggerFactory.getLogger(AnalyseVerticle.class);
+        private static final Logger logger = LoggerFactory.getLogger(BenchmarkVerticle.class);
         KafkaConsumer<String, String> consumer;
         String mode;
         private final AtomicBoolean running = new AtomicBoolean(true);// Analyse avec nDPI
+        private int lineCount_packet = 0;
 
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting AnalyseVerticle..."
+                logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting BenchmarkVerticle..."
                                 + Colors.RESET);
-                // Get mode from config shared map
-                LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
-                JsonObject config = new JsonObject(map);
-
-                mode = config.getString("mode", "pcap").toLowerCase();
-
-                // Start reading from Kafka topic every 2 seconds if mode is pcap
-                switch (mode) {
-                        case "pcap":
-                                // !Benchmark readFromKafka_ActionEveryDelay("network-data", 200);
-                                break;
-                        case "json":
-                                // readFromKafka_ActionEveryDelay("network-data", 200);
-                                break;
-                        case "realtime":
-                                // readFromKafka_ActionEveryDelay("network-data", 200);
-                                break;
-                        case "none":
-                                logger.warn(Colors.YELLOW
-                                                + "[ ANALYSE VERTICLE ]              Mode is set to 'none', no analysis will be performed."
-                                                + Colors.RESET);
-                                return;
-                        default:
-                                logger.warn(Colors.YELLOW
-                                                + "[ ANALYSE VERTICLE ]              Unknown mode '{}', defaulting to PCAP."
-                                                + Colors.RESET,
-                                                mode);
-                                mode = "pcap";
-                }
+                //! readPackets_to_CSV();
         }
 
-        private int lineCount = 0;
-
         /**
-         * Reads messages from a Kafka topic at regular intervals if mode is "pcap".
-         * 
-         * @param topic the Kafka topic to subscribe to
-         * @param delay the delay in milliseconds between reads
+         * Read packets from Kafka topic "network-data" and write specific fields to a CSV file.
          */
-        private void readFromKafka_ActionEveryDelay(String topic, long delay) {
+        private void readPackets_to_CSV() {
 
                 // Config Kafka
                 Map<String, String> config = new HashMap<>();
@@ -103,8 +71,8 @@ public class AnalyseVerticle extends AbstractVerticle {
 
                 KafkaConsumer<String, String> consumer = KafkaConsumer.create(vertx, config);
 
-                consumer.subscribe(topic)
-                                .onSuccess(v -> logger.info("[ANALYSE VERTICLE] Subscribed to topic " + topic))
+                consumer.subscribe("network-data")
+                                .onSuccess(v -> logger.info("[ANALYSE VERTICLE] Subscribed to topic network-data"))
                                 .onFailure(err -> logger
                                                 .error("[ANALYSE VERTICLE] Failed to subscribe: " + err.getMessage()));
 
@@ -115,10 +83,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                         Files.createDirectories(csvPath.getParent());
                         writer = Files.newBufferedWriter(csvPath, StandardOpenOption.CREATE,
                                         StandardOpenOption.TRUNCATE_EXISTING);
-                        // Write CSV header compatible with tshark
-                        // writer.write("frame.number,ip.src,ip.dst,tcp.srcport,tcp.dstport,frame.len");
-                        // writer.newLine();
-                        lineCount = 0;
+                        lineCount_packet = 0;
                 } catch (IOException e) {
                         logger.error("Failed to open CSV file: " + e.getMessage());
                         return;
@@ -127,7 +92,7 @@ public class AnalyseVerticle extends AbstractVerticle {
                 AtomicInteger frameCounter = new AtomicInteger(1); // frame.number equivalent
 
                 consumer.handler(record -> {
-                        vertx.setTimer(delay, tid -> {
+                        vertx.setTimer(200, tid -> {
                                 if (!running.get())
                                         return;
 
@@ -162,7 +127,6 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                                 sport = tcp.getHeader().getSrcPort().valueAsInt();
                                                                 dport = tcp.getHeader().getDstPort().valueAsInt();
                                                         }
-                                                        // Tu peux rajouter UDP si nécessaire
                                                 }
                                         }
 
@@ -175,14 +139,15 @@ public class AnalyseVerticle extends AbstractVerticle {
                                                                 dport + "," +
                                                                 length);
                                                 writer.newLine();
-                                                lineCount++;
+                                                lineCount_packet++;
                                                 writer.flush();
                                         } catch (IOException e) {
                                                 logger.error("Failed to write CSV line: " + e.getMessage());
                                         }
 
-                                        if (lineCount == 10000) {
-                                                logger.info("[ANALYSE VERTICLE] Written {} lines to CSV.", lineCount);
+                                        if (lineCount_packet == 10000) {
+                                                logger.info("[ANALYSE VERTICLE] Written {} lines to CSV.",
+                                                                lineCount_packet);
                                                 // Stop program
                                                 running.set(false);
                                                 // emulate ctrl-c
