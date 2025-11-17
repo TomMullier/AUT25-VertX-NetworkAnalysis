@@ -1,16 +1,17 @@
 {
-  "http.port" : 8080,
-  "store" : "true",
-  "mode" : "menu",
-  "json" : {
-    "file-path" : "src/main/resources/data/network-data.json",
-    "ingestion-interval-ms" : 1000
+  "http.port": 8080,
+  "store": "true",
+  "mode": "menu",
+  "json": {
+    "file-path": "src/main/resources/data/network-data.json",
+    "ingestion-interval-ms": 1000
   },
-  "pcap" : {
-    "file-path" : "src/main/resources/data/benign+slowloris_net_packets.pcap"
+  "pcap": {
+    "file-path": "_tests/benchmark/01_phase/pcap/reference.pcap",
+    "delay": "false"
   },
-  "realtime_test" : {
-    "interface" : "ens160"
+  "realtime_test": {
+    "interface": "ens160"
   },
-  "realtime" : { }
+  "realtime": {}
 }

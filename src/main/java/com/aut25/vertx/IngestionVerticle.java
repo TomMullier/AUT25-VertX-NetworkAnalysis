@@ -32,6 +32,7 @@ import org.pcap4j.core.PcapHandle;
 import org.pcap4j.core.PcapNativeException;
 import org.pcap4j.core.PcapNetworkInterface;
 import org.pcap4j.core.Pcaps;
+import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import java.sql.Timestamp;
@@ -49,6 +50,7 @@ public class IngestionVerticle extends AbstractVerticle {
         private static final Logger logger = LoggerFactory.getLogger(IngestionVerticle.class);
         private KafkaProducer<String, String> producer;
         private final AtomicBoolean running = new AtomicBoolean(true);
+        private JsonObject config;
 
         @Override
         public void start() throws Exception {
@@ -56,7 +58,6 @@ public class IngestionVerticle extends AbstractVerticle {
                                 + Colors.RESET);
 
                 // Config file : get debug mode
-                JsonObject config;
                 try {
                         LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
                         config = new JsonObject(map);
@@ -345,6 +346,7 @@ public class IngestionVerticle extends AbstractVerticle {
          * 
          * @param pcapFilePath Path to the pcap file
          */
+        private long icmpCount = 0;
 
         private void ingestFromPcap(String pcapFilePath) {
                 PcapHandle handle;
@@ -399,6 +401,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 packets.add(packet);
                                                 deltas.add(delta);
                                                 timestamps.add(currentTs.getTime());
+                                                
                                         } catch (EOFException e) {
                                                 break;
                                         }
@@ -440,24 +443,42 @@ public class IngestionVerticle extends AbstractVerticle {
 
         private void publishNextPacket(List<Packet> packets, List<Long> deltas, List<Long> timestamps,
                         AtomicInteger index) {
-                if (index.get() >= packets.size() || !running.get())
-                        return;
+                JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject());
+                String delayConfig = pcapConfig.getString("delay", "true");
 
-                Packet packet = packets.get(index.get());
-                long packetTimestamp = timestamps.get(index.get());
-                long rawDelay = deltas.get(index.getAndIncrement());
-                final long safeDelay = Math.max(rawDelay, 1); // delay final, minimum 1 ms.
-                if (rawDelay < 1) {
+                while (index.get() < packets.size() && running.get()) {
+                        Packet packet = packets.get(index.get());
+                        long packetTimestamp = timestamps.get(index.get());
+                        long rawDelay = deltas.get(index.getAndIncrement());
+                        final long safeDelay = Math.max(rawDelay, 1);
 
-                        processPacket(packet, rawDelay, packetTimestamp);
-                        publishNextPacket(packets, deltas, timestamps, index);
-                        return;
-                } else {
+                        if (delayConfig.equals("false") || rawDelay < 1) {
+                                // Process immediately sans recursion
+                                processPacket(packet, rawDelay, packetTimestamp);
+                        } else {
+                                // Pour les paquets avec délai, sortir de la boucle et utiliser vertx.setTimer
+                                vertx.setTimer(safeDelay, id -> {
+                                        processPacket(packet, safeDelay, packetTimestamp);
+                                        publishNextPacket(packets, deltas, timestamps, index);
+                                });
+                                return; // on sort de la méthode pour attendre le timer
+                        }
+                }
 
-                        vertx.setTimer(safeDelay, id -> {
-                                processPacket(packet, safeDelay, packetTimestamp);
-                                publishNextPacket(packets, deltas, timestamps, index);
+                // Quand tous les paquets sont traités
+                if (index.get() >= packets.size()) {
 
+                        JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
+                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord
+                                        .create("network-data", doneMessage.encode());
+                        
+                        producer.send(kafkaRecord, ar -> {
+                                if (ar.succeeded()) {
+                                        logger.info("[ INGESTION VERTICLE ] PCAP finished message sent to Kafka.");
+                                } else {
+                                        logger.error("[ INGESTION VERTICLE ] Failed to send PCAP_DONE message: "
+                                                        + ar.cause().getMessage());
+                                }
                         });
                 }
         }

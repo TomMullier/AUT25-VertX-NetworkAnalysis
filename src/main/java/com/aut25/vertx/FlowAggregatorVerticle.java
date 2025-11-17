@@ -53,12 +53,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 5_000; // 5 seconds
         private long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
-        private long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 30 seconds
-        private long FLOW_MAX_AGE_MS_UDP = 120_000; // 2 minutes
-        private long FLOW_INACTIVITY_TIMEOUT_MS_OTHER = 60_000; // 60 seconds
+        private long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 5_000; // 5 seconds
+        private long FLOW_MAX_AGE_MS_UDP = 300_000; // 5 minutes
+        private long FLOW_INACTIVITY_TIMEOUT_MS_OTHER = 5_000; // 5 seconds
         private long FLOW_MAX_AGE_MS_OTHER = 300_000; // 5 minutes
 
-        private static final long FLOW_CLEAN_PERIOD_MS = 1_000;
+        private static final long FLOW_CLEAN_PERIOD_MS = 100;
 
         private KafkaConsumer<String, String> consumer;
         private KafkaProducer<String, String> producer;
@@ -141,7 +141,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 consumerConfig.put("auto.offset.reset", "earliest");
-                consumerConfig.put("enable.auto.commit", "false");
+                consumerConfig.put("enable.auto.commit", "true");
                 consumerConfig.put("max.poll.records", "5000"); // Increase batch size for better throughput
                 consumerConfig.put("fetch.max.bytes", "52428800"); // 50 MB to handle larger payloads
                 consumerConfig.put("fetch.min.bytes", "1048576"); // 1 MB to reduce fetch requests
@@ -191,8 +191,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         try {
                                 JsonObject json = new JsonObject(value);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Processing record: {}",
-                                                json.encodePrettily());
                                 processRecord(json);
                         } catch (Exception e) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
@@ -216,20 +214,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (!running.get())
                                 return;
 
-                        long now = System.currentTimeMillis();
-                        toFlush = new ArrayList<>();
-
-                        flushExpiredFlows(flows.values().stream()
-                                        .mapToLong(f -> f.lastSeen)
-                                        .max()
-                                        .orElse(now));
-
-                        long tcpCountToFlush = toFlush.stream().filter(f -> "TCP".equals(f.protocol)).count();
-                        long udpCountToFlush = toFlush.stream().filter(f -> "UDP".equals(f.protocol)).count();
-                        long tcpCount = flows.values().stream().filter(f -> "TCP".equals(f.protocol)).count();
-                        long udpCount = flows.values().stream().filter(f -> "UDP".equals(f.protocol)).count();
-
-                        for (Flow f : toFlush) {
+                        Iterator<Flow> iterator = toFlush.iterator();
+                        while (iterator.hasNext()) {
+                                Flow f = iterator.next();
                                 logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
                                                 f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
 
@@ -244,32 +231,18 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // Publish the flow with appProtocol, riskLevel, riskLabel, and reasonOfFlowEnd
                                 // set
                                 publishFlow(f, f.reasonOfFlowEnd);
+
+                                // Remove the flow from the map after publishing
+                                try {
+                                        flows.entrySet().removeIf(entry -> entry.getKey().equals(f.key) &&
+                                                        entry.getValue().firstSeen == f.firstSeen &&
+                                                        entry.getValue().lastSeen == f.lastSeen);
+                                } catch (Exception e) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error removing flow {}: {}",
+                                                        f.key, e.getMessage());
+                                }
+                                iterator.remove();
                         }
-
-                        Map<String, Long> protocolCounts = toFlush.stream()
-                                        .collect(Collectors.groupingBy(f -> f.protocol, Collectors.counting()));
-
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows (TCP : {} | UDP :
-                        // {})",
-                        // toFlush.size(),
-                        // tcpCountToFlush,
-                        // udpCountToFlush);
-
-                        // protocolCounts.forEach((protocol, count) -> {
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed {} flows for protocol: {}",
-                        // count, protocol);
-                        // });
-
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] Flushed early (FIN/RST) {} flows",
-                        // flushedEarlyCount);
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] >> Active flows: {} (TCP : {} | UDP
-                        // : {})",
-                        // flows.size(),
-                        // tcpCount,
-                        // udpCount);
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] >> Not IP packets processed: {}",
-                        // notIpPacketCount);
-                        // logger.info("---------------------------------------------------------------------------------------------");
 
                 });
         }
@@ -305,8 +278,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 maxAge = FLOW_MAX_AGE_MS_OTHER;
                         }
 
-                        boolean inactive = (referenceTimeMs - f.lastSeen) >= inactivityTimeout;
-                        boolean tooOld = (referenceTimeMs - f.firstSeen) >= maxAge;
+                        boolean inactive = (referenceTimeMs - f.lastSeen) > inactivityTimeout;
+                        boolean tooOld = (referenceTimeMs - f.firstSeen) > maxAge;
 
                         if (inactive) {
                                 f.reasonOfFlowEnd = "Inactivity Timeout";
@@ -323,8 +296,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // non-concurrent maps
                                 it.remove();
                                 // remove from ndpiFlows as well
-                                ndpiFlows.remove(entry.getKey());
+                                ndpiFlows.entrySet().removeIf(ndpiEntry -> ndpiEntry.getKey().equals(entry.getKey()) &&
+                                                ndpiEntry.getValue().lastSeen == f.lastSeen);
                                 toFlush.add(f);
+
                         } else {
                                 // Collect all ongoing flows that are not finished
                                 List<Flow> ongoingFlows = flows.values().stream()
@@ -349,6 +324,66 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 }
                         }
                 }
+        }
+
+        private void flushRemainingFlows() {
+                logger.info(Colors.CYAN
+                                + "[ FLOWAGGREGATOR VERTICLE ]       Flushing remaining flows (end of pcap)..."
+                                + Colors.RESET);
+                toFlush = new ArrayList<>(flows.values());
+
+                Iterator<Flow> iterator = toFlush.iterator();
+                while (iterator.hasNext()) {
+                        Flow f = iterator.next();
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing remaining flow: key={} bytes={} packets={} durationMs={}",
+                                        f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
+
+                        // nDPI analysis on flow packets if not already detected
+                        // before publishing
+                        f.appProtocol = getNDPIProcol(f);
+                        f.riskLevel = getNDPIFlowRisk(f);
+                        f.riskMask = getNDPIFlowRiskMask(f);
+                        f.riskLabel = getNDPIFlowRiskLabel(f);
+                        f.riskSeverity = getNDPIFlowRiskSeverity(f);
+
+                        // Publish the flow with appProtocol, riskLevel, riskLabel, and reasonOfFlowEnd
+                        // set
+                        publishFlow(f, "PCAP_DONE");
+                        // Remove the flow from the map after publishing
+                        try {
+                                flows.entrySet().removeIf(entry -> entry.getKey().equals(f.key) &&
+                                                entry.getValue().lastSeen == f.lastSeen &&
+                                                entry.getValue().firstSeen == f.firstSeen);
+                                ndpiFlows.entrySet().removeIf(entry -> entry.getKey().equals(f.key) &&
+                                                entry.getValue().lastSeen == f.lastSeen);
+                        } catch (Exception e) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error removing flow {}: {}",
+                                                f.key, e.getMessage());
+                        }
+                        iterator.remove();
+
+                        List<Flow> ongoingFlows = flows.values().stream()
+                                        .filter(flow -> !toFlush.contains(flow))
+                                        .collect(Collectors.toList());
+
+                        // Create a JSON array to represent the ongoing flows
+                        JsonObject ongoingFlowsJson = new JsonObject()
+                                        .put("flows", ongoingFlows.stream()
+                                                        .map(Flow::getJsonObject)
+                                                        .collect(Collectors.toList()));
+
+                        // Check if the current flows are different from the last published flows
+                        if (!ongoingFlowsJson.equals(new JsonObject().put("flows", currentFlows.stream()
+                                        .map(Flow::getJsonObject)
+                                        .collect(Collectors.toList())))) {
+                                // Update the current flows
+                                currentFlows = new ArrayList<>(ongoingFlows);
+
+                                // Send the ongoing flows to the event bus
+                                vertx.eventBus().publish("currentFlows.data", ongoingFlowsJson);
+                        }
+                }
+
         }
 
         /**
@@ -481,6 +516,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @param jsonStr JSON string representing a network packet
          */
         private void processRecord(JsonObject json) throws Exception {
+                if (json.toString().contains("PCAP_DONE")) {
+                        logger.info(Colors.CYAN
+                                        + "[ FLOWAGGREGATOR VERTICLE ]       Received PCAP_DONE message. Finished processing pcap file."
+                                        + Colors.RESET);
+                        // flush any remaining flows
+                        flushRemainingFlows();
+                        return;
+                }
                 // Parse the raw packet data
                 String rawPacketBase64 = json.getString("rawPacket");
                 if (rawPacketBase64 == null) {
@@ -588,14 +631,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 String srcIp = getPacketSrcIp(ipPacket);
                 String dstIp = getPacketDstIp(ipPacket);
                 String protocol = getPacketProtocol(ipPacket);
-                // ICMP DEBUG
-                // if ("ICMPv4".equals(protocol)) {
-                // logger.info("[ FLOWAGGREGATOR VERTICLE ] ICMP packet detected: srcIp={}
-                // dstIp={}", srcIp,
-                // dstIp);
-                // }
 
                 Long ts = json.getLong("timestamp", System.currentTimeMillis());
+                flushExpiredFlows(ts);
+
                 Long bytes = json.getLong("length", (long) rawData.length);
 
                 Ports ports = getPacketPorts(ipPacket);
@@ -648,7 +687,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
                                         e.getMessage());
                 }
-
+                // Update or create flow
                 flows.compute(key, (k, f) -> {
                         if (f == null) {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
@@ -666,13 +705,26 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         f.key, f.firstSeen, f.lastSeen, f.bytes, f.packetCount);
 
                         // return f normally; do not flush inside compute
+
                         return f;
                 });
 
                 // after compute, check if the flow should be flushed
                 if (flowEnded.get()) {
-                        Flow endedFlow = flows.remove(key);
-                        ndpiFlows.remove(key);
+                        Flow endedFlow = null;
+                        Iterator<Map.Entry<String, Flow>> iterator = flows.entrySet().iterator();
+                        while (iterator.hasNext()) {
+                                Map.Entry<String, Flow> entry = iterator.next();
+                                if (entry.getKey().equals(key) && entry.getValue().firstSeen == ts
+                                                && entry.getValue().lastSeen == ts) {
+                                        endedFlow = entry.getValue();
+                                        iterator.remove();
+                                        break;
+                                }
+                        }
+                        ndpiFlows.entrySet().removeIf(entry -> entry.getKey().equals(key) &&
+                                        entry.getValue().lastSeen == ts);
+
                         if (endedFlow != null) {
 
                                 endedFlow.appProtocol = getNDPIProcol(endedFlow);
@@ -687,6 +739,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                                 endedFlow.packetCount);
                         }
                 }
+
         }
 
         private void handleArp(Packet packet, JsonObject json) {
@@ -838,9 +891,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return the constructed flow key
          */
         private String buildFlowKey(String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol) {
-                return String.format("%s|%s|%d|%d|%s", srcIp, dstIp, srcPort == null ? 0 : srcPort,
-                                dstPort == null ? 0 : dstPort,
-                                protocol == null ? "UNKNOWN" : protocol);
+                return srcIp + "_" + dstIp + "_" + (srcPort != null ? srcPort : "null") + "_"
+                                + (dstPort != null ? dstPort : "null") + "_"
+                                + (protocol != null ? protocol : "UNKNOWN");
         }
 
         /**
@@ -856,15 +909,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private String buildBilateralFlowKey(String srcIp, Integer srcPort,
                         String dstIp, Integer dstPort,
                         String protocol) {
-                String a = srcIp + "_" + (srcPort == null ? "null" : srcPort);
-                String b = dstIp + "_" + (dstPort == null ? "null" : dstPort);
-
-                // On met toujours la "plus petite" paire en premier
-                if (a.compareTo(b) <= 0) {
-                        return a + "_" + b + "_" + protocol;
-                } else {
-                        return b + "_" + a + "_" + protocol;
-                }
+                String flowKeyA = buildFlowKey(srcIp, dstIp, srcPort, dstPort, protocol);
+                String flowKeyB = buildFlowKey(dstIp, srcIp, dstPort, srcPort, protocol);
+                return flowKeyA.compareTo(flowKeyB) <= 0 ? flowKeyA : flowKeyB;
         }
 
         /**

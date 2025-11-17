@@ -75,7 +75,7 @@ const counts = {
 const packetsEl = document.getElementById("packetContainer");
 
 const flowsList = [];
-const flowsLimit = 100;
+const flowsLimit = 1000;
 
 /* ----------------------------- WEBSOCKET LOGIC ----------------------------- */
 ws.onopen = () => {

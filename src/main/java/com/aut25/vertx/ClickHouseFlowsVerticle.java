@@ -63,7 +63,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 return;
 
                         String value = record.value();
-                        if (value == null || value.isEmpty() || value.equals("reset")) {
+                        if (value == null || value.isEmpty() || value.equals("reset") || value.equals("PCAP_DONE")) {
                                 return;
                         }
                         try {

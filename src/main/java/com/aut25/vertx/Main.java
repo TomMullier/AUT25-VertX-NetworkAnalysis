@@ -133,7 +133,7 @@ public class Main extends AbstractVerticle {
                     }
                     if (pcapPath.trim().isEmpty()) {
                         pcapPath = config.getJsonObject("pcap").getString("file-path",
-                                "src/main/resources/data/benign+slowloris_net_packets.pcap");
+                                "_tests/benchmark/01_phase/pcap/reference.pcap");
                         logger.info(Colors.YELLOW
                                 + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
                                 + pcapPath + Colors.RESET);
@@ -148,7 +148,8 @@ public class Main extends AbstractVerticle {
                     config.put("pcap.file-path", pcapPath);
 
                     JsonObject pcapConfig = new JsonObject()
-                            .put("file-path", pcapPath);
+                            .put("file-path", pcapPath)
+                            .put("delay", "false");
                     sharedData.getLocalMap("config").put("pcap", pcapConfig);
                     sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
                     sharedData.getLocalMap("config").put("mode", "pcap");
@@ -215,12 +216,12 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
 
         verticles.add(new IngestionVerticle());
-        verticles.add(new BenchmarkVerticle());
-        //verticles.add(new FlowAggregatorVerticle());
-        //verticles.add(new FlowConsumerVerticle());
-        //! Too much memory        // verticles.add(new PacketConsumerVerticle());
+        // !verticles.add(new BenchmarkVerticle());
+        verticles.add(new FlowAggregatorVerticle());
+        verticles.add(new FlowConsumerVerticle());
+        // ! Too much memory // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
-        //verticles.add(webServerVerticle);
+        verticles.add(webServerVerticle);
 
         if (store) {
             verticles.add(new ClickHousePacketVerticle());
@@ -388,7 +389,8 @@ public class Main extends AbstractVerticle {
         sharedData.getLocalMap("config").put("json", jsonConfig);
 
         JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject()
-                .put("file-path", "src/main/resources/data/benign+slowloris_net_packets.pcap"));
+                .put("file-path", "_tests/benchmark/01_phase/pcap/reference.pcap")
+                .put("delay", "false"));
         sharedData.getLocalMap("config").put("pcap", pcapConfig);
 
         JsonObject realtimeTestConfig = config.getJsonObject("realtime_test", new JsonObject()
