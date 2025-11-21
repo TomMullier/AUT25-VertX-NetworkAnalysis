@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     bytes Nullable(UInt64),
     packets Nullable(UInt64),
     packetSummaries Array(String),
+    treatmentDelay Array(UInt64),
     durationMs Nullable(UInt64),
     reasonOfFlowEnd Nullable(String),
     minPacketLength Nullable(UInt32),

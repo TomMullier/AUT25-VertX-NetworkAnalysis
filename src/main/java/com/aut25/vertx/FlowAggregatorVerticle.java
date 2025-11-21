@@ -138,17 +138,37 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 Map<String, String> consumerConfig = new HashMap<>();
                 consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
                 consumerConfig.put("group.id", GROUP_ID);
+
+                // Désérialisation classique
                 consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+                // Toujours prendre le prochain message disponible
                 consumerConfig.put("auto.offset.reset", "earliest");
+
+                // Pour réduire la latence, commit manuel ou auto très fréquent
                 consumerConfig.put("enable.auto.commit", "true");
-                consumerConfig.put("max.poll.records", "5000"); // Increase batch size for better throughput
-                consumerConfig.put("fetch.max.bytes", "52428800"); // 50 MB to handle larger payloads
-                consumerConfig.put("fetch.min.bytes", "1048576"); // 1 MB to reduce fetch requests
-                consumerConfig.put("fetch.max.wait.ms", "500"); // Wait longer to fill fetch requests
-                consumerConfig.put("session.timeout.ms", "60000"); // 60 seconds for better fault tolerance
-                consumerConfig.put("heartbeat.interval.ms", "20000"); // Adjust heartbeat interval
-                consumerConfig.put("request.timeout.ms", "70000"); // Ensure requests don't time out prematurely
+                consumerConfig.put("auto.commit.interval.ms", "100"); // Valeur ultra faible
+
+                // Latence minimale : récupérer le plus vite possible
+                consumerConfig.put("max.poll.records", "1"); // 1 seul record = temps minimal
+                consumerConfig.put("fetch.min.bytes", "1"); // Retourne dès qu’un octet est disponible
+                consumerConfig.put("fetch.max.wait.ms", "0"); // Pas d’attente
+                consumerConfig.put("fetch.max.bytes", "1048576"); // 1 MB suffit (réduit la copie mémoire)
+
+                // Timeouts agressifs mais sûrs
+                consumerConfig.put("session.timeout.ms", "10000"); // 10s
+                consumerConfig.put("heartbeat.interval.ms", "3000"); // 3s
+                consumerConfig.put("request.timeout.ms", "15000"); // 15s
+
+                // Optimisation de la latence au niveau réseau
+                consumerConfig.put("receive.buffer.bytes", "32768"); // 32 KB, bonne valeur pour réduire overhead
+                consumerConfig.put("send.buffer.bytes", "32768");
+                consumerConfig.put("fetch.buffer", "4096");
+
+                // Pas de batching côté protocole
+                consumerConfig.put("client.id", "low-latency-consumer");
+                consumerConfig.put("max.partition.fetch.bytes", "1048576"); // 1MB max par fetch
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
                 logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
@@ -278,8 +298,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 maxAge = FLOW_MAX_AGE_MS_OTHER;
                         }
 
-                        boolean inactive = (referenceTimeMs - f.lastSeen) > inactivityTimeout;
-                        boolean tooOld = (referenceTimeMs - f.firstSeen) > maxAge;
+                        boolean inactive = (referenceTimeMs - f.lastSeen) >= inactivityTimeout;
+                        boolean tooOld = (referenceTimeMs - f.firstSeen) >= maxAge;
 
                         if (inactive) {
                                 f.reasonOfFlowEnd = "Inactivity Timeout";
@@ -700,6 +720,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.firstSeen = Math.min(f.firstSeen, ts);
                         f.packetCount++;
                         f.bytes += bytes != null ? bytes : 0;
+                        f.treatmentDelay.add(System.currentTimeMillis()
+                                        - json.getLong("ingestedAt", 0L));
 
                         logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow updated: {} firstSeen={} lastSeen={} bytes={} packets={}",
                                         f.key, f.firstSeen, f.lastSeen, f.bytes, f.packetCount);
@@ -776,6 +798,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         arpFlow.riskMask = 0;
                         arpFlow.riskLabel = "Unknown (ARP)";
                         arpFlow.riskSeverity = "Unknown (ARP)";
+                        arpFlow.treatmentDelay.add(System.currentTimeMillis()
+                                        - json.getLong("ingestedAt", 0L));
                         publishFlow(arpFlow, "ARP");
                 } else {
                         logger.info("[ FLOWAGGREGATOR VERTICLE ]       ARP packet encountered: packet={}", packet);
@@ -939,6 +963,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                                         enrichedFlow.srcCountry, enrichedFlow.dstCountry,
                                                         enrichedFlow.srcDomain, enrichedFlow.dstDomain,
                                                         enrichedFlow.srcOrg, enrichedFlow.dstOrg);
+                                        // log treatment delay stats
+                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} treatment delay stats (ns): {}",
+                                                        enrichedFlow.key,
+                                                        enrichedFlow.treatmentDelay.toString());
 
                                         KafkaProducerRecord<String, String> record = KafkaProducerRecord
                                                         .create(OUT_TOPIC, enrichedFlow.key, value);

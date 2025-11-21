@@ -9,6 +9,7 @@ import io.vertx.kafka.client.consumer.KafkaConsumerRecord;
 import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
+import io.vertx.core.json.JsonArray;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -139,9 +140,15 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                 String srcOrg = json.getString("srcOrg", "N/A");
                                 String dstOrg = json.getString("dstOrg", "N/A");
 
+                                JsonArray treatmentDelayJson = json.getJsonArray("treatmentDelay");
+                                long[] treatmentDelayStrs = treatmentDelayJson
+                                                .stream()
+                                                .mapToLong(o -> ((Number) o).longValue())
+                                                .toArray();
+
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
-                                                "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, "
+                                                "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, treatmentDelay, "
                                                 +
                                                 "minPacketLength, maxPacketLength, meanPacketLength, stddevPacketLength, "
                                                 +
@@ -154,7 +161,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, " +
                                                 "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         pstmt.setString(1, flowId);
                                         pstmt.setLong(2, firstSeen);
@@ -168,58 +175,59 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setLong(10, packetCount);
                                         pstmt.setLong(11, durationMs);
                                         pstmt.setString(12, flowKey);
+                                        pstmt.setObject(13, treatmentDelayStrs);
 
-                                        pstmt.setDouble(13, minPacketLength);
-                                        pstmt.setDouble(14, maxPacketLength);
-                                        pstmt.setDouble(15, meanPacketLength);
-                                        pstmt.setDouble(16, stddevPacketLength);
+                                        pstmt.setDouble(14, minPacketLength);
+                                        pstmt.setDouble(15, maxPacketLength);
+                                        pstmt.setDouble(16, meanPacketLength);
+                                        pstmt.setDouble(17, stddevPacketLength);
 
-                                        pstmt.setDouble(17, bytesPerSecond);
-                                        pstmt.setDouble(18, packetsPerSecond);
+                                        pstmt.setDouble(18, bytesPerSecond);
+                                        pstmt.setDouble(19, packetsPerSecond);
 
-                                        pstmt.setDouble(19, totalBytesUpstream);
-                                        pstmt.setDouble(20, totalBytesDownstream);
-                                        pstmt.setDouble(21, totalPacketsUpstream);
-                                        pstmt.setDouble(22, totalPacketsDownstream);
-                                        pstmt.setDouble(23, ratioBytesUpDown);
-                                        pstmt.setDouble(24, ratioPacketsUpDown);
+                                        pstmt.setDouble(20, totalBytesUpstream);
+                                        pstmt.setDouble(21, totalBytesDownstream);
+                                        pstmt.setDouble(22, totalPacketsUpstream);
+                                        pstmt.setDouble(23, totalPacketsDownstream);
+                                        pstmt.setDouble(24, ratioBytesUpDown);
+                                        pstmt.setDouble(25, ratioPacketsUpDown);
 
-                                        pstmt.setLong(25, flowDurationMs);
+                                        pstmt.setLong(26, flowDurationMs);
 
-                                        pstmt.setDouble(26, interArrivalTimeMean);
-                                        pstmt.setDouble(27, interArrivalTimeStdDev);
-                                        pstmt.setDouble(28, interArrivalTimeMin);
-                                        pstmt.setDouble(29, interArrivalTimeMax);
+                                        pstmt.setDouble(27, interArrivalTimeMean);
+                                        pstmt.setDouble(28, interArrivalTimeStdDev);
+                                        pstmt.setDouble(29, interArrivalTimeMin);
+                                        pstmt.setDouble(30, interArrivalTimeMax);
 
-                                        pstmt.setDouble(30, flowSymmetry);
-                                        pstmt.setDouble(31, synRate);
-                                        pstmt.setDouble(32, finRate);
-                                        pstmt.setDouble(33, rstRate);
-                                        pstmt.setDouble(34, ackRate);
+                                        pstmt.setDouble(31, flowSymmetry);
+                                        pstmt.setDouble(32, synRate);
+                                        pstmt.setDouble(33, finRate);
+                                        pstmt.setDouble(34, rstRate);
+                                        pstmt.setDouble(35, ackRate);
 
-                                        pstmt.setDouble(35, tcpFraction);
-                                        pstmt.setDouble(36, udpFraction);
-                                        pstmt.setDouble(37, otherFraction);
+                                        pstmt.setDouble(36, tcpFraction);
+                                        pstmt.setDouble(37, udpFraction);
+                                        pstmt.setDouble(38, otherFraction);
 
-                                        pstmt.setDouble(38, appProtocolBytes);
-                                        pstmt.setString(39, appProtocol);
-                                        pstmt.setLong(40, ndpiFlowPtr);
+                                        pstmt.setDouble(39, appProtocolBytes);
+                                        pstmt.setString(40, appProtocol);
+                                        pstmt.setLong(41, ndpiFlowPtr);
 
-                                        pstmt.setInt(41, riskLevel);
-                                        pstmt.setInt(42, riskMask);
-                                        pstmt.setString(43, setArrayAsClickHouseStringArray(riskLabels));
-                                        pstmt.setString(44, riskSeverity);
+                                        pstmt.setInt(42, riskLevel);
+                                        pstmt.setInt(43, riskMask);
+                                        pstmt.setString(44, setArrayAsClickHouseStringArray(riskLabels));
+                                        pstmt.setString(45, riskSeverity);
 
-                                        pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
+                                        pstmt.setString(46, setArrayAsClickHouseStringArray(packetSummaries));
 
-                                        pstmt.setString(46, reasonOfFlowEnd);
+                                        pstmt.setString(47, reasonOfFlowEnd);
 
-                                        pstmt.setString(47, srcCountry);
-                                        pstmt.setString(48, dstCountry);
-                                        pstmt.setString(49, srcDomain);
-                                        pstmt.setString(50, dstDomain);
-                                        pstmt.setString(51, srcOrg);
-                                        pstmt.setString(52, dstOrg);
+                                        pstmt.setString(48, srcCountry);
+                                        pstmt.setString(49, dstCountry);
+                                        pstmt.setString(50, srcDomain);
+                                        pstmt.setString(51, dstDomain);
+                                        pstmt.setString(52, srcOrg);
+                                        pstmt.setString(53, dstOrg);
 
                                         pstmt.executeUpdate();
                                         logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Inserted flow into ClickHouse: srcIp={}, dstIp={}, protocol={}, firstSeen={}, lastSeen={}",
@@ -274,6 +282,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 sb.append("]");
                 return sb.toString();
         }
+
+        
 
         @Override
         public void stop() throws Exception {

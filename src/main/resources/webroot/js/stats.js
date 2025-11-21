@@ -24,6 +24,10 @@ export const riskCount = {};
 export const protocolCount = {};
 export const countryLinks = {};
 
+export const flowDelays = {}; // clé = flowKey, valeur = liste des delays
+let treatmentDelaysChart; // instance Chart.js
+
+
 // === Chart instances ===
 
 let severityChart, riskChart, protocolChart;
@@ -44,7 +48,50 @@ export function initMap() {
 export function initCharts() {
         const ctx1 = document.getElementById("severityChart").getContext("2d");
         const ctx2 = document.getElementById("riskChart").getContext("2d");
-        const ctx3 = document.getElementById("protocolChart").getContext("2d");
+        const ctx3 = document.getElementById("protocolChart").getContext("2d"); // --- 4️⃣ Treatment delays per flow ---
+        const ctx4 = document.getElementById("treatmentDelaysChart").getContext("2d");
+        treatmentDelaysChart = new Chart(ctx4, {
+                type: "line",
+                data: {
+                        labels: [], // flowKey ou timestamp
+                        datasets: [{
+                                label: "Average Packet Treatment Delay (ms)",
+                                data: [],
+                                borderColor: "rgba(0, 0, 0, 1)",
+                                backgroundColor: "rgba(0, 0, 0, 0.2)",
+                                fill: true,
+                                tension: 0.3
+                        }]
+                },
+                options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: {
+                                duration: 500
+                        },
+                        scales: {
+                                x: {
+                                        title: {
+                                                display: false,
+                                                text: "Flow"
+                                        },
+                                        ticks: {
+                                                display: false
+                                        }
+
+
+                                },
+                                y: {
+                                        title: {
+                                                display: true,
+                                                text: "Avg Delay (ms)"
+                                        },
+                                        beginAtZero: true
+                                }
+                        }
+                }
+        });
+
 
         // --- 1️⃣ Severities ---
         severityChart = new Chart(ctx1, {
@@ -170,6 +217,7 @@ export function updateCharts() {
         if (severityChart) severityChart.update();
         if (riskChart) riskChart.update();
         if (protocolChart) protocolChart.update();
+
 }
 
 let linkLayers = [];
@@ -241,4 +289,36 @@ export function updateMapLinks() {
                 }).addTo(trafficMap);
                 linkLayers.push(circle);
         });
+}
+
+export function updateFlowDelay(flowKey, delays) {
+        // calcul de la moyenne
+        const avgDelay = delays.reduce((a, b) => a + b, 0) / delays.length;
+
+        // stocker la moyenne
+        flowDelays[flowKey] = avgDelay;
+
+        // mettre à jour le graphique
+        const data = treatmentDelaysChart.data;
+        if (!data.labels.includes(flowKey)) {
+                data.labels.push(flowKey);
+                data.datasets[0].data.push(avgDelay);
+        } else {
+                const index = data.labels.indexOf(flowKey);
+                data.datasets[0].data[index] = avgDelay;
+        }
+
+        // scrolling automatique : conserver max 50 flows visibles
+        const MAX_POINTS = 50;
+        while (data.labels.length > MAX_POINTS) {
+                data.labels.shift();
+                data.datasets[0].data.shift();
+        }
+
+        treatmentDelaysChart.update();
+
+        // Mettre à jour la valeur moyenne sur 50 flows
+        const totalDelay = data.datasets[0].data.reduce((a, b) => a + b, 0);
+        const averageDelay = (data.datasets[0].data.length > 0) ? (totalDelay / data.datasets[0].data.length) : 0;
+        document.getElementById("averageDelayValue").innerText = averageDelay.toFixed(2);
 }

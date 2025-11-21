@@ -11,6 +11,11 @@ flows = NFStreamer(
     source="../01_phase/pcap/reference.pcap",
     idle_timeout=IDLE_TIMEOUT,
     active_timeout=ACTIVE_TIMEOUT,
+    statistical_analysis=False,
+    promiscuous_mode=True,
+    bpf_filter="",
+    n_dissections=0
+    
 )
 filtered_flows = flows
 print("Exporting flows to CSV...")

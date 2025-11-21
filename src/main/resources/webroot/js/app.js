@@ -9,7 +9,8 @@ import {
         initCharts,
         updateMapLinks,
         initMap,
-        fetchCountryCoords
+        fetchCountryCoords,
+        updateFlowDelay
 } from "./stats.js";;
 
 import {
@@ -123,6 +124,7 @@ ws.onmessage = (event) => {
 
                         // === Rafraîchir les graphiques ===
                         updateCharts();
+                        updateFlowDelay(data.flowKey, data.treatmentDelay);
 
                 } else if (data.type === "packet") {
                         //ToDO No display for packets because of performances issues with high ingestion rates 

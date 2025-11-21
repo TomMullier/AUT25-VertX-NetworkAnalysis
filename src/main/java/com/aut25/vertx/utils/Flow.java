@@ -1,6 +1,7 @@
 package com.aut25.vertx.utils;
 
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.pcap4j.packet.EthernetPacket;
 import org.pcap4j.packet.IpPacket;
@@ -43,6 +44,8 @@ public class Flow {
         public Integer dstPort = -1;
         public String protocol = "";
         public String key = "";
+
+        public List<Long> treatmentDelay = new ArrayList<>();
 
         public long firstSeen = -1;
         public long lastSeen = -1;
@@ -212,6 +215,7 @@ public class Flow {
                 jo.put("dstOrg", this.dstOrg);
                 jo.put("srcDomain", this.srcDomain);
                 jo.put("dstDomain", this.dstDomain);
+                jo.put("treatmentDelay", new JsonArray(this.treatmentDelay));
 
                 return jo;
         }
@@ -503,6 +507,7 @@ public class Flow {
                 logger.info("riskSeverity: {}", riskSeverity);
                 logger.info("packetSummariesString: {}", getPacketSummariesString());
                 logger.info("reasonOfFlowEnd: {}", reasonOfFlowEnd);
+                logger.info("treatmentDelay: {}", treatmentDelay);
 
         }
 

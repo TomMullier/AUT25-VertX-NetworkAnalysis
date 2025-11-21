@@ -260,9 +260,48 @@ public class IngestionVerticle extends AbstractVerticle {
         private void configureKafkaProducer() {
                 Properties props = new Properties();
                 props.put("bootstrap.servers", "localhost:9092");
+
+                // Serializers classiques
                 props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
                 props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
-                props.put("acks", "1");
+
+                // ACK minimal pour aller plus vite
+                props.put("acks", "1"); // pas 0 car risque de perte sans gain significatif
+
+                // === LATENCE ULTRA-FAIBLE ===
+
+                // Désactiver totalement le batching côté producer
+                props.put("batch.size", "0"); // Envoi immédiat
+                props.put("linger.ms", "0"); // Pas d'attente
+                props.put("buffer.memory", "33554432"); // 32MB pour absorber les bursts
+
+                // Compression désactivée (sinon +latence CPU)
+                props.put("compression.type", "none");
+
+                // Réutiliser les connexions TCP
+                props.put("connections.max.idle.ms", "300000");
+
+                // Activer le transfert direct sans mise en attente
+                props.put("max.in.flight.requests.per.connection", "1");
+                // → évite reordering, réduit jitter
+
+                // Temps de réponse maximal très bas
+                props.put("request.timeout.ms", "15000");
+                props.put("delivery.timeout.ms", "20000"); // global timeout
+
+                // TCP optimisé latence
+                props.put("socket.send.buffer.bytes", "32768"); // 32 KB
+                props.put("socket.receive.buffer.bytes", "32768");
+
+                // Moins de copies mémoire
+                props.put("message.max.bytes", "1048576"); // 1 MB par message max
+
+                // Le must pour la latence = désactiver la mise en commun des buffers
+                props.put("receive.buffer.bytes", "32768");
+                props.put("send.buffer.bytes", "32768");
+
+                // Id client pour debug
+                props.put("client.id", "low-latency-producer");
 
                 producer = KafkaProducer.create(vertx, props);
                 logger.debug("[ INGESTION VERTICLE ]            Kafka Producer for ingestion configured."
@@ -401,7 +440,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 packets.add(packet);
                                                 deltas.add(delta);
                                                 timestamps.add(currentTs.getTime());
-                                                
+
                                         } catch (EOFException e) {
                                                 break;
                                         }
@@ -471,7 +510,7 @@ public class IngestionVerticle extends AbstractVerticle {
                         JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
                         KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord
                                         .create("network-data", doneMessage.encode());
-                        
+
                         producer.send(kafkaRecord, ar -> {
                                 if (ar.succeeded()) {
                                         logger.info("[ INGESTION VERTICLE ] PCAP finished message sent to Kafka.");
@@ -495,6 +534,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 String base64Packet = Base64.getEncoder().encodeToString(packet.getRawData());
                 JsonObject record = new JsonObject()
                                 .put("timestamp", packetTimestamp)
+                                .put("ingestedAt", System.currentTimeMillis())
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
 
@@ -511,7 +551,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "
                                                 + ar.cause().getMessage());
                         }
-                });
+                }).flush();
         }
 
         /* -------------------------------------------------------------------------- */
