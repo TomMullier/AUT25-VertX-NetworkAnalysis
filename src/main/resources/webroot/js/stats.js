@@ -26,6 +26,7 @@ export const countryLinks = {};
 
 export const flowDelays = {}; // clé = flowKey, valeur = liste des delays
 let treatmentDelaysChart; // instance Chart.js
+let treatmentMaxDelay = 0;
 
 
 // === Chart instances ===
@@ -58,38 +59,31 @@ export function initCharts() {
                                 label: "Average Packet Treatment Delay (ms)",
                                 data: [],
                                 borderColor: "#2563eb",
-                                backgroundColor: "#2563eb",
-                                fill: false,
+                                backgroundColor: "rgba(37, 100, 235, 0.2)",
                                 tension: 0.3,
-                                pointRadius: 3,
+                                pointRadius: 2,
                                 pointHoverRadius: 6,
-                                borderWidth: 2
+                                borderWidth: 2,
+                                fill: true // Add background under the line
                         }]
                 },
                 options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        plugins: {
+                                legend: {
+                                        display: false
+                                }
+                        },
                         animation: {
                                 duration: 500
                         },
                         scales: {
                                 x: {
-                                        title: {
-                                                display: false,
-                                                text: "Flow"
-                                        },
-                                        ticks: {
-                                                display: false
-                                        }
-
-
+                                        display: false // Hide x-axis
                                 },
                                 y: {
-                                        title: {
-                                                display: true,
-                                                text: "Avg Delay (ms)"
-                                        },
-                                        beginAtZero: true
+                                        display: false // Hide y-axis
                                 }
                         }
                 }
@@ -316,6 +310,12 @@ export function updateFlowDelay(flowKey, delays) {
         while (data.labels.length > MAX_POINTS) {
                 data.labels.shift();
                 data.datasets[0].data.shift();
+        }
+        // Mettre à jour l'échelle Y si nécessaire
+        const currentMax = Math.max(...data.datasets[0].data);
+        if (currentMax > treatmentMaxDelay) {
+                treatmentMaxDelay = Math.ceil(currentMax / 100) * 100; // Arrondi au 100 supérieur
+                treatmentDelaysChart.options.scales.y.max = treatmentMaxDelay;
         }
 
         treatmentDelaysChart.update();
