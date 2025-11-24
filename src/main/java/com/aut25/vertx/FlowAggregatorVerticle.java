@@ -211,21 +211,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         try {
                                 JsonObject json = new JsonObject(value);
-                                vertx.executeBlocking(promise -> {
-                                        try {
-                                                processRecord(json);
-                                        } catch (Exception e) {
-                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                                                                e.getMessage());
-                                        } finally {
-                                                promise.complete();
-                                        }
-                                }, false, res -> {
-                                        if (res.failed()) {
-                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                                                                res.cause().getMessage());
-                                        }
-                                });
+                                try {
+                                        processRecord(json);
+                                } catch (Exception e) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                                                        e.getMessage());
+                                } finally {
+                                }
                         } catch (Exception e) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
                                                 e.getMessage());
@@ -332,7 +324,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
 
                         if (inactive || tooOld) {
-                                
+
                                 // remove via iterator to avoid ConcurrentModificationException on
                                 // non-concurrent maps
                                 it.remove();
@@ -461,7 +453,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskScore = ndpi.getFlowRiskScore(f.ndpiFlowPtr);
-                                
+
                                 return riskScore;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk for flow {}: {}", f.key,
@@ -481,7 +473,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskMask = ndpi.getFlowRiskMask(f.ndpiFlowPtr);
-                                
+
                                 return riskMask;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk mask for flow {}: {}", f.key,
@@ -501,7 +493,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskLabel = ndpi.getFlowRiskLabel(f.ndpiFlowPtr);
-                                
+
                                 return riskLabel;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk label for flow {}: {}", f.key,
@@ -521,7 +513,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskSeverity = ndpi.getFlowRiskSeverity(f.ndpiFlowPtr);
-                                
+
                                 return riskSeverity;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk severity for flow {}: {}", f.key,
@@ -645,15 +637,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return;
                 }
                 ipv4PacketCount++;
-                vertx.executeBlocking(promise -> {
-                        processIpPacket(packet, json, rawData);
-                        promise.complete();
-                }, false, res -> {
-                        if (res.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing IPv4 packet: {}",
-                                                res.cause().getMessage());
-                        }
-                });
+                processIpPacket(packet, json, rawData);
         }
 
         private void handleIPv6(Packet packet, JsonObject json, byte[] rawData) {
@@ -664,15 +648,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return;
                 }
                 ipv6PacketCount++;
-                vertx.executeBlocking(promise -> {
-                        processIpPacket(packet, json, rawData);
-                        promise.complete();
-                }, false, res -> {
-                        if (res.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing IPv6 packet: {}",
-                                                res.cause().getMessage());
-                        }
-                });
+                processIpPacket(packet, json, rawData);
         }
 
         private void processIpPacket(Packet packet, JsonObject json, byte[] rawData) {
@@ -724,7 +700,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 ndpiFlow.lastSeen = ts;
 
                 // Send packet to nDPI for analysis
-                vertx.executeBlocking(promise -> {
                         try {
                                 IpPacket ip = packet.get(IpPacket.class); // IpPacket
                                 byte[] payload = ip.getRawData();
@@ -737,13 +712,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
                                                 e.getMessage());
                         }
-                        promise.complete();
-                }, false, res -> {
-                        if (res.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error analyzing packet with nDPI: {}",
-                                                res.cause().getMessage());
-                        }
-                });
                 // Update or create flow
                 flows.compute(key, (k, f) -> {
                         // Create treatmentDelay JsonObject if null
@@ -999,7 +967,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                                                 enrichedFlow.srcCountry, enrichedFlow.dstCountry,
                                                                 enrichedFlow.srcDomain, enrichedFlow.dstDomain,
                                                                 enrichedFlow.srcOrg, enrichedFlow.dstOrg);
-                                                
 
                                                 KafkaProducerRecord<String, String> record = KafkaProducerRecord
                                                                 .create(OUT_TOPIC, enrichedFlow.key, value);
