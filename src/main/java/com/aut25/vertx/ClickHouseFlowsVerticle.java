@@ -230,8 +230,6 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                         pstmt.setString(53, dstOrg);
 
                                         pstmt.executeUpdate();
-                                        logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Inserted flow into ClickHouse: srcIp={}, dstIp={}, protocol={}, firstSeen={}, lastSeen={}",
-                                                        srcIp, dstIp, protocol, firstSeen, lastSeen);
                                 }
 
                         } catch (Exception e) {

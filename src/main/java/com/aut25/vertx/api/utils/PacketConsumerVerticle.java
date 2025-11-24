@@ -47,7 +47,6 @@ public class PacketConsumerVerticle extends AbstractVerticle {
 
                 JsonObject packet = new JsonObject(value);
                 vertx.eventBus().publish("packets.data", packet);
-                logger.debug("[ PACKET CONSUMER VERTICLE ]      Processed packet: {}", packet.encode());
             } catch (Exception e) {
                 logger.error("[ PACKET CONSUMER VERTICLE ]      Error processing packet: {}", e.getMessage());
             }

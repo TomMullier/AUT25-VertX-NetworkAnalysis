@@ -149,7 +149,6 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         .create("network-data", record.encode());
                                         producer.send(kafkaRecord, ar -> {
                                                 if (ar.succeeded()) {
-                                                        logger.debug("[ INGESTION VERTICLE ]            Record sent to Kafka.");
                                                 } else {
                                                         logger.error("[ INGESTION VERTICLE ]            Failed to send record to Kafka: "
                                                                         + ar.cause().getMessage());
@@ -537,11 +536,6 @@ public class IngestionVerticle extends AbstractVerticle {
                                 .put("ingestedAt", System.currentTimeMillis())
                                 .put("delay", delay)
                                 .put("rawPacket", base64Packet);
-
-                // logger.debug("[ INGESTION VERTICLE ] Processing packet at timestamp: {} with
-                // delay: {} ms",
-                // packetTimestamp, delay);
-
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
                                 record.encode());
                 if (running.get() == false)

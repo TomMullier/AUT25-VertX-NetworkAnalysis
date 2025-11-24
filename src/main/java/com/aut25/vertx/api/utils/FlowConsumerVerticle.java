@@ -47,7 +47,6 @@ public class FlowConsumerVerticle extends AbstractVerticle {
                 }
                 JsonObject flow = new JsonObject(value);
                 vertx.eventBus().publish("flows.data", flow);
-                logger.debug("[ FLOW CONSUMER VERTICLE ]        Processed flow: {}", flow.encode());
             } catch (Exception e) {
                 logger.error("[ FLOW CONSUMER VERTICLE ]        Error processing flow: {}", e.getMessage());
             }

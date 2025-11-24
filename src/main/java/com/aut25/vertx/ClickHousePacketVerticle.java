@@ -102,9 +102,6 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                                                 pstmt.executeUpdate();
                                         }
 
-                                        logger.debug("[ CLICKHOUSE PACKET VERTICLE ]    Inserted packet into ClickHouse: srcIp={}, dstIp={}, protocol={}, timestamp={}",
-                                                        srcIp, dstIp, protocol, timestamp);
-
                                 }
                         } catch (Exception e) {
                                 logger.error("[ CLICKHOUSE PACKET VERTICLE ]    Error processing record: {}",

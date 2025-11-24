@@ -10,3 +10,7 @@
 ::-webkit-scrollbar-thumb:hover {
         background: #6b7280;
 }
+
+* {
+        font-family: 'Inter', sans-serif;
+}

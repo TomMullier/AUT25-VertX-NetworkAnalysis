@@ -211,7 +211,21 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         try {
                                 JsonObject json = new JsonObject(value);
-                                processRecord(json);
+                                vertx.executeBlocking(promise -> {
+                                        try {
+                                                processRecord(json);
+                                        } catch (Exception e) {
+                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                                                                e.getMessage());
+                                        } finally {
+                                                promise.complete();
+                                        }
+                                }, false, res -> {
+                                        if (res.failed()) {
+                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                                                                res.cause().getMessage());
+                                        }
+                                });
                         } catch (Exception e) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
                                                 e.getMessage());
@@ -231,6 +245,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Periodic cleanup task to flush expired flows
                 vertx.setPeriodic(FLOW_CLEAN_PERIOD_MS, id -> {
+                        if (!running.get())
+                                return;
+                        loopFlushEveryDelay();
+                });
+        }
+
+        private void loopFlushEveryDelay() {
+                vertx.executeBlocking(promise -> {
                         if (!running.get())
                                 return;
 
@@ -263,7 +285,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 }
                                 iterator.remove();
                         }
-
+                        promise.complete();
+                }, false, res -> {
+                        if (res.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error in flush loop: {}",
+                                                res.cause().getMessage());
+                        }
                 });
         }
 
@@ -275,9 +302,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private void flushExpiredFlows(long referenceTimeMs) {
                 if (!running.get())
                         return;
-
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Reference time for flushing: {}",
-                                referenceTimeMs);
 
                 // Iterate safely over the entry set so we can remove while iterating
                 Iterator<Map.Entry<String, Flow>> it = flows.entrySet().iterator();
@@ -308,10 +332,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
 
                         if (inactive || tooOld) {
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Checking flow: key={} inactivityTimeout={} maxAge={}",
-                                                f.key, inactivityTimeout, maxAge);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Inactivity duration: {} ms, Age duration: {} ms",
-                                                (referenceTimeMs - f.lastSeen), (referenceTimeMs - f.firstSeen));
+                                
                                 // remove via iterator to avoid ConcurrentModificationException on
                                 // non-concurrent maps
                                 it.remove();
@@ -440,8 +461,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskScore = ndpi.getFlowRiskScore(f.ndpiFlowPtr);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskScore={}",
-                                                f.key, riskScore);
+                                
                                 return riskScore;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk for flow {}: {}", f.key,
@@ -461,8 +481,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskMask = ndpi.getFlowRiskMask(f.ndpiFlowPtr);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskMask={}",
-                                                f.key, riskMask);
+                                
                                 return riskMask;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk mask for flow {}: {}", f.key,
@@ -482,8 +501,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskLabel = ndpi.getFlowRiskLabel(f.ndpiFlowPtr);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskLabel={}",
-                                                f.key, riskLabel);
+                                
                                 return riskLabel;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk label for flow {}: {}", f.key,
@@ -503,8 +521,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskSeverity = ndpi.getFlowRiskSeverity(f.ndpiFlowPtr);
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} has nDPI riskSeverity={}",
-                                                f.key, riskSeverity);
+                                
                                 return riskSeverity;
                         } catch (Exception e) {
                                 logger.warn("Failed to get nDPI risk severity for flow {}: {}", f.key,
@@ -541,7 +558,15 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         + "[ FLOWAGGREGATOR VERTICLE ]       Received PCAP_DONE message. Finished processing pcap file."
                                         + Colors.RESET);
                         // flush any remaining flows
-                        flushRemainingFlows();
+                        vertx.executeBlocking(promise -> {
+                                flushRemainingFlows();
+                                promise.complete();
+                        }, false, res -> {
+                                if (res.failed()) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error flushing remaining flows: {}",
+                                                        res.cause().getMessage());
+                                }
+                        });
                         return;
                 }
                 // Parse the raw packet data
@@ -566,7 +591,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return; // skip this record
                 }
 
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Parsed packet: " + packet);
                 EthernetPacket eth = packet.get(EthernetPacket.class);
                 if (eth == null) {
                         logger.error("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
@@ -584,22 +608,18 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 int etherType = ethHeader.getType().value() & 0xFFFF;
                 switch (etherType) {
                         case 0x0800: // IPv4
-                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: IPv4 (0x0800)");
                                 handleIPv4(packet, json, rawData);
                                 break;
 
                         case 0x86DD: // IPv6
-                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: IPv6 (0x86DD)");
                                 handleIPv6(packet, json, rawData);
                                 break;
 
                         case 0x0806: // ARP
-                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: ARP (0x0806)");
                                 handleArp(packet, json);
                                 break;
 
                         case 0x8100: // VLAN
-                                logger.debug("[FLOWAGGREGATOR] Ethernet Type: VLAN (0x8100)");
                                 handleVlanEncapsulated(packet, json, rawData);
                                 break;
 
@@ -625,7 +645,15 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return;
                 }
                 ipv4PacketCount++;
-                processIpPacket(packet, json, rawData);
+                vertx.executeBlocking(promise -> {
+                        processIpPacket(packet, json, rawData);
+                        promise.complete();
+                }, false, res -> {
+                        if (res.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing IPv4 packet: {}",
+                                                res.cause().getMessage());
+                        }
+                });
         }
 
         private void handleIPv6(Packet packet, JsonObject json, byte[] rawData) {
@@ -636,7 +664,15 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return;
                 }
                 ipv6PacketCount++;
-                processIpPacket(packet, json, rawData);
+                vertx.executeBlocking(promise -> {
+                        processIpPacket(packet, json, rawData);
+                        promise.complete();
+                }, false, res -> {
+                        if (res.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing IPv6 packet: {}",
+                                                res.cause().getMessage());
+                        }
+                });
         }
 
         private void processIpPacket(Packet packet, JsonObject json, byte[] rawData) {
@@ -671,11 +707,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (tcpHeader.getFin()) {
                                 flowEnded.set(true);
                                 endFlag = "FIN";
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (FIN). Will flush early.");
                         } else if (tcpHeader.getRst()) {
                                 flowEnded.set(true);
                                 endFlag = "RST";
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       TCP termination detected (RST). Will flush early.");
                         }
                 }
 
@@ -690,28 +724,34 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 ndpiFlow.lastSeen = ts;
 
                 // Send packet to nDPI for analysis
-                try {
-                        IpPacket ip = packet.get(IpPacket.class); // IpPacket
-                        byte[] payload = ip.getRawData();
+                vertx.executeBlocking(promise -> {
+                        try {
+                                IpPacket ip = packet.get(IpPacket.class); // IpPacket
+                                byte[] payload = ip.getRawData();
 
-                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
+                                String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
 
-                        if (!"UNKNOWN".equalsIgnoreCase(ndpiProtocol)) {
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flow {} analyzed with nDPI: {}",
-                                                key, ndpiProtocol);
+                                ndpiFlow.detectedProtocol = ndpiProtocol;
+
+                        } catch (Exception e) {
+                                logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
+                                                e.getMessage());
                         }
-
-                        ndpiFlow.detectedProtocol = ndpiProtocol;
-
-                } catch (Exception e) {
-                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
-                                        e.getMessage());
-                }
+                        promise.complete();
+                }, false, res -> {
+                        if (res.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error analyzing packet with nDPI: {}",
+                                                res.cause().getMessage());
+                        }
+                });
                 // Update or create flow
                 flows.compute(key, (k, f) -> {
+                        // Create treatmentDelay JsonObject if null
+
                         if (f == null) {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
                                 f.ndpiFlowPtr = ndpiFlow.ndpiFlowPtr;
+                                f.treatmentDelay = new ArrayList<>();
                         }
                         // update
                         String packId = setPacketId(srcIp, dstIp, protocol, ts, packet);
@@ -722,9 +762,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.bytes += bytes != null ? bytes : 0;
                         f.treatmentDelay.add(System.currentTimeMillis()
                                         - json.getLong("ingestedAt", 0L));
-
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow updated: {} firstSeen={} lastSeen={} bytes={} packets={}",
-                                        f.key, f.firstSeen, f.lastSeen, f.bytes, f.packetCount);
 
                         // return f normally; do not flush inside compute
 
@@ -756,9 +793,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 endedFlow.riskSeverity = getNDPIFlowRiskSeverity(endedFlow);
                                 publishFlow(endedFlow, endFlag);
                                 flushedEarlyCount++;
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow flushed early due to FIN/RST: {} firstSeen={} lastSeen={} bytes={} packets={}",
-                                                endedFlow.key, endedFlow.firstSeen, endedFlow.lastSeen, endedFlow.bytes,
-                                                endedFlow.packetCount);
                         }
                 }
 
@@ -948,45 +982,53 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 f.reasonOfFlowEnd = reasonOfFlowEnd;
                 f.calculateStats();
                 // Enrichissement avant publication
-                f.enrich(geoIPService, dnsService, whoisService, vertx)
-                                .onSuccess(enrichedFlow -> {
-                                        JsonObject jo = enrichedFlow.getJsonObject();
-                                        String value = jo.encode();
+                vertx.executeBlocking(promise -> {
 
-                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
-                                                        enrichedFlow.key, enrichedFlow.protocol,
-                                                        enrichedFlow.appProtocol,
-                                                        enrichedFlow.riskLevel, enrichedFlow.riskLabel,
-                                                        enrichedFlow.riskSeverity,
-                                                        enrichedFlow.bytes, enrichedFlow.packetCount,
-                                                        (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
-                                                        enrichedFlow.srcCountry, enrichedFlow.dstCountry,
-                                                        enrichedFlow.srcDomain, enrichedFlow.dstDomain,
-                                                        enrichedFlow.srcOrg, enrichedFlow.dstOrg);
-                                        // log treatment delay stats
-                                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Flow {} treatment delay stats (ns): {}",
-                                                        enrichedFlow.key,
-                                                        enrichedFlow.treatmentDelay.toString());
+                        f.enrich(geoIPService, dnsService, whoisService, vertx)
+                                        .onSuccess(enrichedFlow -> {
+                                                JsonObject jo = enrichedFlow.getJsonObject();
+                                                String value = jo.encode();
 
-                                        KafkaProducerRecord<String, String> record = KafkaProducerRecord
-                                                        .create(OUT_TOPIC, enrichedFlow.key, value);
+                                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
+                                                                enrichedFlow.key, enrichedFlow.protocol,
+                                                                enrichedFlow.appProtocol,
+                                                                enrichedFlow.riskLevel, enrichedFlow.riskLabel,
+                                                                enrichedFlow.riskSeverity,
+                                                                enrichedFlow.bytes, enrichedFlow.packetCount,
+                                                                (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
+                                                                enrichedFlow.srcCountry, enrichedFlow.dstCountry,
+                                                                enrichedFlow.srcDomain, enrichedFlow.dstDomain,
+                                                                enrichedFlow.srcOrg, enrichedFlow.dstOrg);
+                                                
 
-                                        producer.write(record, ar -> {
-                                                if (ar.failed()) {
-                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
-                                                                        enrichedFlow.key,
-                                                                        ar.cause().getMessage());
-                                                }
+                                                KafkaProducerRecord<String, String> record = KafkaProducerRecord
+                                                                .create(OUT_TOPIC, enrichedFlow.key, value);
+
+                                                producer.write(record, ar -> {
+                                                        if (ar.failed()) {
+                                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
+                                                                                enrichedFlow.key,
+                                                                                ar.cause().getMessage());
+                                                        }
+                                                });
+                                        })
+                                        .onFailure(err -> {
+                                                logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
+                                                                f.key, err.getMessage());
+                                                // Publier quand même le flow non enrichi
+                                                JsonObject jo = f.getJsonObject();
+                                                producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
+                                                                jo.encode()));
                                         });
-                                })
-                                .onFailure(err -> {
-                                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
-                                                        f.key, err.getMessage());
-                                        // Publier quand même le flow non enrichi
-                                        JsonObject jo = f.getJsonObject();
-                                        producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key, jo.encode()));
-                                });
+                        promise.complete();
+                }, false, res -> {
+                        if (res.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error publishing flow {}: {}",
+                                                f.key, res.cause().getMessage());
 
+                        }
+
+                });
         }
 
         /**

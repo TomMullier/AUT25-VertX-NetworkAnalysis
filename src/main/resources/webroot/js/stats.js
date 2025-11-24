@@ -57,10 +57,13 @@ export function initCharts() {
                         datasets: [{
                                 label: "Average Packet Treatment Delay (ms)",
                                 data: [],
-                                borderColor: "rgba(0, 0, 0, 1)",
-                                backgroundColor: "rgba(0, 0, 0, 0.2)",
-                                fill: true,
-                                tension: 0.3
+                                borderColor: "#2563eb",
+                                backgroundColor: "#2563eb",
+                                fill: false,
+                                tension: 0.3,
+                                pointRadius: 3,
+                                pointHoverRadius: 6,
+                                borderWidth: 2
                         }]
                 },
                 options: {

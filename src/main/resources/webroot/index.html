@@ -8,36 +8,43 @@
 
         <!-- Tailwind (CDN) -->
         <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body class="bg-gray-50 text-gray-900 flex flex-col min-h-screen">
+<body class="bg-white text-gray-400 flex flex-col min-h-screen">
 
         <!-- ------------------------------- Header -------------------------------- -->
-        <header class="bg-gray-800 text-white p-6 shadow-md mb-6">
-                <h1 class="text-3xl font-bold text-center">Kafka Real-Time Dashboard</h1>
+        <header class="bg-gray-200 text-white p-3">
+                <h1 class="text-xl font-bold text-center text-gray-400" style="opacity: 0.5; font-family: Inter;">
+                        Network Dashboard</h1>
         </header>
 
         <!-- ---------------------------- Main Content ----------------------------- -->
-        <main class="flex-1 p-6 mx-auto w-full space-y-6">
-                <section id="status" class="p-4 bg-white rounded-2xl shadow">
-                        <h2 class="text-xl font-semibold mb-2">WebSocket Status</h2>
-                        <p id="connectionStatus" class="font-mono text-gray-700">Connecting to WebSocket...</p>
+        <main class="flex-1 p-2 mx-auto w-full space-y-2">
+                <section id="status" class="p-2 mb-0 rounded-l border border-gray-200 bg-white">
+                        <h2 class="text-xl font-semibold mb-2 text-blue-600" style="font-family: Inter;">WebSocket
+                                Status</h2>
+                        <p id="connectionStatus" class="font-mono text-gray-400" style="font-family: Inter;">Connecting
+                                to WebSocket...</p>
                 </section>
 
-                <section id="treatmentDelays" class="p-4 bg-white rounded-2xl shadow">
-                                <h2 class="text-xl font-semibold mb-4">Packet Treatment Delays <span>Average on last 50 flows :
-                                                <span id="averageDelayValue">0</span> ms</span></h2> 
-                                <div class="flex justify-center">
-                                                <canvas id="treatmentDelaysChart" class="w-[800px] h-[400px]"></canvas>
-                                </div>
+                <section id="treatmentDelays" class="p-2 rounded-l border border-gray-200 bg-white">
+                        <h2 class="text-xl font-semibold mb-2 text-blue-600">Packet Treatment Delays <span>Average on
+                                        last
+                                        50 flows :
+                                        <span id="averageDelayValue">0</span> ms</span></h2>
+                        <div class="flex justify-center">
+                                <canvas id="treatmentDelaysChart" class="w-[800px] h-[400px]"></canvas>
+                        </div>
                 </section>
 
                 <!-- --------------------------- Settings section ---------------------------- -->
-                <section id="settings" class="p-4 bg-white rounded-2xl shadow">
-                        <h2 class="text-xl font-semibold mb-4 flex justify-between items-center cursor-pointer"
+                <section id="settings" class="p-2 rounded-l border border-gray-200 bg-white">
+                        <h2 class="text-xl font-semibold mb-2 text-blue-600 flex justify-between items-center cursor-pointer"
                                 id="settingsToggle">
                                 <span>Settings</span>
                                 <span id="settingsArrow" class="ml-2">▶</span>
@@ -83,7 +90,7 @@
                                                         <label for="tcpTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">TCP
                                                                 Timeout (ms) <span
-                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        class="text-gray-400 text-xs">(Default:
                                                                         5000)</span></label>
                                                         <input type="number" id="tcpTimeout" name="tcpTimeout"
                                                                 placeholder="5000" value="5000"
@@ -93,7 +100,7 @@
                                                         <label for="udpTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">UDP
                                                                 Timeout (ms) <span
-                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        class="text-gray-400 text-xs">(Default:
                                                                         30000)</span></label>
                                                         <input type="number" id="udpTimeout" name="udpTimeout"
                                                                 placeholder="30000" value="30000"
@@ -103,7 +110,7 @@
                                                         <label for="otherTimeout"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">Other
                                                                 Timeout (ms) <span
-                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        class="text-gray-400 text-xs">(Default:
                                                                         60000)</span></label>
                                                         <input type="number" id="otherTimeout" name="otherTimeout"
                                                                 placeholder="60000" value="60000"
@@ -117,7 +124,7 @@
                                                         <label for="tcpMaxAge"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">TCP
                                                                 Max Age (ms) <span
-                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        class="text-gray-400 text-xs">(Default:
                                                                         300000)</span></label>
                                                         <input type="number" id="tcpMaxAge" name="tcpMaxAge"
                                                                 placeholder="300000" value="300000"
@@ -127,7 +134,7 @@
                                                         <label for="udpMaxAge"
                                                                 class="block text-sm font-medium text-gray-700 mb-2">UDP
                                                                 Max Age (ms) <span
-                                                                        class="text-gray-500 text-xs">(Default:
+                                                                        class="text-gray-400 text-xs">(Default:
                                                                         120000)</span></label>
                                                         <input type="number" id="udpMaxAge" name="udpMaxAge"
                                                                 placeholder="120000" value="120000"
@@ -138,7 +145,7 @@
                                                                 class="block text-sm font-medium text-gray-700 mb-2">Other
                                                                 Max
                                                                 Age
-                                                                (ms) <span class="text-gray-500 text-xs">(Default:
+                                                                (ms) <span class="text-gray-400 text-xs">(Default:
                                                                         300000)</span></label>
                                                         <input type="number" id="otherMaxAge" name="otherMaxAge"
                                                                 placeholder="300000" value="300000"
@@ -149,7 +156,7 @@
                                         <!-- Apply Button -->
                                         <div class="col-span-2 flex justify-center mt-4">
                                                 <button type="submit"
-                                                        class="px-10 py-2 bg-gray-500 text-white font-bold rounded hover:bg-gray-600 transition">
+                                                        class="px-10 py-2 bg-gray-400 text-white font-bold rounded hover:bg-gray-400 transition">
                                                         Apply
                                                 </button>
                                         </div>
@@ -158,22 +165,22 @@
                 </section>
 
                 <!-- ---------------------------- Flow section ----------------------------- -->
-                <section id="flows" class="p-4 bg-white rounded-2xl shadow max-w-full mx-auto">
-                        <h2 class="text-xl font-semibold mb-4">Received Flows</h2>
+                <section id="flows" class="p-2 bg-#070707 rounded-l border border-gray-200 bg-white">
+                        <h2 class="text-xl font-semibold mb-2 text-blue-600">Received Flows</h2>
 
 
 
                         <!-- ----------------------------- Search bar ------------------------------ -->
                         <div class="mb-4 flex items-center space-x-2">
                                 <input type="text" id="searchInput"
-                                        placeholder="🔍 Search for a flow (IP, port, protocol, org, etc.)..."
+                                        placeholder="Search for a flow (IP, port, protocol, org, etc.)..."
                                         class="flex-1 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                                 <button id="resetButton"
-                                        class="px-4 py-2 bg-gray-500 text-white font-bold rounded hover:bg-gray-600 transition">
+                                        class="px-4 py-2 bg-gray-400 text-white font-bold rounded hover:bg-gray-400 transition">
                                         Reset
                                 </button>
                         </div>
-                        <div id="resetMessage" class="mb-4 text-gray-600 font-medium">
+                        <div id="resetMessage" class="mb-4 text-gray-400 font-medium">
 
                         </div>
 
@@ -500,7 +507,7 @@
 
                         </section>
                         <!-- -------------------------- Risk evel legend --------------------------- -->
-                        <div class="mt-4 p-4 bg-gray-100 rounded-lg mx-auto mb-4">
+                        <div class="mt-4 p-2 bg-gray-100 rounded-lg mx-auto mb-4">
                                 <h3 class="text-lg font-semibold mb-4">Risk Level Legend</h3>
                                 <div class="grid grid-cols-2 gap-4">
                                         <div class="flex items-center">
@@ -611,8 +618,8 @@
                 </section> -->
 
                         <!-- --------------------------- Charts section ---------------------------- -->
-                        <section id="charts" class="p-4 bg-white rounded-2xl shadow">
-                                <h2 class="text-xl font-semibold mb-4">Visualizations</h2>
+                        <section id="charts" class="p-2 bg-#070707 rounded-l border border-gray-200 bg-white">
+                                <h2 class="text-xl font-semibold mb-2 text-blue-600">Visualizations</h2>
 
                                 <div class="grid grid-cols-4 gap-6 justify-items-center items-center">
 
@@ -638,7 +645,7 @@
                                 <div class="bg-white rounded-xl shadow-xl p-6 max-w-4xl w-full relative transform transition-all duration-300 scale-95"
                                         style="margin:auto; margin-top:10vh; max-height:80vh; overflow-y:auto;">
                                         <button id="closeModal"
-                                                class="absolute top-2 right-2 text-gray-500 hover:text-black text-xl font-bold">&times;</button>
+                                                class="absolute top-2 right-2 text-gray-400 hover:text-black text-xl font-bold">&times;</button>
                                         <h3 class="text-lg font-semibold mb-4" id="modalTitle">Flow Details</h3>
                                         <pre id="jsonContent"
                                                 class="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[70vh] text-sm font-mono"></pre>
@@ -650,7 +657,7 @@
         </main>
 
         <!-- ------------------------------- Footer -------------------------------- -->
-        <footer class="bg-gray-200 text-center p-4 text-sm">
+        <footer class="bg-gray-200 text-center p-2 text-sm">
                 © 2025 - Kafka Real-Time Dashboard. All rights reserved.
         </footer>
         <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
