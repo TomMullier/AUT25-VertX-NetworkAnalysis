@@ -18,6 +18,8 @@ import java.util.Iterator;
 import java.io.EOFException;
 import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
+import java.util.PriorityQueue;
+import java.util.Comparator;
 
 import com.aut25.vertx.utils.Colors;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -44,6 +46,8 @@ import io.vertx.kafka.client.producer.KafkaProducer;
 import io.vertx.kafka.client.producer.KafkaProducerRecord;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import java.util.PriorityQueue;
+import java.util.Comparator;
 
 public class IngestionVerticle extends AbstractVerticle {
 
@@ -51,6 +55,20 @@ public class IngestionVerticle extends AbstractVerticle {
         private KafkaProducer<String, String> producer;
         private final AtomicBoolean running = new AtomicBoolean(true);
         private JsonObject config;
+
+        private class PacketWrapper {
+                Packet packet;
+                long timestamp;
+                long delta;
+
+                public PacketWrapper(Packet packet, long timestamp, long delta) {
+                        this.packet = packet;
+                        this.timestamp = timestamp;
+                        this.delta = delta;
+                }
+        }
+
+        private PriorityQueue<PacketWrapper> packetQueue = new PriorityQueue<>();
 
         @Override
         public void start() throws Exception {
@@ -468,10 +486,22 @@ public class IngestionVerticle extends AbstractVerticle {
                                 List<Long> deltas = (List<Long>) result.get(1);
                                 @SuppressWarnings("unchecked")
                                 List<Long> timestamps = (List<Long>) result.get(2);
+                                // Après avoir rempli packets, deltas, timestamps
+                                packetQueue = new PriorityQueue<>(Comparator.comparingLong(pw -> pw.timestamp));
 
-                                // Publier les paquets sur Kafka en respectant les délais
-                                AtomicInteger index = new AtomicInteger(0);
-                                publishNextPacket(packets, deltas, timestamps, index);
+                                Iterator<Packet> packetIterator = packets.iterator();
+                                Iterator<Long> deltaIterator = deltas.iterator();
+                                Iterator<Long> timestampIterator = timestamps.iterator();
+
+                                while (packetIterator.hasNext() && deltaIterator.hasNext()
+                                                && timestampIterator.hasNext()) {
+                                        packetQueue.add(new PacketWrapper(packetIterator.next(),
+                                                        timestampIterator.next(),
+                                                        deltaIterator.next()));
+                                }
+
+                                // Lancer la publication
+                                publishNextFromQueue();
                         } else {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to process pcap file: "
                                                 + res.cause().getMessage());
@@ -479,46 +509,30 @@ public class IngestionVerticle extends AbstractVerticle {
                 });
         }
 
-        private void publishNextPacket(List<Packet> packets, List<Long> deltas, List<Long> timestamps,
-                        AtomicInteger index) {
-                JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject());
-                String delayConfig = pcapConfig.getString("delay", "true");
-
-                while (index.get() < packets.size() && running.get()) {
-                        Packet packet = packets.get(index.get());
-                        long packetTimestamp = timestamps.get(index.get());
-                        long rawDelay = deltas.get(index.getAndIncrement());
-                        final long safeDelay = Math.max(rawDelay, 1);
-
-                        if (delayConfig.equals("false") || rawDelay < 1) {
-                                // Process immediately sans recursion
-                                processPacket(packet, rawDelay, packetTimestamp);
-                        } else {
-                                // Pour les paquets avec délai, sortir de la boucle et utiliser vertx.setTimer
-                                vertx.setTimer(safeDelay, id -> {
-                                        processPacket(packet, safeDelay, packetTimestamp);
-                                        publishNextPacket(packets, deltas, timestamps, index);
-                                });
-                                return; // on sort de la méthode pour attendre le timer
-                        }
-                }
-
-                // Quand tous les paquets sont traités
-                if (index.get() >= packets.size()) {
-
+        private void publishNextFromQueue() {
+                if (!running.get() || packetQueue.isEmpty()) {
+                        // Tous les paquets traités, envoyer PCAP_DONE
                         JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
-                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord
-                                        .create("network-data", doneMessage.encode());
-
+                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
+                                        doneMessage.encode());
                         producer.send(kafkaRecord, ar -> {
                                 if (ar.succeeded()) {
-                                        logger.info("[ INGESTION VERTICLE ] PCAP finished message sent to Kafka.");
+                                        logger.info("[INGESTION] PCAP finished message sent to Kafka.");
                                 } else {
-                                        logger.error("[ INGESTION VERTICLE ] Failed to send PCAP_DONE message: "
+                                        logger.error("[INGESTION] Failed to send PCAP_DONE message: "
                                                         + ar.cause().getMessage());
                                 }
                         });
+                        return;
                 }
+
+                PacketWrapper pw = packetQueue.poll(); // récupère le paquet avec le plus petit timestamp
+                long safeDelay = Math.max(pw.delta, 1);
+
+                vertx.setTimer(safeDelay, id -> {
+                        processPacket(pw.packet, safeDelay, pw.timestamp);
+                        publishNextFromQueue(); // récursion pour le paquet suivant
+                });
         }
 
         /**

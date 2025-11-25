@@ -8,6 +8,7 @@ com/aut25/vertx/utils/NdpiFlowWrapper.class
 com/aut25/vertx/api/routes/UtilsRoute.class
 com/aut25/vertx/ClickHouseFlowsVerticle.class
 com/aut25/vertx/FlowAggregatorVerticle.class
+com/aut25/vertx/IngestionVerticle$PacketWrapper.class
 com/aut25/vertx/FlowAggregatorVerticle$Ports.class
 com/aut25/vertx/ClickHousePacketVerticle.class
 com/aut25/vertx/api/WebServerVerticle.class
