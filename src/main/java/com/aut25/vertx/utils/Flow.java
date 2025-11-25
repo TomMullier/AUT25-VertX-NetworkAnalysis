@@ -36,6 +36,14 @@ import com.maxmind.geoip2.exception.AddressNotFoundException;
  */
 public class Flow {
 
+        public boolean finFromSrc = false;
+        public boolean finAckedByDst = false;
+        public boolean finFromDst = false;
+        public boolean finAckedBySrc = false;
+
+        public long finSrcSeq = -1;
+        public long finDstSeq = -1;
+
         // logger
 
         public String srcIp = "";
@@ -638,6 +646,10 @@ public class Flow {
                         }
                 }
                 return "No match";
+        }
+
+        public boolean isProperlyClosed() {
+                return finFromSrc && finAckedByDst && finFromDst && finAckedBySrc;
         }
 
 }

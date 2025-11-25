@@ -60,11 +60,14 @@ public class IngestionVerticle extends AbstractVerticle {
                 Packet packet;
                 long timestamp;
                 long delta;
+                long index;
 
-                public PacketWrapper(Packet packet, long timestamp, long delta) {
+                public PacketWrapper(Packet packet, long timestamp, long delta, long index) {
                         this.packet = packet;
                         this.timestamp = timestamp;
                         this.delta = delta;
+                        this.index = index;
+
                 }
         }
 
@@ -487,17 +490,21 @@ public class IngestionVerticle extends AbstractVerticle {
                                 @SuppressWarnings("unchecked")
                                 List<Long> timestamps = (List<Long>) result.get(2);
                                 // Après avoir rempli packets, deltas, timestamps
-                                packetQueue = new PriorityQueue<>(Comparator.comparingLong(pw -> pw.timestamp));
+                                packetQueue = new PriorityQueue<>(
+                                                Comparator.comparingLong((PacketWrapper pw) -> pw.timestamp)
+                                                                .thenComparingLong(pw -> pw.index));
 
                                 Iterator<Packet> packetIterator = packets.iterator();
                                 Iterator<Long> deltaIterator = deltas.iterator();
                                 Iterator<Long> timestampIterator = timestamps.iterator();
-
+                                long index = 0;
                                 while (packetIterator.hasNext() && deltaIterator.hasNext()
                                                 && timestampIterator.hasNext()) {
                                         packetQueue.add(new PacketWrapper(packetIterator.next(),
                                                         timestampIterator.next(),
-                                                        deltaIterator.next()));
+                                                        deltaIterator.next(),
+                                                        index));
+                                        index++;
                                 }
 
                                 // Lancer la publication

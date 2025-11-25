@@ -65,6 +65,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private final Map<String, Flow> flows = new ConcurrentHashMap<>();
         private List<Flow> toFlush = new ArrayList<>();
+        private String endFlag = "";
         private List<Flow> currentFlows = new ArrayList<>();
         private final AtomicBoolean running = new AtomicBoolean(true);
         private long notIpPacketCount = 0;
@@ -85,6 +86,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private GeoIPService geoIPService;
         private DnsService dnsService;
         private WhoisService whoisService;
+
+        private long currentTs = 0;
+        private long oldTs = 0;
 
         @Override
         public void start() throws Exception {
@@ -147,7 +151,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("auto.offset.reset", "earliest");
 
                 // Pour réduire la latence, commit manuel ou auto très fréquent
-                consumerConfig.put("enable.auto.commit", "true");
+                consumerConfig.put("enable.auto.commit", "false");
                 consumerConfig.put("auto.commit.interval.ms", "100"); // Valeur ultra faible
 
                 // Latence minimale : récupérer le plus vite possible
@@ -211,12 +215,30 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                         try {
                                 JsonObject json = new JsonObject(value);
+                                // ! check
+                                if (oldTs == 0) {
+                                        oldTs = json.getLong("timestamp", System.currentTimeMillis());
+                                } else {
+                                        currentTs = json.getLong("timestamp", System.currentTimeMillis());
+                                        if (currentTs < oldTs) {
+                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Timestamp went backwards: oldTs={} currentTs={}",
+                                                                oldTs, currentTs);
+                                        }
+                                        oldTs = currentTs;
+                                }
                                 try {
                                         processRecord(json);
                                 } catch (Exception e) {
                                         logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
                                                         e.getMessage());
                                 } finally {
+                                        // Commit manuel après traitement
+                                        consumer.commit(ar -> {
+                                                if (ar.failed()) {
+                                                        logger.error("[FLOWAGGREGATOR] Commit failed: {}",
+                                                                        ar.cause().getMessage());
+                                                }
+                                        });
                                 }
                         } catch (Exception e) {
                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
@@ -675,19 +697,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Check for TCP FIN/RST to end flow early
                 AtomicBoolean flowEnded = new AtomicBoolean(false);
-                String endFlag = "";
-                if (ipPacket.contains(TcpPacket.class)) {
-                        TcpPacket tcp = ipPacket.get(TcpPacket.class);
-                        TcpPacket.TcpHeader tcpHeader = tcp.getHeader();
-
-                        if (tcpHeader.getFin()) {
-                                flowEnded.set(true);
-                                endFlag = "FIN";
-                        } else if (tcpHeader.getRst()) {
-                                flowEnded.set(true);
-                                endFlag = "RST";
-                        }
-                }
+                
 
                 // Build bilateral flow key
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
@@ -700,18 +710,18 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 ndpiFlow.lastSeen = ts;
 
                 // Send packet to nDPI for analysis
-                        try {
-                                IpPacket ip = packet.get(IpPacket.class); // IpPacket
-                                byte[] payload = ip.getRawData();
+                try {
+                        IpPacket ip = packet.get(IpPacket.class); // IpPacket
+                        byte[] payload = ip.getRawData();
 
-                                String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
+                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
 
-                                ndpiFlow.detectedProtocol = ndpiProtocol;
+                        ndpiFlow.detectedProtocol = ndpiProtocol;
 
-                        } catch (Exception e) {
-                                logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
-                                                e.getMessage());
-                        }
+                } catch (Exception e) {
+                        logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
+                                        e.getMessage());
+                }
                 // Update or create flow
                 flows.compute(key, (k, f) -> {
                         // Create treatmentDelay JsonObject if null
@@ -731,7 +741,50 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.treatmentDelay.add(System.currentTimeMillis()
                                         - json.getLong("ingestedAt", 0L));
 
-                        // return f normally; do not flush inside compute
+                        if (ipPacket.contains(TcpPacket.class)) {
+                                TcpPacket tcp = ipPacket.get(TcpPacket.class);
+                                TcpPacket.TcpHeader tcpHeader = tcp.getHeader();
+
+                                if (tcpHeader.getFin()) {
+                                        if (srcIp.equals(f.srcIp) && srcPort.equals(f.srcPort)) {
+                                                f.finFromSrc = true;
+                                                f.finSrcSeq = tcpHeader.getSequenceNumber();
+                                        } else {
+                                                f.finFromDst = true;
+                                                f.finDstSeq = tcpHeader.getSequenceNumber();
+                                        }
+                                } else if (tcpHeader.getAck()) {
+
+                                        long ack = tcpHeader.getAcknowledgmentNumber();
+
+                                        // ACK du FIN SRC
+                                        if (f.finFromSrc && !f.finAckedByDst &&
+                                                        ack == f.finSrcSeq + 1 &&
+                                                        srcIp.equals(f.dstIp)) {
+                                                f.finAckedByDst = true;
+                                        }
+
+                                        // ACK du FIN DST
+                                        if (f.finFromDst && !f.finAckedBySrc &&
+                                                        ack == f.finDstSeq + 1 &&
+                                                        srcIp.equals(f.srcIp)) {
+                                                f.finAckedBySrc = true;
+                                        }
+                                }
+
+                                // if TCP RST flag is set, end flow immediately
+                                if (tcpHeader.getRst()) {
+                                        flowEnded.set(true);
+                                        endFlag = "TCP RST";
+                                }
+
+                                // Check if flow is properly closed
+                                if (f.isProperlyClosed()) {
+                                        flowEnded.set(true);
+                                        endFlag = "TCP FIN";
+                                }
+
+                        }
 
                         return f;
                 });
