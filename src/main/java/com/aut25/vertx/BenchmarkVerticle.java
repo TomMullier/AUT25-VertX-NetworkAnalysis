@@ -27,6 +27,7 @@ import java.nio.file.StandardOpenOption;
 
 import org.pcap4j.packet.Packet;
 import org.pcap4j.packet.TcpPacket;
+import org.pcap4j.packet.UdpPacket;
 
 import java.util.Base64;
 import java.util.HashMap;
@@ -45,15 +46,49 @@ public class BenchmarkVerticle extends AbstractVerticle {
         private final AtomicBoolean running = new AtomicBoolean(true);// Analyse avec nDPI
         private int lineCount_packet = 0;
 
+        private String path_csv_packets = "_tests/benchmark/01_phase/csv/plateform_output_benign_slowloris.csv";
+        private long lineCount = 152730; // Nombre de lignes à écrire dans le CSV
+
         @Override
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ ANALYSE VERTICLE ]              Starting BenchmarkVerticle..."
                                 + Colors.RESET);
-                //! readPackets_to_CSV();
+                readPackets_to_CSV();
         }
 
         /**
-         * Read packets from Kafka topic "network-data" and write specific fields to a CSV file.
+         * Get the outer source port from an IP packet.
+         * @param ipPacket
+         * @return The outer source port as an integer.
+         */
+        private int getOuterSrcPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
+         * Get the outer destination port from an IP packet.
+         * @param ipPacket
+         * @return The outer destination port as an integer.
+         */
+        private int getOuterDstPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getDstPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getDstPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
+         * Read packets from Kafka topic "network-data" and write specific fields to a
+         * CSV file.
          */
         private void readPackets_to_CSV() {
 
@@ -77,7 +112,7 @@ public class BenchmarkVerticle extends AbstractVerticle {
                                                 .error("[ANALYSE VERTICLE] Failed to subscribe: " + err.getMessage()));
 
                 // CSV setup
-                Path csvPath = Paths.get("_tests/benchmark/01_phase/csv/plateform_analyse_output.csv");
+                Path csvPath = Paths.get(path_csv_packets);
                 BufferedWriter writer;
                 try {
                         Files.createDirectories(csvPath.getParent());
@@ -110,24 +145,21 @@ public class BenchmarkVerticle extends AbstractVerticle {
                                         int sport = 0;
                                         int dport = 0;
                                         int length = 0;
-
+                                        Packet packet = null;
                                         String rawPacketBase64 = json.getString("rawPacket");
                                         if (rawPacketBase64 != null) {
                                                 byte[] rawData = Base64.getDecoder().decode(rawPacketBase64);
-                                                Packet packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
+                                                packet = EthernetPacket.newPacket(rawData, 0, rawData.length);
                                                 length = packet.length();
 
                                                 if (packet.contains(IpPacket.class)) {
-                                                        IpPacket ipPacket = packet.get(IpPacket.class);
+                                                        IpPacket ipPacket = packet.get(IpPacket.class); // IP externe
                                                         srcIp = ipPacket.getHeader().getSrcAddr().getHostAddress();
                                                         dstIp = ipPacket.getHeader().getDstAddr().getHostAddress();
-
-                                                        if (ipPacket.contains(TcpPacket.class)) {
-                                                                TcpPacket tcp = ipPacket.get(TcpPacket.class);
-                                                                sport = tcp.getHeader().getSrcPort().valueAsInt();
-                                                                dport = tcp.getHeader().getDstPort().valueAsInt();
-                                                        }
+                                                        sport = getOuterSrcPort(ipPacket);
+                                                        dport = getOuterDstPort(ipPacket);
                                                 }
+
                                         }
 
                                         // Write CSV line
@@ -145,12 +177,11 @@ public class BenchmarkVerticle extends AbstractVerticle {
                                                 logger.error("Failed to write CSV line: " + e.getMessage());
                                         }
 
-                                        if (lineCount_packet == 10000) {
+                                        if (lineCount_packet == lineCount) {
                                                 logger.info("[ANALYSE VERTICLE] Written {} lines to CSV.",
                                                                 lineCount_packet);
                                                 // Stop program
                                                 running.set(false);
-                                                // emulate ctrl-c
                                                 vertx.close();
                                                 return;
                                         }

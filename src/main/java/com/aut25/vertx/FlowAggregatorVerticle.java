@@ -697,7 +697,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Check for TCP FIN/RST to end flow early
                 AtomicBoolean flowEnded = new AtomicBoolean(false);
-                
 
                 // Build bilateral flow key
                 String key = buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
@@ -942,6 +941,38 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         }
 
         /**
+         * Get the outer source port from an IP packet.
+         * 
+         * @param ipPacket
+         * @return The outer source port as an integer.
+         */
+        private int getOuterSrcPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
+         * Get the outer destination port from an IP packet.
+         * 
+         * @param ipPacket
+         * @return The outer destination port as an integer.
+         */
+        private int getOuterDstPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getDstPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getDstPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
          * Helper class to hold source and destination ports
          * 
          * @param ipPacket the IP packet to extract ports from
@@ -950,11 +981,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         private Ports getPacketPorts(Packet ipPacket) {
                 if (ipPacket.getPayload() instanceof TcpPacket tcp) {
-                        return new Ports(tcp.getHeader().getSrcPort().valueAsInt(),
-                                        tcp.getHeader().getDstPort().valueAsInt());
+                        return new Ports(getOuterSrcPort((IpPacket) ipPacket),
+                                        getOuterDstPort((IpPacket) ipPacket));
                 } else if (ipPacket.getPayload() instanceof UdpPacket udp) {
-                        return new Ports(udp.getHeader().getSrcPort().valueAsInt(),
-                                        udp.getHeader().getDstPort().valueAsInt());
+                        return new Ports(getOuterSrcPort((IpPacket) ipPacket),
+                                        getOuterDstPort((IpPacket) ipPacket));
                 }
                 return new Ports(null, null);
         }

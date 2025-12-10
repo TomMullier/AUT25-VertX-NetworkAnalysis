@@ -266,20 +266,37 @@ check_and_start_service "kafka" "src/main/resources/kafka-docker-compose.yml"
 check_and_start_service "clickhouse" "src/main/resources/kafka-docker-compose.yml"
 echo ""
 
-# === Kafka Topics ===
 TOPIC_NAME="network-data"
 TOPIC_NAME2="network-flows"
 
-echo -e "${BLUE}=== Resetting Kafka topic: ${YELLOW}$TOPIC_NAME${NC}"
+# Ensure Kafka is running
+echo "=== Vérification de Kafka ==="
+if ! docker ps --format '{{.Names}}' | grep -q '^kafka$'; then
+    echo "❌ Kafka n'est pas lancé. Tentative de démarrage..."
+    docker start kafka >/dev/null 2>&1 || {
+        echo "Erreur : impossible de démarrer le conteneur Kafka."
+        exit 1
+    }
+    sleep 5
+fi
+
+# Wait until Kafka is ready
+until docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1; do
+    echo "⏳ Kafka n'est pas encore prêt..."
+    sleep 2
+done
+
+# Reset topics
+echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME 2>/dev/null
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --topic $TOPIC_NAME --partitions 1 --replication-factor 1
-echo -e "${GREEN}✅ Topic $TOPIC_NAME has been reset.${NC}"
+echo "✅ Topic $TOPIC_NAME has been reset."
 
-echo -e "${BLUE}=== Resetting Kafka topic: ${YELLOW}$TOPIC_NAME2${NC}"
+echo "=== Resetting Kafka topic: $TOPIC_NAME2 ==="
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME2 2>/dev/null
 docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --topic $TOPIC_NAME2 --partitions 1 --replication-factor 1
-echo -e "${GREEN}✅ Topic $TOPIC_NAME2 has been reset.${NC}"
-echo ""
+echo "✅ Topic $TOPIC_NAME2 has been reset."
+
 
 
 # === ClickHouse setup ===

@@ -15,68 +15,72 @@
         <link rel="stylesheet" href="css/style.css">
 </head>
 
-<body class="text-gray-400 flex flex-col min-h-screen p-4">
+<body class="text-gray-400 flex flex-col min-h-screen">
 
         <!-- ------------------------------- Header -------------------------------- -->
-        <header class=" text-white p-2">
-        <div class="flex justify-between items-center h-16 space-x-10">
-                <h1 class="text-2xl font-normal text-left text-gray-400">
-                        network dashboard
-                </h1>
-                <div class="flex items-center space-x-2">
-                        <div
-                                class="flex items-center rounded focus-within:ring-2 focus-within:ring-gray-700 rounded-2xl">
-                                <span class="pl-2 pr-1">
-                                        <svg width="20px" height="20px" viewBox="0 0 20 20"
-                                                xmlns="http://www.w3.org/2000/svg">
-                                                <path
-                                                        d="M17.545 15.467l-3.779-3.779a6.15 6.15 0 0 0 .898-3.21c0-3.417-2.961-6.377-6.378-6.377A6.185 6.185 0 0 0 2.1 8.287c0 3.416 2.961 6.377 6.377 6.377a6.15 6.15 0 0 0 3.115-.844l3.799 3.801a.953.953 0 0 0 1.346 0l.943-.943c.371-.371.236-.84-.135-1.211zM4.004 8.287a4.282 4.282 0 0 1 4.282-4.283c2.366 0 4.474 2.107 4.474 4.474a4.284 4.284 0 0 1-4.283 4.283c-2.366-.001-4.473-2.109-4.473-4.474z" />
-                                        </svg>
-                                </span>
-                                <input type="text" id="searchInput" placeholder="search for a flow"
-                                        class="flex-1 pl-4 pr-4 pt-2 pb-2 border-none focus:outline-none rounded-2xl text-gray-800 opacity-70 placeholder-gray-400 focus:opacity-100">
-                                <button id="resetButton"
-                                        class="p-1 bg-gray-400 text-white font-extrabold rounded-2xl hover:bg-gray-400 transition ml-2">
-                                        <svg fill="#000000" width="12px" height="12px" viewBox="0 0 24 24" id="cross"
-                                                data-name="Line Color" xmlns="http://www.w3.org/2000/svg"
-                                                class="icon line-color">
-                                                <line id="primary" x1="19" y1="19" x2="5" y2="5"
-                                                        style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
-                                                </line>
+        <header class=" text-white p-4">
+                <div class="flex justify-between items-center h-16 space-x-10">
+                        <h1 class="text-2xl font-normal text-left text-gray-400">
+                                { network dashboard - flow analysis }
+                        </h1>
+                        <div class="flex items-center space-x-2">
+                                <div class="flex items-center rounded rounded-2xl">
+                                        <span class="pl-2 pr-1 loupe-icon">
+                                                <svg width="20px" height="20px" viewBox="0 0 20 20"
+                                                        xmlns="http://www.w3.org/2000/svg">
+                                                        <path
+                                                                d="M17.545 15.467l-3.779-3.779a6.15 6.15 0 0 0 .898-3.21c0-3.417-2.961-6.377-6.378-6.377A6.185 6.185 0 0 0 2.1 8.287c0 3.416 2.961 6.377 6.377 6.377a6.15 6.15 0 0 0 3.115-.844l3.799 3.801a.953.953 0 0 0 1.346 0l.943-.943c.371-.371.236-.84-.135-1.211zM4.004 8.287a4.282 4.282 0 0 1 4.282-4.283c2.366 0 4.474 2.107 4.474 4.474a4.284 4.284 0 0 1-4.283 4.283c-2.366-.001-4.473-2.109-4.473-4.474z" />
+                                                </svg>
+                                        </span>
+                                        <input type="text" id="searchInput" placeholder="search for a flow"
+                                                class="flex-1 pl-4 pr-4 pt-2 pb-2 border-none focus:outline-none rounded-2xl text-gray-800 opacity-70 placeholder-gray-400 focus:opacity-100">
+                                        <button id="resetButton"
+                                                class="p-1 bg-gray-400 text-white font-extrabold rounded-2xl hover:bg-gray-400 transition ml-2">
+                                                <svg fill="#000000" width="12px" height="12px" viewBox="0 0 24 24"
+                                                        id="cross" data-name="Line Color"
+                                                        xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+                                                        <line id="primary" x1="19" y1="19" x2="5" y2="5"
+                                                                style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
+                                                        </line>
 
-                                                <line id="primary-2" data-name="primary" x1="19" y1="5" x2="5" y2="19"
-                                                        style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
-                                                </line>
-                                        </svg>
-                                </button>
+                                                        <line id="primary-2" data-name="primary" x1="19" y1="5" x2="5"
+                                                                y2="19"
+                                                                style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
+                                                        </line>
+                                                </svg>
+                                        </button>
+                                </div>
                         </div>
+        </header>
+
+        <!-- ---------------------------- Main Content ----------------------------- -->
+        <div class="text-gray-800 text-3xl font-black welcome-message pl-4 mb-0">
+                welcome back, <span id="username" class="text-gray-400">Tom !</span>
+        </div>
+        <main class="flex-1 flex flex-row space-x-6 p-4">
+                <div id="left-col" class="flex flex-col flex-1 w-[20%]">
+                        <h2 id="status-title">Status</h2>
+                        <section id="status" class="">
+                                <h2 class="" style="font-family: Inter;">Websocket connection</h2>
+                                <p id="connectionStatus" class="font-mono text-gray-400" style="font-family: Inter;">
+                                        Connecting to WebSocket...</p>
+                        </section>
+                        <section id="treatmentDelays" class="">
+                                <h2 class="">Packet Treatment Delays
+                                        <span>Average on last 50 flows: <span id="averageDelayValue">0</span>
+                                                ms</span>
+                                </h2>
+                                <div class="flex justify-center">
+                                        <canvas id="treatmentDelaysChart" class="w-[800px] h-[100px]"></canvas>
+                                </div>
+                        </section>
                 </div>
-                </header>
+                <div id="right-col">
 
-                <!-- ---------------------------- Main Content ----------------------------- -->
-                <main class="flex-1 py-4 mx-auto w-full space-y-2">
-                        <div class="text-gray-800 text-3xl font-black">
-                                welcome back, <span id="username" class="text-gray-400">Tom !</span>
-                        </div>
-                        <div class="flex space-x-6">
-                                        <section id="status" class="w-1/4 ">
-                                                        <h2 class="" style="font-family: Inter;">WebSocket Status</h2>
-                                                        <p id="connectionStatus" class="font-mono text-gray-400" style="font-family: Inter;">Connecting to WebSocket...</p>
-                                        </section>
-                                        <section id="treatmentDelays" class="w-3/4">
-                                                        <h2 class="">Packet Treatment Delays
-                                                                        <span>Average on last 50 flows: <span id="averageDelayValue">0</span> ms</span>
-                                                        </h2>
-                                                        <div class="flex justify-center">
-                                                                        <canvas id="treatmentDelaysChart" class="w-[800px] h-[100px]"></canvas>
-                                                        </div>
-                                        </section>
-                        </div>
 
                         <!-- --------------------------- Settings section ---------------------------- -->
                         <section id="settings" class="">
-                                <h2 class=" flex justify-between items-center cursor-pointer"
-                                        id="settingsToggle">
+                                <h2 class=" flex justify-between items-center cursor-pointer" id="settingsToggle">
                                         <span>Settings</span>
                                         <span id="settingsArrow" class="ml-2">▶</span>
                                 </h2>
@@ -192,7 +196,7 @@
                                                 <div class="col-span-2 flex justify-center mt-4">
                                                         <button type="submit"
                                                                 class="px-10 py-2 bg-gray-400 text-white font-bold rounded hover:bg-gray-400 transition">
-                                                                Apply
+                                                                Apply configuration
                                                         </button>
                                                 </div>
                                         </div>
@@ -207,7 +211,7 @@
                                 <div id="resetMessage" class="mb-4 text-gray-400 font-medium">
                                 </div>
                                 <!-- ----------------------------- Flow table ------------------------------ -->
-                                <section id="flowTables" class="space-y-6 mt-6">
+                                <section id="flowTables" class="space-y-6">
                                         <div class="severity-section" data-severity="Emergency" style="display: none;">
                                                 <h3
                                                         class="bg-red-900 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
@@ -661,51 +665,45 @@
 
                                 </section>
                                 <!-- -------------------------- Risk evel legend --------------------------- -->
-                                <div class="mt-4 p-2 bg-gray-100 rounded-lg mx-auto mb-4">
-                                        <h3 class="text-lg font-semibold mb-4">Risk Level Legend</h3>
-                                        <div class="grid grid-cols-2 gap-4">
+                                <div class="risk-level-legend">
+                                        <h3 class="">Risk Level Legend</h3>
+                                        <div class="grid grid-cols-2">
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-red-900 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-red-900 font-bold mr-1">Emergency : </span>
+                                                        <span class="w-8 h-4 bg-red-900 inline-block mr-2"></span>
+                                                        <span class="text-red-900 mr-1">Emergency : </span>
                                                         Emergency
                                                         risk
                                                         level
                                                 </div>
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-yellow-300 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-yellow-300 font-bold mr-1">Severe : </span>
+                                                        <span class="w-8 h-4 bg-yellow-300 inline-block mr-2"></span>
+                                                        <span class="text-yellow-300 mr-1">Severe : </span>
                                                         Severe
                                                         risk
                                                         level
                                                 </div>
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-red-700 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-red-700 font-bold mr-1">Critical : </span>
+                                                        <span class="w-8 h-4 bg-red-700 inline-block mr-2"></span>
+                                                        <span class="text-red-700 mr-1">Critical : </span>
                                                         Critical
                                                         risk
                                                         level
                                                 </div>
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-green-500 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-green-500 font-bold mr-1">Medium : </span>
+                                                        <span class="w-8 h-4 bg-green-500 inline-block mr-2"></span>
+                                                        <span class="text-green-500 mr-1">Medium : </span>
                                                         Medium risk
                                                         level
                                                 </div>
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-orange-600 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-orange-600 font-bold mr-1">High : </span> High
+                                                        <span class="w-8 h-4 bg-orange-600 inline-block mr-2"></span>
+                                                        <span class="text-orange-600 mr-1">High : </span> High
                                                         risk
                                                         level
                                                 </div>
                                                 <div class="flex items-center">
-                                                        <span
-                                                                class="w-8 h-4 bg-blue-500 inline-block mr-2 border border-black"></span>
-                                                        <span class="text-blue-500 font-bold mr-1">Low : </span> Low
+                                                        <span class="w-8 h-4 bg-blue-500 inline-block mr-2"></span>
+                                                        <span class="text-blue-500 mr-1">Low : </span> Low
                                                         risk level
                                                 </div>
                                         </div>
@@ -823,17 +821,18 @@
                                                         class="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[70vh] text-sm font-mono"></pre>
                                         </div>
                                 </div>
+                </div>
 
 
 
-                </main>
+        </main>
 
-                <!-- ------------------------------- Footer -------------------------------- -->
-                <footer class="bg-gray-200 text-center p-2 text-sm">
-                        © 2025 - Kafka Real-Time Dashboard. All rights reserved.
-                </footer>
-                <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-                <script type="module" src="js/app.js"></script>
+        <!-- ------------------------------- Footer -------------------------------- -->
+        <footer class="bg-gray-200 text-center p-2 text-sm">
+                © 2025 - Kafka Real-Time Dashboard. All rights reserved.
+        </footer>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+        <script type="module" src="js/app.js"></script>
 </body>
 
 </html>

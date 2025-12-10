@@ -8,7 +8,7 @@ ACTIVE_TIMEOUT = 300  # secondes (300_000 ms)
 
 # --- flow generator ---
 flows = NFStreamer(
-    source="../01_phase/pcap/reference.pcap",
+    source="../01_phase/pcap/reference.pcap", 
     idle_timeout=IDLE_TIMEOUT,
     active_timeout=ACTIVE_TIMEOUT,
     statistical_analysis=False,

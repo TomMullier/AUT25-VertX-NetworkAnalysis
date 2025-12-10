@@ -11,15 +11,112 @@
 * {
   font-family: 'Inter', sans-serif;
 }
+header {
+  background-color: #ebebeb;
+}
+header .loupe-icon {
+  color: #2563eb;
+}
 body {
-  background-color: #eaf0f7;
+  background-color: #ffffff;
+}
+.welcome-message {
+  margin-top: 10px;
+}
+main {
+  background-color: #ffffff;
+}
+main #left-col {
+  margin-right: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+  border-radius: 8px;
+}
+main #left-col #status-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2563eb;
+}
+main #left-col h2 {
+  color: #000000;
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+main #left-col section {
+  padding: 0%;
+}
+main #left-col #connectionStatus {
+  font-size: 0.85rem;
+  color: #808080;
+}
+main #left-col #connectionStatus::before {
+  content: '> ';
+}
+main #right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-left: 5px;
+}
+main #right-col #settings {
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+  border-radius: 8px;
+}
+main #right-col #settings h2 {
+  margin-bottom: 0%;
+}
+main #right-col #settings form {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+main #right-col #settings form button {
+  background-color: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+main #right-col #settings form button:hover {
+  background-color: #1e40af;
+}
+main #right-col #settings legend,
+main #right-col #settings label {
+  color: #000000;
+  font-size: 0.9rem;
+  font-weight: normal;
+}
+main #right-col h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2563eb;
+}
+main #right-col #flows {
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+  border-radius: 8px;
+}
+main #right-col .risk-level-legend {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 10px;
+  margin: 0;
+  margin-bottom: 20px;
+}
+main #right-col .risk-level-legend h3 {
+  font-size: 1rem;
+  font-weight: normal;
+  color: #000000;
+  margin-bottom: 10px;
 }
 section {
-  border-radius: 25px;
-  background-color: #eaf0f7;
-  box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.2);
-  padding: 25px;
-  margin-bottom: 16px;
+  background-color: #ffffff;
+  box-shadow: none;
+  padding: 10px;
 }
 section h2 {
   font-size: 1rem;
