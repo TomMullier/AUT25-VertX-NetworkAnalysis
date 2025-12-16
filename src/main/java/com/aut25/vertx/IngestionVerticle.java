@@ -291,12 +291,11 @@ public class IngestionVerticle extends AbstractVerticle {
                 // === LATENCE ULTRA-FAIBLE ===
 
                 // Désactiver totalement le batching côté producer
-                props.put("batch.size", "0"); // Envoi immédiat
-                props.put("linger.ms", "0"); // Pas d'attente
+                props.put("batch.size", "16384"); // 16KB batch size
+                props.put("linger.ms", "1"); // 1ms linger time
                 props.put("buffer.memory", "33554432"); // 32MB pour absorber les bursts
 
-                // Compression désactivée (sinon +latence CPU)
-                props.put("compression.type", "none");
+                props.put("compression.type", "lz4"); // rapide et efficace
 
                 // Réutiliser les connexions TCP
                 props.put("connections.max.idle.ms", "300000");
@@ -566,7 +565,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "
                                                 + ar.cause().getMessage());
                         }
-                }).flush();
+                });
         }
 
         /* -------------------------------------------------------------------------- */

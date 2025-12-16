@@ -2,8 +2,8 @@ import csv
 import ipaddress
 
 # ----------------------------------- Paths ---------------------------------- #
-nfstream_path = "./csv/nfstream_flows.csv"
-vertx_path = "./csv/vertx_flows.csv"
+nfstream_path = "./csv/nfstream_flows_reference.csv"
+vertx_path = "./csv/vertx_flows_reference.csv"
 
 
 # ------------------------------ Utils functions ----------------------------- #

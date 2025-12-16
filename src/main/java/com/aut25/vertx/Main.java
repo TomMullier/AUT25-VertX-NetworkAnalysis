@@ -215,17 +215,17 @@ public class Main extends AbstractVerticle {
 
         // Créer la liste de verticles à déployer
 
-        verticles.add(new BenchmarkVerticle());
-        // :verticles.add(new FlowAggregatorVerticle());
-        // :verticles.add(new FlowConsumerVerticle());
+        // !verticles.add(new BenchmarkVerticle());
+        verticles.add(new FlowAggregatorVerticle());
+        // verticles.add(new FlowConsumerVerticle());
         // ! Too much memory // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         // :verticles.add(webServerVerticle);
         verticles.add(new IngestionVerticle());
 
         if (store) {
-            // :verticles.add(new ClickHousePacketVerticle());
-            // :verticles.add(new ClickHouseFlowsVerticle());
+            verticles.add(new ClickHousePacketVerticle());
+            verticles.add(new ClickHouseFlowsVerticle());
         } else {
             logger.info(Colors.YELLOW
                     + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."

@@ -34,6 +34,8 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import io.vertx.kafka.client.consumer.KafkaConsumer;
 import io.vertx.kafka.client.consumer.KafkaConsumerRecords;
@@ -87,9 +89,19 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private DnsService dnsService;
         private WhoisService whoisService;
 
-        private long currentTs = 0;
-        private long oldTs = 0;
+        AtomicInteger inFlight = new AtomicInteger(0);
+        int MAX_IN_FLIGHT = 1000;
 
+        AtomicLong processed = new AtomicLong(0);
+
+        private final ConcurrentHashMap<Integer, Long> lastTsPerPartition = new ConcurrentHashMap<>();
+
+        /**
+         * Start the verticle, initialize Kafka consumer and producer, and set up
+         * processing logic
+         * 
+         * @throws Exception if an error occurs during startup
+         */
         @Override
         public void start() throws Exception {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
@@ -138,44 +150,39 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         return;
                 }
 
-                // Kafka consumer config
                 Map<String, String> consumerConfig = new HashMap<>();
                 consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
                 consumerConfig.put("group.id", GROUP_ID);
 
-                // Désérialisation classique
+                // Désérialisation
                 consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
-                // Toujours prendre le prochain message disponible
-                consumerConfig.put("auto.offset.reset", "earliest");
+                // Gestion des offsets
+                consumerConfig.put("enable.auto.commit", "false"); // Commit manuel recommandé
+                // Commit manuel par batch, pas après chaque message
 
-                // Pour réduire la latence, commit manuel ou auto très fréquent
-                consumerConfig.put("enable.auto.commit", "false");
-                consumerConfig.put("auto.commit.interval.ms", "100"); // Valeur ultra faible
+                // Lecture efficace
+                consumerConfig.put("max.poll.records", "500"); // Traite 500 messages par poll (au lieu de 1)
+                consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de données
+                consumerConfig.put("fetch.max.wait.ms", "50"); // Max 50ms d'attente pour atteindre fetch.min.bytes
+                consumerConfig.put("max.partition.fetch.bytes", "2097152"); // 2 MB max par partition
 
-                // Latence minimale : récupérer le plus vite possible
-                consumerConfig.put("max.poll.records", "1"); // 1 seul record = temps minimal
-                consumerConfig.put("fetch.min.bytes", "1"); // Retourne dès qu’un octet est disponible
-                consumerConfig.put("fetch.max.wait.ms", "0"); // Pas d’attente
-                consumerConfig.put("fetch.max.bytes", "1048576"); // 1 MB suffit (réduit la copie mémoire)
-
-                // Timeouts agressifs mais sûrs
+                // Timeouts
                 consumerConfig.put("session.timeout.ms", "10000"); // 10s
                 consumerConfig.put("heartbeat.interval.ms", "3000"); // 3s
-                consumerConfig.put("request.timeout.ms", "15000"); // 15s
+                consumerConfig.put("request.timeout.ms", "30000"); // 30s, plus large pour gros fetch
 
-                // Optimisation de la latence au niveau réseau
-                consumerConfig.put("receive.buffer.bytes", "32768"); // 32 KB, bonne valeur pour réduire overhead
-                consumerConfig.put("send.buffer.bytes", "32768");
-                consumerConfig.put("fetch.buffer", "4096");
+                // Buffers réseau
+                consumerConfig.put("receive.buffer.bytes", "262144"); // 256 KB
+                consumerConfig.put("send.buffer.bytes", "262144"); // 256 KB
+                consumerConfig.put("max.poll.interval.ms", "600000");
 
-                // Pas de batching côté protocole
-                consumerConfig.put("client.id", "low-latency-consumer");
-                consumerConfig.put("max.partition.fetch.bytes", "1048576"); // 1MB max par fetch
+                // Identification client
+                consumerConfig.put("client.id", "high-throughput-consumer");
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
+                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
 
                 // Kafka producer config
                 Map<String, String> producerConfig = new HashMap<>();
@@ -186,7 +193,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 producer = KafkaProducer.create(vertx, producerConfig);
 
-                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka producer created : " + producerConfig.toString());
+                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka producer created : " + producerConfig.toString());
 
                 // Subscribe to input topic
                 consumer.subscribe(IN_TOPIC, ar -> {
@@ -204,57 +211,59 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (!running.get())
                                 return;
 
+                        if (inFlight.incrementAndGet() > MAX_IN_FLIGHT) {
+                                consumer.pause();
+                        }
                         String value = record.value();
                         if (value == null || value.isEmpty() || value.equals("reset")) {
                                 // Display packet info
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Empty or Reset Packet details: {}",
-                                                record);
-
+                                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Empty or Reset Packet details: {}",
+                                                // record);
+                                inFlight.decrementAndGet();
                                 return;
                         }
-
-                        try {
-                                JsonObject json = new JsonObject(value);
-                                // ! check
-                                if (oldTs == 0) {
-                                        oldTs = json.getLong("timestamp", System.currentTimeMillis());
-                                } else {
-                                        currentTs = json.getLong("timestamp", System.currentTimeMillis());
-                                        if (currentTs < oldTs) {
-                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Timestamp went backwards: oldTs={} currentTs={}",
-                                                                oldTs, currentTs);
-                                        }
-                                        oldTs = currentTs;
-                                }
+                        final int partition = record.partition();
+                        vertx.executeBlocking(promise -> {
                                 try {
-                                        processRecord(json);
-                                } catch (Exception e) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                                                        e.getMessage());
-                                } finally {
-                                        // Commit manuel après traitement
-                                        consumer.commit(ar -> {
-                                                if (ar.failed()) {
-                                                        logger.error("[FLOWAGGREGATOR] Commit failed: {}",
-                                                                        ar.cause().getMessage());
-                                                }
-                                        });
-                                }
-                        } catch (Exception e) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                                                e.getMessage());
-                        }
-
-                        // Commit offsets manually
-                        consumer.commit(ar -> {
-                                if (ar.failed()) {
-                                        if (ar.cause().getMessage() != null) {
-                                                logger.error(
-                                                                "[ FLOWAGGREGATOR VERTICLE ]       Commit failed: "
-                                                                                + ar.cause().getMessage());
+                                        JsonObject json = new JsonObject(record.value());
+                                        long packetTs = json.getLong("timestamp", System.currentTimeMillis());
+                                        long lastTs = lastTsPerPartition.getOrDefault(partition, 0L);
+                                        if (packetTs < lastTs) {
+                                                logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Partition {} timestamp backward: {} -> {}",
+                                                                partition, lastTs, packetTs);
                                         }
+
+                                        lastTsPerPartition.put(partition, packetTs);
+
+                                        processRecord(json);
+                                        processed.incrementAndGet();
+                                        promise.complete();
+                                } catch (Exception e) {
+                                        promise.fail(e);
+                                }
+                        }, false, ar -> {
+                                inFlight.decrementAndGet();
+                                if (inFlight.get() < MAX_IN_FLIGHT / 2) {
+                                        consumer.resume();
+                                }
+
+                                if (ar.failed()) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                                                        ar.cause().getMessage());
                                 }
                         });
+
+                });
+                vertx.setPeriodic(100, id -> {
+                        if (processed.get() > 0) {
+                                consumer.commit(ar -> {
+                                        if (ar.failed()) {
+                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Commit failed: {}",
+                                                                ar.cause().getMessage());
+                                        }
+                                });
+                                processed.set(0);
+                        }
                 });
 
                 // Periodic cleanup task to flush expired flows
@@ -273,8 +282,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         Iterator<Flow> iterator = toFlush.iterator();
                         while (iterator.hasNext()) {
                                 Flow f = iterator.next();
-                                logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={} packets={} durationMs={}",
-                                                f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
+                                // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={}
+                                // packets={} durationMs={}",
+                                // f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
 
                                 // nDPI analysis on flow packets if not already detected
                                 // before publishing
@@ -390,8 +400,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 Iterator<Flow> iterator = toFlush.iterator();
                 while (iterator.hasNext()) {
                         Flow f = iterator.next();
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing remaining flow: key={} bytes={} packets={} durationMs={}",
-                                        f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
+                        // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing remaining flow: key={}
+                        // bytes={} packets={} durationMs={}",
+                        // f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
 
                         // nDPI analysis on flow packets if not already detected
                         // before publishing
@@ -604,7 +615,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         vertx.eventBus().publish("malformedPackets.data", malformedPacket);
                         return; // skip this record
                 }
-
                 EthernetPacket eth = packet.get(EthernetPacket.class);
                 if (eth == null) {
                         logger.error("[FLOWAGGREGATOR] Not an Ethernet packet. Raw data: {}",
@@ -638,9 +648,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 break;
 
                         default:
-                                logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}. Raw data: {}",
-                                                Integer.toHexString(etherType),
-                                                Base64.getEncoder().encodeToString(rawData));
+                                // logger.debug("[FLOWAGGREGATOR] Unsupported EtherType: 0x{}. Raw data: {}",
+                                // Integer.toHexString(etherType),
+                                // Base64.getEncoder().encodeToString(rawData));
                                 JsonObject malformedPacket = new JsonObject()
                                                 .put("error", "Unsupported EtherType: 0x"
                                                                 + Integer.toHexString(etherType))
@@ -729,6 +739,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
                                 f.ndpiFlowPtr = ndpiFlow.ndpiFlowPtr;
                                 f.treatmentDelay = new ArrayList<>();
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Created new flow: key={}", k);
                         }
                         // update
                         String packId = setPacketId(srcIp, dstIp, protocol, ts, packet);
@@ -739,6 +750,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.bytes += bytes != null ? bytes : 0;
                         f.treatmentDelay.add(System.currentTimeMillis()
                                         - json.getLong("ingestedAt", 0L));
+                        System.out.println("Packet ingested at: " + json.getLong("ingestedAt", 0L) + ", now: "
+                                        + System.currentTimeMillis() + ", delay: "
+                                        + (System.currentTimeMillis() - json.getLong("ingestedAt", 0L)) + " ms");
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Updated flow {} with packet {} and treatment delay {} ms",
+                                        k, packId,
+                                        (System.currentTimeMillis() - json.getLong("ingestedAt", 0L)));
 
                         if (ipPacket.contains(TcpPacket.class)) {
                                 TcpPacket tcp = ipPacket.get(TcpPacket.class);
@@ -1034,52 +1051,45 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 f.reasonOfFlowEnd = reasonOfFlowEnd;
                 f.calculateStats();
                 // Enrichissement avant publication
-                vertx.executeBlocking(promise -> {
 
-                        f.enrich(geoIPService, dnsService, whoisService, vertx)
-                                        .onSuccess(enrichedFlow -> {
-                                                JsonObject jo = enrichedFlow.getJsonObject();
-                                                String value = jo.encode();
+                f.enrich(geoIPService, dnsService, whoisService, vertx)
+                                .onSuccess(enrichedFlow -> {
+                                        JsonObject jo = enrichedFlow.getJsonObject();
+                                        String value = jo.encode();
 
-                                                logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Published flow: key={} protocol={} appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={} durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={} dstOrg={}",
-                                                                enrichedFlow.key, enrichedFlow.protocol,
-                                                                enrichedFlow.appProtocol,
-                                                                enrichedFlow.riskLevel, enrichedFlow.riskLabel,
-                                                                enrichedFlow.riskSeverity,
-                                                                enrichedFlow.bytes, enrichedFlow.packetCount,
-                                                                (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
-                                                                enrichedFlow.srcCountry, enrichedFlow.dstCountry,
-                                                                enrichedFlow.srcDomain, enrichedFlow.dstDomain,
-                                                                enrichedFlow.srcOrg, enrichedFlow.dstOrg);
+                                        // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} protocol={}
+                                        // appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={}
+                                        // durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={}
+                                        // dstOrg={}",
+                                        // enrichedFlow.key, enrichedFlow.protocol,
+                                        // enrichedFlow.appProtocol,
+                                        // enrichedFlow.riskLevel, enrichedFlow.riskLabel,
+                                        // enrichedFlow.riskSeverity,
+                                        // enrichedFlow.bytes, enrichedFlow.packetCount,
+                                        // (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
+                                        // enrichedFlow.srcCountry, enrichedFlow.dstCountry,
+                                        // enrichedFlow.srcDomain, enrichedFlow.dstDomain,
+                                        // enrichedFlow.srcOrg, enrichedFlow.dstOrg);
 
-                                                KafkaProducerRecord<String, String> record = KafkaProducerRecord
-                                                                .create(OUT_TOPIC, enrichedFlow.key, value);
+                                        KafkaProducerRecord<String, String> record = KafkaProducerRecord
+                                                        .create(OUT_TOPIC, enrichedFlow.key, value);
 
-                                                producer.write(record, ar -> {
-                                                        if (ar.failed()) {
-                                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
-                                                                                enrichedFlow.key,
-                                                                                ar.cause().getMessage());
-                                                        }
-                                                });
-                                        })
-                                        .onFailure(err -> {
-                                                logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
-                                                                f.key, err.getMessage());
-                                                // Publier quand même le flow non enrichi
-                                                JsonObject jo = f.getJsonObject();
-                                                producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
-                                                                jo.encode()));
+                                        producer.write(record, ar -> {
+                                                if (ar.failed()) {
+                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
+                                                                        enrichedFlow.key,
+                                                                        ar.cause().getMessage());
+                                                }
                                         });
-                        promise.complete();
-                }, false, res -> {
-                        if (res.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error publishing flow {}: {}",
-                                                f.key, res.cause().getMessage());
-
-                        }
-
-                });
+                                })
+                                .onFailure(err -> {
+                                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
+                                                        f.key, err.getMessage());
+                                        // Publier quand même le flow non enrichi
+                                        JsonObject jo = f.getJsonObject();
+                                        producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
+                                                        jo.encode()));
+                                });
         }
 
         /**
