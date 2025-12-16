@@ -19,6 +19,7 @@ import org.pcap4j.packet.factory.PacketFactories;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.aut25.vertx.services.DnsService;
 import com.aut25.vertx.services.GeoIPService;
@@ -95,6 +96,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         AtomicLong processed = new AtomicLong(0);
 
         private final ConcurrentHashMap<Integer, Long> lastTsPerPartition = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<Integer, AtomicInteger> countPerPartition = new ConcurrentHashMap<>();
+
+        private final Map<Integer, Long> lastOffsetPerPartition = new HashMap<>();
+        private final Map<Integer, Map<String, Long>> lastTsPerPartitionFlow = new HashMap<>();
 
         /**
          * Start the verticle, initialize Kafka consumer and producer, and set up
@@ -139,15 +144,22 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Enrichment services initialized."
                                 + Colors.RESET);
                 // Initialize nDPI
-                try {
-                        ndpi.init();
-                        logger.info(Colors.GREEN
-                                        + "[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully in FlowAggregatorVerticle."
-                                        + Colors.RESET);
-                } catch (Exception e) {
-                        logger.error(Colors.RED + "[ FLOWAGGREGATOR VERTICLE ]       Failed to initialize nDPI: "
-                                        + e.getMessage() + Colors.RESET);
-                        return;
+                LocalMap<String, Object> sharedData = vertx.sharedData().getLocalMap("config");
+
+                // Essaie d'initialiser atomiquement
+                Object prev = sharedData.putIfAbsent("ndpi_initialized", true);
+                if (prev != null) {
+                        // nDPI déjà initialisé par un autre verticle
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]      nDPI already initialized by another verticle.");
+                } else {
+                        try {
+                                ndpi.init();
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
+                        } catch (Exception e) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]      Failed to initialize nDPI: {}",
+                                                e.getMessage());
+                                sharedData.put("ndpi_initialized", false); // rollback
+                        }
                 }
 
                 Map<String, String> consumerConfig = new HashMap<>();
@@ -182,7 +194,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("client.id", "high-throughput-consumer");
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
-                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka consumer created : " + consumerConfig.toString());
+                // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Kafka consumer created : " +
+                // consumerConfig.toString());
 
                 // Kafka producer config
                 Map<String, String> producerConfig = new HashMap<>();
@@ -193,8 +206,24 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 producer = KafkaProducer.create(vertx, producerConfig);
 
-                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Kafka producer created : " + producerConfig.toString());
+                // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Kafka producer created : " +
+                // producerConfig.toString());
 
+                // Subscribe to input topic
+                String verticleId = this.deploymentID();
+                consumer
+                                .partitionsRevokedHandler(partitions -> {
+                                        logger.warn(
+                                                        "[FLOWAGGREGATOR VERTICLE {}] Kafka rebalance START - partitions revoked: {}",
+                                                        verticleId,
+                                                        partitions);
+                                })
+                                .partitionsAssignedHandler(partitions -> {
+                                        logger.warn(
+                                                        "[FLOWAGGREGATOR VERTICLE {}] Kafka rebalance END - partitions assigned: {}",
+                                                        verticleId,
+                                                        partitions);
+                                });
                 // Subscribe to input topic
                 consumer.subscribe(IN_TOPIC, ar -> {
                         if (ar.succeeded()) {
@@ -207,9 +236,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
 
                 // Handler for incoming Kafka messages
+                consumer.pause();
                 consumer.handler(record -> {
                         if (!running.get())
                                 return;
+
+                        // Debug partition stats
+                        final int partition = record.partition();
+                        countPerPartition.computeIfAbsent(partition, k -> new AtomicInteger()).incrementAndGet();
 
                         if (inFlight.incrementAndGet() > MAX_IN_FLIGHT) {
                                 consumer.pause();
@@ -217,43 +251,72 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         String value = record.value();
                         if (value == null || value.isEmpty() || value.equals("reset")) {
                                 // Display packet info
-                                // logger.debug("[ FLOWAGGREGATOR VERTICLE ]       Empty or Reset Packet details: {}",
-                                                // record);
+                                // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Empty or Reset Packet details: {}",
+                                // record);
                                 inFlight.decrementAndGet();
                                 return;
                         }
-                        final int partition = record.partition();
-                        vertx.executeBlocking(promise -> {
+
+                        // vertx.executeBlocking(promise -> {
                                 try {
+                                        // Check for Kafka order violation per partition
+                                        long offset = record.offset();
+                                        long lastOffset = lastOffsetPerPartition.getOrDefault(partition, -1L);
+                                        if (offset <= lastOffset) {
+                                                logger.error(
+                                                                "[ FLOWAGGREGATOR VERTICLE ] Kafka order violation! partition={} lastOffset={} currentOffset={}",
+                                                                partition, lastOffset, offset);
+                                        }
+                                        lastOffsetPerPartition.put(partition, offset);
+
                                         JsonObject json = new JsonObject(record.value());
-                                        long packetTs = json.getLong("timestamp", System.currentTimeMillis());
-                                        long lastTs = lastTsPerPartition.getOrDefault(partition, 0L);
+                                        long packetTs = json.getLong(
+                                                        "timestamp",
+                                                        System.currentTimeMillis());
+
+                                        String flowKey = json.getString("flow_id");
+                                        if (flowKey == null) {
+                                                logger.warn(
+                                                                "[ FLOWAGGREGATOR VERTICLE ] Missing flow_id in record (partition={}, offset={})",
+                                                                partition, offset);
+                                                return;
+                                        }
+                                        // Check for timestamp regression per flow
+                                        Map<String, Long> lastTsPerFlow = lastTsPerPartitionFlow.computeIfAbsent(
+                                                        partition,
+                                                        p -> new HashMap<>());
+
+                                        long lastTs = lastTsPerFlow.getOrDefault(flowKey, 0L);
                                         if (packetTs < lastTs) {
-                                                logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Partition {} timestamp backward: {} -> {}",
-                                                                partition, lastTs, packetTs);
+                                                logger.warn(
+                                                                "[ FLOWAGGREGATOR VERTICLE ] Flow {} timestamp backward (partition={}): {} -> {}",
+                                                                flowKey, partition, lastTs, packetTs);
                                         }
 
-                                        lastTsPerPartition.put(partition, packetTs);
+                                        lastTsPerFlow.put(flowKey, packetTs);
 
                                         processRecord(json);
                                         processed.incrementAndGet();
-                                        promise.complete();
+                                        //promise.complete();
                                 } catch (Exception e) {
-                                        promise.fail(e);
+                                        //promise.fail(e);
                                 }
-                        }, false, ar -> {
-                                inFlight.decrementAndGet();
-                                if (inFlight.get() < MAX_IN_FLIGHT / 2) {
-                                        consumer.resume();
-                                }
+                        // }, false, ar -> {
+                        //         inFlight.decrementAndGet();
+                        //         if (inFlight.get() < MAX_IN_FLIGHT / 2) {
+                        //                 consumer.resume();
+                        //         }
 
-                                if (ar.failed()) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                                                        ar.cause().getMessage());
-                                }
-                        });
+                        //         if (ar.failed()) {
+                        //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
+                        //                                 ar.cause());
+                        //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Offending record: {}",
+                        //                                 record.value());
+                        //         }
+                        // });
 
                 });
+                consumer.resume();
                 vertx.setPeriodic(100, id -> {
                         if (processed.get() > 0) {
                                 consumer.commit(ar -> {
@@ -272,10 +335,27 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 return;
                         loopFlushEveryDelay();
                 });
+
+                vertx.setPeriodic(5000, id -> { // toutes les 5 secondes
+                        countPerPartition.forEach((p, c) -> {
+                                logger.info(
+                                                "[ FLOWAGGREGATOR VERTICLE ]       Partition {} processed {} messages in last 5s",
+                                                p, c.get());
+                                long totalTime = c.get() > 0
+                                                ? (System.currentTimeMillis() - lastTsPerPartition.getOrDefault(p, 0L))
+                                                : 0;
+                                double debitTimePerPacket = c.get() > 0 ? (double) totalTime / c.get() : 0;
+                                logger.info(
+                                                "[ FLOWAGGREGATOR VERTICLE ]       Partition {} average debit time per packet: {} ms",
+                                                p, debitTimePerPacket);
+                        });
+                        countPerPartition.clear();
+                });
+
         }
 
         private void loopFlushEveryDelay() {
-                vertx.executeBlocking(promise -> {
+                // vertx.executeBlocking(promise -> {
                         if (!running.get())
                                 return;
 
@@ -309,13 +389,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 }
                                 iterator.remove();
                         }
-                        promise.complete();
-                }, false, res -> {
-                        if (res.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error in flush loop: {}",
-                                                res.cause().getMessage());
-                        }
-                });
+                //         promise.complete();
+                // }, false, res -> {
+                //         if (res.failed()) {
+                //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error in flush loop: {}",
+                //                                 res.cause());
+                //         }
+                // });
         }
 
         /**
@@ -738,8 +818,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         if (f == null) {
                                 f = new Flow(k, srcIp, dstIp, srcPort, dstPort, protocol, ts);
                                 f.ndpiFlowPtr = ndpiFlow.ndpiFlowPtr;
-                                f.treatmentDelay = new ArrayList<>();
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       Created new flow: key={}", k);
+                                f.treatmentDelay = new CopyOnWriteArrayList<>();
                         }
                         // update
                         String packId = setPacketId(srcIp, dstIp, protocol, ts, packet);
@@ -750,13 +829,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         f.bytes += bytes != null ? bytes : 0;
                         f.treatmentDelay.add(System.currentTimeMillis()
                                         - json.getLong("ingestedAt", 0L));
-                        System.out.println("Packet ingested at: " + json.getLong("ingestedAt", 0L) + ", now: "
-                                        + System.currentTimeMillis() + ", delay: "
-                                        + (System.currentTimeMillis() - json.getLong("ingestedAt", 0L)) + " ms");
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       Updated flow {} with packet {} and treatment delay {} ms",
-                                        k, packId,
-                                        (System.currentTimeMillis() - json.getLong("ingestedAt", 0L)));
-
                         if (ipPacket.contains(TcpPacket.class)) {
                                 TcpPacket tcp = ipPacket.get(TcpPacket.class);
                                 TcpPacket.TcpHeader tcpHeader = tcp.getHeader();

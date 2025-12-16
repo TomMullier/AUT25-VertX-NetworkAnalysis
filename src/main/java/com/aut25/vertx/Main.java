@@ -216,7 +216,17 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
 
         // !verticles.add(new BenchmarkVerticle());
-        verticles.add(new FlowAggregatorVerticle());
+        sharedData.getLocalMap("config").put("ndpi_initialized", false);
+        int numAggregators = 6;
+        for (int i = 0; i < numAggregators; i++) {
+            FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
+            DeploymentOptions options = new DeploymentOptions();
+            options.setConfig(config);
+            options.setInstances(1);
+            options.setWorker(true);
+            vertx.deployVerticle(verticle, options);
+        }
+
         // verticles.add(new FlowConsumerVerticle());
         // ! Too much memory // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);

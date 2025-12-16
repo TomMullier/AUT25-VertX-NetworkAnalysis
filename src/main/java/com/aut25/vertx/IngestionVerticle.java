@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.PriorityQueue;
 import java.util.Comparator;
 
+import com.aut25.vertx.FlowAggregatorVerticle.Ports;
 import com.aut25.vertx.utils.Colors;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,8 @@ import org.pcap4j.core.PcapNetworkInterface;
 import org.pcap4j.core.Pcaps;
 import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.TcpPacket;
+import org.pcap4j.packet.UdpPacket;
 import org.pcap4j.packet.namednumber.DataLinkType;
 import java.sql.Timestamp;
 import java.util.ArrayList;
@@ -551,14 +554,19 @@ public class IngestionVerticle extends AbstractVerticle {
                         return;
 
                 String base64Packet = Base64.getEncoder().encodeToString(packet.getRawData());
+                String flowKey = buildFlowKey(packet); // build flow key
                 JsonObject record = new JsonObject()
                                 .put("timestamp", packetTimestamp)
                                 .put("ingestedAt", System.currentTimeMillis())
                                 .put("delay", delay)
-                                .put("rawPacket", base64Packet);
-                KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
+                                .put("rawPacket", base64Packet)
+                                .put("flow_id", flowKey);
+                // Key to partition by flow
+
+                // Create a KafkaRecord with key (key = flowKey)
+                KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data", flowKey,
                                 record.encode());
-                if (running.get() == false)
+                if (!running.get())
                         return;
                 producer.send(kafkaRecord, ar -> {
                         if (ar.failed()) {
@@ -579,5 +587,158 @@ public class IngestionVerticle extends AbstractVerticle {
                         producer.close();
                 }
                 logger.info(Colors.RED + "[ INGESTION VERTICLE ]            IngestionVerticle stopped!" + Colors.RESET);
+        }
+
+        /**
+         * Extract source IP address from packet
+         * 
+         * @param packet the packet to extract the source IP from
+         * @return the source IP address as a String, or null if not found
+         */
+        String getPacketSrcIp(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getSrcAddr().getHostAddress();
+                }
+                return null;
+        }
+
+        /**
+         * Extract destination IP address from packet
+         * 
+         * @param packet the packet to extract the destination IP from
+         * @return the destination IP address as a String, or null if not found
+         */
+        String getPacketDstIp(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getDstAddr().getHostAddress();
+                }
+                return null;
+        }
+
+        /**
+         * Extract protocol from packet
+         * 
+         * @param packet the packet to extract the protocol from
+         * @return the protocol as a String, or null if not found
+         */
+        String getPacketProtocol(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        return ipPacket.getHeader().getProtocol().name();
+                }
+                return null;
+        }
+
+        /**
+         * Helper class to hold source and destination ports
+         */
+        record Ports(Integer src, Integer dst) {
+        }
+
+        /**
+         * Get the outer source port from an IP packet.
+         * 
+         * @param ipPacket
+         * @return The outer source port as an integer.
+         */
+        private int getOuterSrcPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getSrcPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
+         * Get the outer destination port from an IP packet.
+         * 
+         * @param ipPacket
+         * @return The outer destination port as an integer.
+         */
+        private int getOuterDstPort(IpPacket ipPacket) {
+                Packet payload = ipPacket.getPayload();
+                if (payload instanceof TcpPacket) {
+                        return ((TcpPacket) payload).getHeader().getDstPort().valueAsInt();
+                } else if (payload instanceof UdpPacket) {
+                        return ((UdpPacket) payload).getHeader().getDstPort().valueAsInt();
+                }
+                return 0;
+        }
+
+        /**
+         * Helper class to hold source and destination ports
+         * 
+         * @param ipPacket the IP packet to extract ports from
+         * @return a Ports object containing source and destination ports, or null if
+         *         not applicable
+         */
+        private Ports getPacketPorts(Packet ipPacket) {
+                if (ipPacket.getPayload() instanceof TcpPacket tcp) {
+                        return new Ports(getOuterSrcPort((IpPacket) ipPacket),
+                                        getOuterDstPort((IpPacket) ipPacket));
+                } else if (ipPacket.getPayload() instanceof UdpPacket udp) {
+                        return new Ports(getOuterSrcPort((IpPacket) ipPacket),
+                                        getOuterDstPort((IpPacket) ipPacket));
+                }
+                return new Ports(null, null);
+        }
+
+        /**
+         * Build a canonical flow key from 5-tuple
+         * 
+         * @param srcIp    the source IP address
+         * @param dstIp    the destination IP address
+         * @param srcPort  the source port
+         * @param dstPort  the destination port
+         * @param protocol the protocol used
+         * @return the constructed flow key
+         */
+        private String buildFlowKey(String srcIp, String dstIp, Integer srcPort, Integer dstPort, String protocol) {
+                return srcIp + "_" + dstIp + "_" + (srcPort != null ? srcPort : "null") + "_"
+                                + (dstPort != null ? dstPort : "null") + "_"
+                                + (protocol != null ? protocol : "UNKNOWN");
+        }
+
+        /**
+         * Build a bilateral flow key from 5-tuple
+         * 
+         * @param srcIp    the source IP address
+         * @param dstIp    the destination IP address
+         * @param srcPort  the source port
+         * @param dstPort  the destination port
+         * @param protocol the protocol used
+         * @return the constructed bilateral flow key
+         */
+        private String buildBilateralFlowKey(String srcIp, Integer srcPort,
+                        String dstIp, Integer dstPort,
+                        String protocol) {
+                String flowKeyA = buildFlowKey(srcIp, dstIp, srcPort, dstPort, protocol);
+                String flowKeyB = buildFlowKey(dstIp, srcIp, dstPort, srcPort, protocol);
+                return flowKeyA.compareTo(flowKeyB) <= 0 ? flowKeyA : flowKeyB;
+        }
+
+        /**
+         * Build a flow key from a packet
+         * 
+         * @param packet the packet to build the flow key from
+         * @return the constructed flow key
+         */
+        private String buildFlowKey(Packet packet) {
+                if (packet.contains(IpPacket.class)) {
+                        IpPacket ipPacket = packet.get(IpPacket.class);
+                        String srcIp = ipPacket.getHeader().getSrcAddr().getHostAddress();
+                        String dstIp = ipPacket.getHeader().getDstAddr().getHostAddress();
+                        Ports ports = getPacketPorts(ipPacket);
+                        Integer srcPort = ports.src();
+                        Integer dstPort = ports.dst();
+                        String protocol = ipPacket.getHeader().getProtocol().name();
+                        return buildBilateralFlowKey(srcIp, srcPort, dstIp, dstPort, protocol);
+
+                }
+                return null;
         }
 }

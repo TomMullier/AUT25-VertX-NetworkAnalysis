@@ -17,6 +17,8 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.CompositeFuture;
@@ -53,7 +55,7 @@ public class Flow {
         public String protocol = "";
         public String key = "";
 
-        public List<Long> treatmentDelay = new ArrayList<>();
+        public CopyOnWriteArrayList<Long> treatmentDelay = new CopyOnWriteArrayList<>();
 
         public long firstSeen = -1;
         public long lastSeen = -1;
@@ -95,12 +97,12 @@ public class Flow {
         public double otherFraction = -1;
 
         // List of packets for this flow
-        public List<Packet> packets = new ArrayList<>();
-        public List<String> packetSummaries = new ArrayList<>();
-        public List<Long> packetTimestamps = new ArrayList<>();
+        public CopyOnWriteArrayList<Packet> packets = new CopyOnWriteArrayList<>();
+        public CopyOnWriteArrayList<String> packetSummaries = new CopyOnWriteArrayList<>();
+        public CopyOnWriteArrayList<Long> packetTimestamps = new CopyOnWriteArrayList<>();
 
         public long ndpiFlowPtr = 0;
-        public final List<byte[]> packetList = new ArrayList<>();
+        public final CopyOnWriteArrayList<byte[]> packetList = new CopyOnWriteArrayList<>();
         public String appProtocol;
         public byte[] appProtocolBytes;
 
