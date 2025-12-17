@@ -58,6 +58,7 @@ public class IngestionVerticle extends AbstractVerticle {
         private KafkaProducer<String, String> producer;
         private final AtomicBoolean running = new AtomicBoolean(true);
         private JsonObject config;
+        private int PARTITIONS_COUNT = 1;
 
         private class PacketWrapper {
                 Packet packet;
@@ -421,6 +422,16 @@ public class IngestionVerticle extends AbstractVerticle {
                 logger.info("[ INGESTION VERTICLE ]            PCAP file opened successfully: {}", pcapFilePath);
                 DataLinkType dlt = handle.getDlt();
                 logger.debug("[ INGESTION VERTICLE ]            Data Link Type: {}", dlt);
+                producer.partitionsFor("network-data", ar -> {
+                        if (ar.succeeded()) {
+                                PARTITIONS_COUNT = ar.result().size();
+                                logger.info("[ INGESTION VERTICLE ]            Fetched {} partitions for topic 'network-data'",
+                                                PARTITIONS_COUNT);
+                        } else {
+                                throw new RuntimeException("Unable to fetch partitions");
+                        }
+                });
+
                 vertx.executeBlocking(promise -> {
                         try {
                                 if (running.get() == false) {
@@ -518,20 +529,32 @@ public class IngestionVerticle extends AbstractVerticle {
                 });
         }
 
+        private void sendPcapDoneToAllPartitions() {
+                JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
+                
+                for (int p = 0; p < PARTITIONS_COUNT; p++) {
+                        final int partition = p;
+                        KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(
+                                        "network-data",
+                                        null,
+                                        doneMessage.encode(),
+                                        partition);
+
+                        producer.send(record, ar -> {
+                                if (!ar.succeeded()) {
+                                        logger.error("[INGESTION] Failed to send PCAP_DONE to partition {}: {}",
+                                                        partition, ar.cause().getMessage());
+                                }
+                        });
+                }
+
+                logger.info("[INGESTION] PCAP_DONE sent to all partitions ({})", PARTITIONS_COUNT);
+        }
+
         private void publishNextFromQueue() {
                 if (!running.get() || packetQueue.isEmpty()) {
                         // Tous les paquets traités, envoyer PCAP_DONE
-                        JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
-                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data",
-                                        doneMessage.encode());
-                        producer.send(kafkaRecord, ar -> {
-                                if (ar.succeeded()) {
-                                        logger.info("[INGESTION] PCAP finished message sent to Kafka.");
-                                } else {
-                                        logger.error("[INGESTION] Failed to send PCAP_DONE message: "
-                                                        + ar.cause().getMessage());
-                                }
-                        });
+                        sendPcapDoneToAllPartitions();
                         return;
                 }
 
@@ -562,7 +585,6 @@ public class IngestionVerticle extends AbstractVerticle {
                                 .put("rawPacket", base64Packet)
                                 .put("flow_id", flowKey);
                 // Key to partition by flow
-
                 // Create a KafkaRecord with key (key = flowKey)
                 KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord.create("network-data", flowKey,
                                 record.encode());

@@ -24,6 +24,7 @@ import com.aut25.vertx.api.*;
 import com.aut25.vertx.api.utils.*;
 
 import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.io.BufferedWriter;
 
 public class Main extends AbstractVerticle {
@@ -216,19 +217,7 @@ public class Main extends AbstractVerticle {
         // Créer la liste de verticles à déployer
 
         // !verticles.add(new BenchmarkVerticle());
-        sharedData.getLocalMap("config").put("ndpi_initialized", false);
-        int numAggregators = 6;
-        for (int i = 0; i < numAggregators; i++) {
-            FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
-            DeploymentOptions options = new DeploymentOptions();
-            options.setConfig(config);
-            options.setInstances(1);
-            options.setWorker(true);
-            vertx.deployVerticle(verticle, options);
-        }
-
         // verticles.add(new FlowConsumerVerticle());
-        // ! Too much memory // verticles.add(new PacketConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         // :verticles.add(webServerVerticle);
         verticles.add(new IngestionVerticle());
@@ -241,14 +230,29 @@ public class Main extends AbstractVerticle {
                     + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."
                     + Colors.RESET);
         }
-
-        logger.debug("[ MAIN VERTICLE ]                 Verticles to deploy: ");
-        for (AbstractVerticle v : verticles) {
-            logger.debug(" - " + v.getClass().getSimpleName());
+        sharedData.getLocalMap("config").put("ndpi_initialized", false);
+        int numAggregators = 20;
+        for (int i = 0; i < numAggregators; i++) {
+            FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
+            DeploymentOptions options = new DeploymentOptions();
+            options.setConfig(config);
+            options.setInstances(1);
+            options.setWorker(true);
+            vertx.deployVerticle(verticle, options);
         }
 
-        // Déploiement séquentiel
-        deployVerticlesSequentially(verticles, startPromise);
+        AtomicInteger readyCount = new AtomicInteger(0);
+        vertx.eventBus().consumer("flow.aggregator.ready", msg -> {
+            int ready = readyCount.incrementAndGet();
+            logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 FlowAggregatorVerticle ready count: " + ready
+                    + Colors.RESET);
+            if (ready == numAggregators) {
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 All FlowAggregatorVerticles are ready."
+                        + Colors.RESET);
+                // Déploiement séquentiel
+                deployVerticlesSequentially(verticles, startPromise);
+            }
+        });
     }
 
     /**

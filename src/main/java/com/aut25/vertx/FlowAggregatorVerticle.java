@@ -165,6 +165,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 Map<String, String> consumerConfig = new HashMap<>();
                 consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
                 consumerConfig.put("group.id", GROUP_ID);
+                consumerConfig.put("group.instance.id",
+                                "flow-aggregator-" + UUID.randomUUID());
 
                 // Désérialisation
                 consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -172,11 +174,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 // Gestion des offsets
                 consumerConfig.put("enable.auto.commit", "false"); // Commit manuel recommandé
-                // Commit manuel par batch, pas après chaque message
+                consumerConfig.put("auto.offset.reset", "earliest"); // Depuis le début si pas d'offset
 
                 // Lecture efficace
                 consumerConfig.put("max.poll.records", "500"); // Traite 500 messages par poll (au lieu de 1)
-                consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de données
+                consumerConfig.put("fetch.min.bytes", "1"); // Attend au moins 32 KB de données
+                // consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de
+                // données
                 consumerConfig.put("fetch.max.wait.ms", "50"); // Max 50ms d'attente pour atteindre fetch.min.bytes
                 consumerConfig.put("max.partition.fetch.bytes", "2097152"); // 2 MB max par partition
 
@@ -225,18 +229,24 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                                         partitions);
                                 });
                 // Subscribe to input topic
-                consumer.subscribe(IN_TOPIC, ar -> {
-                        if (ar.succeeded()) {
-                                logger.info(Colors.CYAN + "[ FLOWAGGREGATOR VERTICLE ]       Subscribed to topic {}",
-                                                IN_TOPIC + Colors.RESET);
-                        } else {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to subscribe: {}",
-                                                ar.cause().getMessage());
-                        }
-                });
+                consumer.partitionsAssignedHandler(partitions -> {
+                        logger.info("[FLOW {}] Partitions assigned: {}", deploymentID(), partitions);
+                        vertx.eventBus().publish("flow.aggregator.ready", deploymentID());
+                })
+                                .subscribe(IN_TOPIC, ar -> {
+                                        if (ar.succeeded()) {
+                                                logger.info(Colors.CYAN
+                                                                + "[ FLOWAGGREGATOR VERTICLE ]       Subscribed to topic {}",
+                                                                IN_TOPIC + Colors.RESET);
+
+                                        } else {
+                                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to subscribe: {}",
+                                                                ar.cause().getMessage());
+                                        }
+                                });
 
                 // Handler for incoming Kafka messages
-                consumer.pause();
+                // consumer.pause();
                 consumer.handler(record -> {
                         if (!running.get())
                                 return;
@@ -258,65 +268,70 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         }
 
                         // vertx.executeBlocking(promise -> {
+                        try {
+                                // Check for Kafka order violation per partition
+                                long offset = record.offset();
+                                long lastOffset = lastOffsetPerPartition.getOrDefault(partition, -1L);
+                                if (offset <= lastOffset) {
+                                        logger.error(
+                                                        "[ FLOWAGGREGATOR VERTICLE ] Kafka order violation! partition={} lastOffset={} currentOffset={}",
+                                                        partition, lastOffset, offset);
+                                }
+                                lastOffsetPerPartition.put(partition, offset);
+
+                                JsonObject json = new JsonObject(record.value());
+                                long packetTs = json.getLong(
+                                                "timestamp",
+                                                System.currentTimeMillis());
+
+                                String flowKey = json.getString("flow_id") != null ? json.getString("flow_id")
+                                                : "unknown_flow";
+
+                                // Check for timestamp regression per flow
+                                Map<String, Long> lastTsPerFlow = lastTsPerPartitionFlow.computeIfAbsent(
+                                                partition,
+                                                p -> new HashMap<>());
+
+                                long lastTs = lastTsPerFlow.getOrDefault(flowKey, 0L);
+                                if (packetTs < lastTs) {
+                                        logger.warn(
+                                                        "[ FLOWAGGREGATOR VERTICLE ] Flow {} timestamp backward (partition={}): {} -> {}",
+                                                        flowKey, partition, lastTs, packetTs);
+                                }
+
+                                lastTsPerFlow.put(flowKey, packetTs);
+
                                 try {
-                                        // Check for Kafka order violation per partition
-                                        long offset = record.offset();
-                                        long lastOffset = lastOffsetPerPartition.getOrDefault(partition, -1L);
-                                        if (offset <= lastOffset) {
-                                                logger.error(
-                                                                "[ FLOWAGGREGATOR VERTICLE ] Kafka order violation! partition={} lastOffset={} currentOffset={}",
-                                                                partition, lastOffset, offset);
-                                        }
-                                        lastOffsetPerPartition.put(partition, offset);
-
-                                        JsonObject json = new JsonObject(record.value());
-                                        long packetTs = json.getLong(
-                                                        "timestamp",
-                                                        System.currentTimeMillis());
-
-                                        String flowKey = json.getString("flow_id");
-                                        if (flowKey == null) {
-                                                logger.warn(
-                                                                "[ FLOWAGGREGATOR VERTICLE ] Missing flow_id in record (partition={}, offset={})",
-                                                                partition, offset);
-                                                return;
-                                        }
-                                        // Check for timestamp regression per flow
-                                        Map<String, Long> lastTsPerFlow = lastTsPerPartitionFlow.computeIfAbsent(
-                                                        partition,
-                                                        p -> new HashMap<>());
-
-                                        long lastTs = lastTsPerFlow.getOrDefault(flowKey, 0L);
-                                        if (packetTs < lastTs) {
-                                                logger.warn(
-                                                                "[ FLOWAGGREGATOR VERTICLE ] Flow {} timestamp backward (partition={}): {} -> {}",
-                                                                flowKey, partition, lastTs, packetTs);
-                                        }
-
-                                        lastTsPerFlow.put(flowKey, packetTs);
-
                                         processRecord(json);
                                         processed.incrementAndGet();
-                                        //promise.complete();
-                                } catch (Exception e) {
-                                        //promise.fail(e);
+                                } finally {
+                                        int current = inFlight.decrementAndGet();
+                                        if (current < MAX_IN_FLIGHT / 2) {
+                                                consumer.resume();
+                                        }
                                 }
-                        // }, false, ar -> {
-                        //         inFlight.decrementAndGet();
-                        //         if (inFlight.get() < MAX_IN_FLIGHT / 2) {
-                        //                 consumer.resume();
-                        //         }
 
-                        //         if (ar.failed()) {
-                        //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error processing record: {}",
-                        //                                 ar.cause());
-                        //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Offending record: {}",
-                        //                                 record.value());
-                        //         }
+                                processed.incrementAndGet();
+                                // promise.complete();
+                        } catch (Exception e) {
+                                // promise.fail(e);
+                        }
+                        // }, false, ar -> {
+                        // inFlight.decrementAndGet();
+                        // if (inFlight.get() < MAX_IN_FLIGHT / 2) {
+                        // consumer.resume();
+                        // }
+
+                        // if (ar.failed()) {
+                        // logger.error("[ FLOWAGGREGATOR VERTICLE ] Error processing record: {}",
+                        // ar.cause());
+                        // logger.error("[ FLOWAGGREGATOR VERTICLE ] Offending record: {}",
+                        // record.value());
+                        // }
                         // });
 
                 });
-                consumer.resume();
+                // consumer.resume();
                 vertx.setPeriodic(100, id -> {
                         if (processed.get() > 0) {
                                 consumer.commit(ar -> {
@@ -348,6 +363,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 logger.info(
                                                 "[ FLOWAGGREGATOR VERTICLE ]       Partition {} average debit time per packet: {} ms",
                                                 p, debitTimePerPacket);
+                                // logger.info(flows.size() + " flows remaining in the map.");
+
                         });
                         countPerPartition.clear();
                 });
@@ -356,45 +373,45 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private void loopFlushEveryDelay() {
                 // vertx.executeBlocking(promise -> {
-                        if (!running.get())
-                                return;
+                if (!running.get())
+                        return;
 
-                        Iterator<Flow> iterator = toFlush.iterator();
-                        while (iterator.hasNext()) {
-                                Flow f = iterator.next();
-                                // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={}
-                                // packets={} durationMs={}",
-                                // f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
+                Iterator<Flow> iterator = toFlush.iterator();
+                while (iterator.hasNext()) {
+                        Flow f = iterator.next();
+                        // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Flushing flow: key={} bytes={}
+                        // packets={} durationMs={}",
+                        // f.key, f.bytes, f.packetCount, (f.lastSeen - f.firstSeen));
 
-                                // nDPI analysis on flow packets if not already detected
-                                // before publishing
-                                f.appProtocol = getNDPIProcol(f);
-                                f.riskLevel = getNDPIFlowRisk(f);
-                                f.riskMask = getNDPIFlowRiskMask(f);
-                                f.riskLabel = getNDPIFlowRiskLabel(f);
-                                f.riskSeverity = getNDPIFlowRiskSeverity(f);
+                        // nDPI analysis on flow packets if not already detected
+                        // before publishing
+                        f.appProtocol = getNDPIProcol(f);
+                        f.riskLevel = getNDPIFlowRisk(f);
+                        f.riskMask = getNDPIFlowRiskMask(f);
+                        f.riskLabel = getNDPIFlowRiskLabel(f);
+                        f.riskSeverity = getNDPIFlowRiskSeverity(f);
 
-                                // Publish the flow with appProtocol, riskLevel, riskLabel, and reasonOfFlowEnd
-                                // set
-                                publishFlow(f, f.reasonOfFlowEnd);
+                        // Publish the flow with appProtocol, riskLevel, riskLabel, and reasonOfFlowEnd
+                        // set
+                        publishFlow(f, f.reasonOfFlowEnd);
 
-                                // Remove the flow from the map after publishing
-                                try {
-                                        flows.entrySet().removeIf(entry -> entry.getKey().equals(f.key) &&
-                                                        entry.getValue().firstSeen == f.firstSeen &&
-                                                        entry.getValue().lastSeen == f.lastSeen);
-                                } catch (Exception e) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error removing flow {}: {}",
-                                                        f.key, e.getMessage());
-                                }
-                                iterator.remove();
+                        // Remove the flow from the map after publishing
+                        try {
+                                flows.entrySet().removeIf(entry -> entry.getKey().equals(f.key) &&
+                                                entry.getValue().firstSeen == f.firstSeen &&
+                                                entry.getValue().lastSeen == f.lastSeen);
+                        } catch (Exception e) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error removing flow {}: {}",
+                                                f.key, e.getMessage());
                         }
-                //         promise.complete();
+                        iterator.remove();
+                }
+                // promise.complete();
                 // }, false, res -> {
-                //         if (res.failed()) {
-                //                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error in flush loop: {}",
-                //                                 res.cause());
-                //         }
+                // if (res.failed()) {
+                // logger.error("[ FLOWAGGREGATOR VERTICLE ] Error in flush loop: {}",
+                // res.cause());
+                // }
                 // });
         }
 
@@ -529,6 +546,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 vertx.eventBus().publish("currentFlows.data", ongoingFlowsJson);
                         }
                 }
+                // Logger info to debug
 
         }
 
@@ -658,22 +676,24 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @param jsonStr JSON string representing a network packet
          */
         private void processRecord(JsonObject json) throws Exception {
-                if (json.toString().contains("PCAP_DONE")) {
-                        logger.info(Colors.CYAN
-                                        + "[ FLOWAGGREGATOR VERTICLE ]       Received PCAP_DONE message. Finished processing pcap file."
-                                        + Colors.RESET);
-                        // flush any remaining flows
+                if ("PCAP_DONE".equals(json.getString("status"))) {
+                        logger.info("[FLOWAGGREGATOR {}] Received PCAP_DONE signal, flushing remaining flows...",
+                                        deploymentID());
+
+                        consumer.pause();
+
                         vertx.executeBlocking(promise -> {
                                 flushRemainingFlows();
-                                promise.complete();
-                        }, false, res -> {
-                                if (res.failed()) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error flushing remaining flows: {}",
-                                                        res.cause().getMessage());
-                                }
+                        }, res -> {
+                                consumer.commit(ar -> {
+                                        logger.info("[FLOWAGGREGATOR {}] Shutdown complete", deploymentID());
+                                });
                         });
+
                         return;
+
                 }
+
                 // Parse the raw packet data
                 String rawPacketBase64 = json.getString("rawPacket");
                 if (rawPacketBase64 == null) {
