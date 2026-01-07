@@ -99,6 +99,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         int MAX_IN_FLIGHT = 1000;
 
         AtomicLong processed = new AtomicLong(0);
+        AtomicLong processed_rate_second = new AtomicLong(0);
+
 
         private final ConcurrentHashMap<Integer, Long> lastTsPerPartition = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Integer, AtomicInteger> countPerPartition = new ConcurrentHashMap<>();
@@ -316,9 +318,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         processed.incrementAndGet();
                                 } finally {
                                         int current = inFlight.decrementAndGet();
+                                        
                                         if (current < MAX_IN_FLIGHT / 2) {
                                                 consumer.resume();
                                         }
+                                        processed_rate_second.incrementAndGet();
                                 }
 
                                 processed.incrementAndGet();
@@ -361,27 +365,15 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         loopFlushEveryDelay();
                 });
 
-                vertx.setPeriodic(5000, id -> { // toutes les 5 secondes
-                        // countPerPartition.forEach((p, c) -> {
-                        // logger.info(
-                        // "[ FLOWAGGREGATOR VERTICLE ] Partition {} processed {} messages in last 5s",
-                        // p, c.get());
-                        // long totalTime = c.get() > 0
-                        // ? (System.currentTimeMillis() - lastTsPerPartition.getOrDefault(p, 0L))
-                        // : 0;
-                        // double debitTimePerPacket = c.get() > 0 ? (double) totalTime / c.get() : 0;
-                        // logger.info(
-                        // "[ FLOWAGGREGATOR VERTICLE ] Partition {} average debit time per packet: {}
-                        // ms",
-                        // p, debitTimePerPacket);
-                        // logger.info(flows.size() + " flows remaining in the map.");
-
-                        // });
-                        // countPerPartition.clear();
-                        // // Display total processed packets
-                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] {} packets processed so far for
-                        // partition.",
-                        // total_processed_packets);
+                vertx.setPeriodic(50, id -> { 
+                        // Log treated packets rate per second
+                        long rate = processed_rate_second.getAndSet(0);
+                        vertx.eventBus().publish("metrics.rates",
+                                        new JsonObject()
+                                                        .put("type", "FLOW_AGGREGATION_RATE")
+                                                        .put("rate_per_second", rate)
+                                                        .put("unit", "packets/s")
+                                                        .put("verticle_id", deploymentID()));
                 });
 
                 vertx.eventBus().consumer("pcap.global.done", msg -> {
