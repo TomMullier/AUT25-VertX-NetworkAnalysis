@@ -17,6 +17,7 @@
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/api/routes/NetworkRoute.java
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/BenchmarkVerticle.java
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/services/GeoIPService.java
+/home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/MetricsVerticle.java
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/utils/NDPIWrapper.java
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/ApiVerticle.java
 /home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/src/main/java/com/aut25/vertx/IngestionVerticle.java

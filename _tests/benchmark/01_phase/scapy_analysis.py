@@ -2,8 +2,8 @@ from scapy.all import rdpcap, IP, IPv6, TCP, UDP
 import csv
 import ipaddress
 
-PCAP_FILE = "../000_PCAP/reference.pcap"
-CSV_FILE = "./csv/scapy_output_reference.csv"
+PCAP_FILE = "../000_PCAP/Friday-WorkingHours.pcap"
+CSV_FILE = "./csv/scapy_output_Friday-WorkingHours.csv"
 
 packets = rdpcap(PCAP_FILE)
 

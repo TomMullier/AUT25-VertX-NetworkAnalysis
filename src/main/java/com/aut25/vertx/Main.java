@@ -207,17 +207,18 @@ public class Main extends AbstractVerticle {
         }
 
         // log shared data config
-        logger.info("[ MAIN VERTICLE ]                 Shared Data Config: "
+        logger.debug("[ MAIN VERTICLE ]                 Shared Data Config: "
                 + sharedData.getLocalMap("config").toString());
 
         // Determine if ClickHouse storage is enabled
         boolean store = config.getString("store", "false").equalsIgnoreCase(
                 "true");
-        logger.info(Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Store configuration: " + store + Colors.RESET);
+        logger.debug(Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Store configuration: " + store + Colors.RESET);
 
         // Créer la liste de verticles à déployer
-
-        // !verticles.add(new BenchmarkVerticle());
+        long start_deployement = System.nanoTime();
+        verticles.add(new MetricsVerticle());
+        // verticles.add(new BenchmarkVerticle());
         // verticles.add(new FlowConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         // :verticles.add(webServerVerticle);
@@ -246,13 +247,22 @@ public class Main extends AbstractVerticle {
         AtomicInteger readyCount = new AtomicInteger(0);
         vertx.eventBus().consumer("flow.aggregator.ready", msg -> {
             int ready = readyCount.incrementAndGet();
-            logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 FlowAggregatorVerticle ready count: " + ready
+            logger.debug(Colors.GREEN + "[ MAIN VERTICLE ]                 FlowAggregatorVerticle ready count: " + ready
                     + Colors.RESET);
             if (ready == numAggregators) {
-                logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 All FlowAggregatorVerticles are ready."
+                logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 " + numAggregators
+                        + " FlowAggregatorVerticles are ready."
                         + Colors.RESET);
                 // Déploiement séquentiel
                 deployVerticlesSequentially(verticles, startPromise);
+
+                long end_deployment = System.nanoTime();
+                vertx.eventBus().send(
+                        "metrics.collect",
+                        new JsonObject()
+                                .put("type", "VERTICLE_DEPLOYMENT")
+                                .put("startTime", start_deployement)
+                                .put("endTime", end_deployment));
             }
         });
     }

@@ -63,6 +63,7 @@ public class IngestionVerticle extends AbstractVerticle {
         private String mode = "";
         AtomicLong inFlightProducer = new AtomicLong();
         private final AtomicBoolean publishingDone = new AtomicBoolean(false);
+        private long start, end;
 
         private class PacketWrapper {
                 Packet packet;
@@ -360,6 +361,7 @@ public class IngestionVerticle extends AbstractVerticle {
         private long icmpCount = 0;
 
         private void ingestFromPcap(String pcapFilePath) {
+                start = System.nanoTime();
                 PcapHandle handle;
                 try {
                         handle = Pcaps.openOffline(pcapFilePath, PcapHandle.TimestampPrecision.NANO);
@@ -468,7 +470,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         index));
                                         index++;
                                 }
-                                
+
                                 // Lancer la publication
                                 publishNextFromQueue();
                         } else {
@@ -497,7 +499,16 @@ public class IngestionVerticle extends AbstractVerticle {
                         });
                 }
 
-                logger.info("[ INGESTION VERTICLE ]            PCAP_DONE sent to all partitions ({})", PARTITIONS_COUNT);
+                logger.info("[ INGESTION VERTICLE ]            PCAP_DONE sent to all partitions ({})",
+                                PARTITIONS_COUNT);
+                end = System.nanoTime();
+                vertx.eventBus().send(
+                                "metrics.collect",
+                                new JsonObject()
+                                                .put("type", "PCAP_INGESTION")
+                                                .put("startTime", start)
+                                                .put("endTime", end));
+
         }
 
         private void waitForProducerDrainAndSendDone() {

@@ -106,6 +106,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private final Map<Integer, Long> lastOffsetPerPartition = new HashMap<>();
         private final Map<Integer, Map<String, Long>> lastTsPerPartitionFlow = new HashMap<>();
 
+        private long start;
+
         /**
          * Start the verticle, initialize Kafka consumer and producer, and set up
          * processing logic
@@ -132,10 +134,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         FLOW_INACTIVITY_TIMEOUT_MS_OTHER = config.getLong("FLOW_INACTIVITY_TIMEOUT_MS_OTHER",
                                         FLOW_INACTIVITY_TIMEOUT_MS_OTHER);
                         FLOW_MAX_AGE_MS_OTHER = config.getLong("FLOW_MAX_AGE_MS_OTHER", FLOW_MAX_AGE_MS_OTHER);
-                        logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Loaded settings from shared map."
+                        logger.debug(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Loaded settings from shared map."
                                         + Colors.RESET);
                 }
-                logger.info(Colors.GREEN
+                logger.debug(Colors.GREEN
                                 + "[ FLOWAGGREGATOR VERTICLE ]       Flow timeouts: TCP inactivity={}ms, TCP max age={}ms, UDP inactivity={}ms, UDP max age={}ms, OTHER inactivity={}ms, OTHER max age={}ms"
                                 + Colors.RESET,
                                 FLOW_INACTIVITY_TIMEOUT_MS_TCP, FLOW_MAX_AGE_MS_TCP,
@@ -146,8 +148,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 "src/main/resources/GeoLite2-ASN.mmdb");
                 dnsService = new DnsService();
                 whoisService = new WhoisService();
-                logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Enrichment services initialized."
-                                + Colors.RESET);
+                
                 // Initialize nDPI
                 LocalMap<String, Object> sharedData = vertx.sharedData().getLocalMap("config");
 
@@ -155,7 +156,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 Object prev = sharedData.putIfAbsent("ndpi_initialized", true);
                 if (prev != null) {
                         // nDPI déjà initialisé par un autre verticle
-                        logger.info("[ FLOWAGGREGATOR VERTICLE ]      nDPI already initialized by another verticle.");
+                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       nDPI already initialized by another verticle.");
                 } else {
                         try {
                                 ndpi.init();
@@ -225,27 +226,28 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 String verticleId = this.deploymentID();
                 consumer
                                 .partitionsRevokedHandler(partitions -> {
-                                        logger.warn(
+                                        logger.debug(
                                                         "[FLOWAGGREGATOR VERTICLE {}] Kafka rebalance START - partitions revoked: {}",
                                                         verticleId,
                                                         partitions);
                                 })
                                 .partitionsAssignedHandler(partitions -> {
-                                        logger.warn(
+                                        logger.debug(
                                                         "[FLOWAGGREGATOR VERTICLE {}] Kafka rebalance END - partitions assigned: {}",
                                                         verticleId,
                                                         partitions);
                                 });
                 // Subscribe to input topic
                 consumer.partitionsAssignedHandler(partitions -> {
-                        logger.info("[FLOW {}] Partitions assigned: {}", deploymentID(), partitions);
+                        logger.debug("[FLOW {}] Partitions assigned: {}", deploymentID(), partitions);
                         vertx.eventBus().publish("flow.aggregator.ready", deploymentID());
                 })
                                 .subscribe(IN_TOPIC, ar -> {
                                         if (ar.succeeded()) {
-                                                logger.info(Colors.CYAN
-                                                                + "[ FLOWAGGREGATOR VERTICLE ]       Subscribed to topic {}",
-                                                                IN_TOPIC + Colors.RESET);
+                                                logger.debug(Colors.CYAN
+                                                                + "[ FLOWAGGREGATOR VERTICLE {} ]       Subscribed to topic {}", 
+                                                                deploymentID(), IN_TOPIC + Colors.RESET);
+                                                start = System.nanoTime();
 
                                         } else {
                                                 logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to subscribe: {}",
@@ -782,7 +784,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         vertx.eventBus().send("pcap.partition.done",
                                         new JsonObject()
                                                         .put("verticleId", deploymentID())
-                                                        .put("partition", partition));
+                                                        .put("partition", partition)
+                                                        .put("startTime", start));
 
                         return;
                 }

@@ -57,6 +57,7 @@ public class PcapCoordinatorVerticle extends AbstractVerticle {
         private static final Logger logger = LoggerFactory.getLogger(PcapCoordinatorVerticle.class);
         private final Set<Integer> donePartitions = new HashSet<>();
         private int totalPartitions;
+        private long minStart = 0;
 
         @Override
         public void start() {
@@ -71,7 +72,8 @@ public class PcapCoordinatorVerticle extends AbstractVerticle {
                                         startListening();
                                 })
                                 .onFailure(err -> {
-                                        logger.error("[ PCAP COORD VERTICLE ]           Failed to fetch partition count", err);
+                                        logger.error("[ PCAP COORD VERTICLE ]           Failed to fetch partition count",
+                                                        err);
                                         vertx.close(); // ou fail fast
                                 });
 
@@ -83,15 +85,28 @@ public class PcapCoordinatorVerticle extends AbstractVerticle {
 
                         JsonObject body = (JsonObject) msg.body();
                         int partition = body.getInteger("partition");
+                        long startTime = body.getLong("startTime");
+                        if (minStart == 0 || startTime < minStart) {
+                                minStart = startTime;
+                        }
 
                         if (donePartitions.add(partition)) {
-                                logger.info("[ PCAP COORD VERTICLE ]           Partition {} done ({}/{})",
+                                logger.info(Colors.YELLOW + "[ PCAP COORD VERTICLE ]           Partition {} done ({}/{})"
+                                                + Colors.RESET,
                                                 partition, donePartitions.size(), totalPartitions);
                         }
 
                         if (donePartitions.size() == totalPartitions) {
-                                logger.warn("[ PCAP COORD VERTICLE ]           ALL partitions done ({}/{}), publishing global done",
+                                logger.warn(Colors.GREEN + "[ PCAP COORD VERTICLE ]           ALL partitions done ({}/{}), publishing global done"
+                                                + Colors.RESET,
                                                 donePartitions.size(), totalPartitions);
+                                long end = System.nanoTime();
+                                vertx.eventBus().send(
+                                                "metrics.collect",
+                                                new JsonObject()
+                                                                .put("type", "PCAP_PROCESSING")
+                                                                .put("startTime", minStart)
+                                                                .put("endTime", end));
                                 vertx.eventBus().publish("pcap.global.done", "");
                         }
                 });

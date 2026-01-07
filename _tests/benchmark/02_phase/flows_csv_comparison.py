@@ -1,5 +1,6 @@
 import csv
 import ipaddress
+import sys
 
 # ----------------------------------- Paths ---------------------------------- #
 # nfstream_path = "./csv/nfstream_flows_reference.csv"
@@ -7,6 +8,8 @@ import ipaddress
 nfstream_path = "./csv/nfstream_flows_benign_slowloris.csv"
 vertx_path = "./csv/vertx_flows_benign_slowloris.csv"
 
+# Augmente la limite maximale des champs CSV
+csv.field_size_limit(sys.maxsize)
 
 # ------------------------------ Utils functions ----------------------------- #
 def normalize_ip(ip):
@@ -110,6 +113,11 @@ for key, nf_flow in nfstream_flows.items():
 # vertx_remaining = Vert.x flows not found in NFStream
 
 print("========== Flow Comparison Report ==========\n")
+
+print("Comparing files :")
+print(" - NFStream flows file :", nfstream_path)
+print(" - Vert.x flows file   :", vertx_path)
+print("\n")
 
 # Flows present in NFStream BUT missing in Vert.x
 print("=== NFStream → Vert.x : Missing in Vert.x ===")
