@@ -268,7 +268,7 @@ echo ""
 
 TOPIC_NAME="network-data"
 TOPIC_NAME2="network-flows"
-NUM_PARTITIONS=20
+NUM_PARTITIONS=50
 
 # Ensure Kafka is running
 echo "=== Vérification de Kafka ==="

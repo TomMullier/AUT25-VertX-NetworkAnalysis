@@ -213,6 +213,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 producerConfig.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
                 producerConfig.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
                 producerConfig.put("acks", "1");
+                producerConfig.put("max.request.size", "5242880"); // 5 MB
+                producerConfig.put("compression.type", "lz4");
 
                 producer = KafkaProducer.create(vertx, producerConfig);
 

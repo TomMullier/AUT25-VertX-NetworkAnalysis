@@ -233,7 +233,7 @@ public class Main extends AbstractVerticle {
                     + Colors.RESET);
         }
         sharedData.getLocalMap("config").put("ndpi_initialized", false);
-        int numAggregators = 20;
+        int numAggregators = 50;
         for (int i = 0; i < numAggregators; i++) {
             FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
             DeploymentOptions options = new DeploymentOptions();

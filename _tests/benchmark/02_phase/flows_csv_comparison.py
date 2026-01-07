@@ -2,8 +2,10 @@ import csv
 import ipaddress
 
 # ----------------------------------- Paths ---------------------------------- #
-nfstream_path = "./csv/nfstream_flows_reference.csv"
-vertx_path = "./csv/vertx_flows_reference.csv"
+# nfstream_path = "./csv/nfstream_flows_reference.csv"
+# vertx_path = "./csv/vertx_flows_reference.csv"
+nfstream_path = "./csv/nfstream_flows_benign_slowloris.csv"
+vertx_path = "./csv/vertx_flows_benign_slowloris.csv"
 
 
 # ------------------------------ Utils functions ----------------------------- #
@@ -144,10 +146,14 @@ if total_nfstream_flows > 0:
     print(
         f"Percentage of NFStream flows missing in Vert.x: {len(nf_remaining) / total_nfstream_flows * 100:.2f}%"
     )
-    print(f"Success rate for NFStream: {100 - (len(nf_remaining) / total_nfstream_flows * 100):.2f}%")
+    print(
+        f"Success rate for NFStream: {100 - (len(nf_remaining) / total_nfstream_flows * 100):.2f}%"
+    )
 if total_vertx_flows > 0:
     print(
         f"Percentage of Vert.x flows missing in NFStream: {len(vertx_remaining) / total_vertx_flows * 100:.2f}%"
-    ) 
-    print(f"Success rate for Vert.x: {100 - (len(vertx_remaining) / total_vertx_flows * 100):.2f}%")
+    )
+    print(
+        f"Success rate for Vert.x: {100 - (len(vertx_remaining) / total_vertx_flows * 100):.2f}%"
+    )
 print("=============================================")
