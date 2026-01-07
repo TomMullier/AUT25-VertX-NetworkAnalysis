@@ -13,6 +13,7 @@ import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
 import java.io.EOFException;
@@ -59,6 +60,9 @@ public class IngestionVerticle extends AbstractVerticle {
         private final AtomicBoolean running = new AtomicBoolean(true);
         private JsonObject config;
         private int PARTITIONS_COUNT = 1;
+        private String mode = "";
+        AtomicLong inFlightProducer = new AtomicLong();
+        private final AtomicBoolean publishingDone = new AtomicBoolean(false);
 
         private class PacketWrapper {
                 Packet packet;
@@ -94,21 +98,12 @@ public class IngestionVerticle extends AbstractVerticle {
                         return;
                 }
 
-                /*
-                 * Get mode from config file.
-                 * Can be :
-                 * - json (default for debug)
-                 * - pcap
-                 * - realtime
-                 */
-                String mode;
-
                 if (config != null && config.containsKey("ingestionMethod")) {
-                        mode = config.getString("ingestionMethod", "json").toLowerCase();
+                        mode = config.getString("ingestionMethod", "pcap").toLowerCase();
                 } else {
-                        mode = config.getString("mode", "json").toLowerCase();
+                        mode = config.getString("mode", "pcap").toLowerCase();
                 }
-                if (!List.of("json", "pcap", "realtime").contains(mode)) {
+                if (!List.of("pcap-instant", "pcap", "realtime").contains(mode)) {
                         logger.error("[ INGESTION VERTICLE ]            Invalid mode specified: " + mode);
                         return;
                 }
@@ -132,58 +127,17 @@ public class IngestionVerticle extends AbstractVerticle {
                 logger.debug(Colors.YELLOW + "[ INGESTION VERTICLE ][ CONFIG ]  Mode: " + mode.toUpperCase()
                                 + Colors.RESET);
                 switch (mode) {
-                        case "json":
-                                JsonObject fileConfig = config.getJsonObject("json", new JsonObject());
-                                String filePath = fileConfig.getString("file-path", "data/sample_data.json");
-                                int interval = fileConfig.getInteger("ingestion-interval-ms", 1000);
+                        case "pcap-instant":
+                                JsonObject pcapConfig_instant = config.getJsonObject("pcap", new JsonObject());
+                                String pcapFilePath_instant = pcapConfig_instant.getString("file-path",
+                                                "src/main/resources/datapcap-sample.pcap");
+                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] PCAP File path: "
+                                                + pcapFilePath_instant);
 
-                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] File path: " + filePath);
-                                logger.debug("[ INGESTION VERTICLE ][ CONFIG ] Ingestion interval (ms): " + interval);
+                                ingestFromPcap(pcapFilePath_instant);
 
-                                List<JsonObject> records;
-                                try {
-                                        String content = Files.readString(Paths.get(filePath), StandardCharsets.UTF_8);
-                                        ObjectMapper mapper = new ObjectMapper();
-                                        List<Map<String, Object>> listOfMaps = mapper.readValue(
-                                                        content, new TypeReference<List<Map<String, Object>>>() {
-                                                        });
-                                        records = listOfMaps.stream()
-                                                        .map(JsonObject::mapFrom)
-                                                        .toList();
-                                } catch (Exception e) {
-                                        logger.error("[ INGESTION VERTICLE ]            Failed to read or parse file: "
-                                                        + e.getMessage());
-                                        return;
-                                }
-
-                                AtomicReference<Iterator<JsonObject>> iteratorRef = new AtomicReference<>(
-                                                records.iterator());
-                                vertx.setPeriodic(interval, id -> {
-                                        if (!running.get())
-                                                return;
-
-                                        Iterator<JsonObject> it = iteratorRef.get();
-                                        if (!it.hasNext()) {
-                                                it = records.iterator();
-                                                iteratorRef.set(it);
-                                                logger.debug("[ INGESTION VERTICLE ]            End of file reached. Looping again...");
-                                        }
-
-                                        JsonObject record = it.next();
-                                        KafkaProducerRecord<String, String> kafkaRecord = KafkaProducerRecord
-                                                        .create("network-data", record.encode());
-                                        producer.send(kafkaRecord, ar -> {
-                                                if (ar.succeeded()) {
-                                                } else {
-                                                        logger.error("[ INGESTION VERTICLE ]            Failed to send record to Kafka: "
-                                                                        + ar.cause().getMessage());
-                                                }
-                                        });
-                                });
                                 break;
-
                         case "pcap":
-                                // TODO : implement pcap replay for ingestion
                                 JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject());
                                 String pcapFilePath = pcapConfig.getString("file-path",
                                                 "src/main/resources/datapcap-sample.pcap");
@@ -289,39 +243,34 @@ public class IngestionVerticle extends AbstractVerticle {
                 props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
                 props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
-                // ACK minimal pour aller plus vite
-                props.put("acks", "1"); // pas 0 car risque de perte sans gain significatif
+                // Fiabilité (suffisant sans surcoût)
+                props.put("acks", "1");
 
-                // === LATENCE ULTRA-FAIBLE ===
+                // Retry contrôlé (IMPORTANT)
+                props.put("retries", "5");
+                props.put("retry.backoff.ms", "100");
 
-                // Désactiver totalement le batching côté producer
-                props.put("batch.size", "16384"); // 16KB batch size
-                props.put("linger.ms", "1"); // 1ms linger time
-                props.put("buffer.memory", "33554432"); // 32MB pour absorber les bursts
+                // Préserve l’ordre même avec retry
+                props.put("max.in.flight.requests.per.connection", "5");
 
-                props.put("compression.type", "lz4"); // rapide et efficace
+                // Batching raisonnable (meilleur débit réel)
+                props.put("linger.ms", "5");
+                props.put("batch.size", "32768"); // 32 KB
 
-                // Réutiliser les connexions TCP
+                // Absorption des bursts PCAP
+                props.put("buffer.memory", "67108864"); // 64 MB
+
+                // Compression rapide
+                props.put("compression.type", "lz4");
+
+                // Timeouts réalistes (TA config actuelle était trop courte)
+                props.put("request.timeout.ms", "30000");
+                props.put("delivery.timeout.ms", "60000");
+
+                // Réseau
                 props.put("connections.max.idle.ms", "300000");
-
-                // Activer le transfert direct sans mise en attente
-                props.put("max.in.flight.requests.per.connection", "1");
-                // → évite reordering, réduit jitter
-
-                // Temps de réponse maximal très bas
-                props.put("request.timeout.ms", "15000");
-                props.put("delivery.timeout.ms", "20000"); // global timeout
-
-                // TCP optimisé latence
-                props.put("socket.send.buffer.bytes", "32768"); // 32 KB
-                props.put("socket.receive.buffer.bytes", "32768");
-
-                // Moins de copies mémoire
-                props.put("message.max.bytes", "1048576"); // 1 MB par message max
-
-                // Le must pour la latence = désactiver la mise en commun des buffers
-                props.put("receive.buffer.bytes", "32768");
-                props.put("send.buffer.bytes", "32768");
+                props.put("send.buffer.bytes", "65536");
+                props.put("receive.buffer.bytes", "65536");
 
                 // Id client pour debug
                 props.put("client.id", "low-latency-producer");
@@ -519,7 +468,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                         index));
                                         index++;
                                 }
-
+                                
                                 // Lancer la publication
                                 publishNextFromQueue();
                         } else {
@@ -531,7 +480,7 @@ public class IngestionVerticle extends AbstractVerticle {
 
         private void sendPcapDoneToAllPartitions() {
                 JsonObject doneMessage = new JsonObject().put("status", "PCAP_DONE");
-                
+
                 for (int p = 0; p < PARTITIONS_COUNT; p++) {
                         final int partition = p;
                         KafkaProducerRecord<String, String> record = KafkaProducerRecord.create(
@@ -542,29 +491,52 @@ public class IngestionVerticle extends AbstractVerticle {
 
                         producer.send(record, ar -> {
                                 if (!ar.succeeded()) {
-                                        logger.error("[INGESTION] Failed to send PCAP_DONE to partition {}: {}",
+                                        logger.error("[ INGESTION VERTICLE ]            Failed to send PCAP_DONE to partition {}: {}",
                                                         partition, ar.cause().getMessage());
                                 }
                         });
                 }
 
-                logger.info("[INGESTION] PCAP_DONE sent to all partitions ({})", PARTITIONS_COUNT);
+                logger.info("[ INGESTION VERTICLE ]            PCAP_DONE sent to all partitions ({})", PARTITIONS_COUNT);
+        }
+
+        private void waitForProducerDrainAndSendDone() {
+                vertx.setPeriodic(10, id -> {
+                        if (inFlightProducer.get() == 0) {
+                                vertx.cancelTimer(id);
+                                sendPcapDoneToAllPartitions();
+                                logger.info("[ INGESTION VERTICLE ]            All records ACKed by Kafka, PCAP_DONE sent");
+                        }
+                });
         }
 
         private void publishNextFromQueue() {
-                if (!running.get() || packetQueue.isEmpty()) {
-                        // Tous les paquets traités, envoyer PCAP_DONE
-                        sendPcapDoneToAllPartitions();
+                if (!running.get()) {
                         return;
                 }
 
-                PacketWrapper pw = packetQueue.poll(); // récupère le paquet avec le plus petit timestamp
+                PacketWrapper pw = packetQueue.poll();
+
+                // Plus rien à publier
+                if (pw == null) {
+                        // Marquer la fin UNE SEULE FOIS
+                        if (publishingDone.compareAndSet(false, true)) {
+                                waitForProducerDrainAndSendDone();
+                        }
+                        return;
+                }
+
                 long safeDelay = Math.max(pw.delta, 1);
 
-                vertx.setTimer(safeDelay, id -> {
+                if (mode.equals("pcap")) {
+                        vertx.setTimer(safeDelay, id -> {
+                                processPacket(pw.packet, safeDelay, pw.timestamp);
+                                vertx.runOnContext(v -> publishNextFromQueue());
+                        });
+                } else {
                         processPacket(pw.packet, safeDelay, pw.timestamp);
-                        publishNextFromQueue(); // récursion pour le paquet suivant
-                });
+                        vertx.runOnContext(v -> publishNextFromQueue());
+                }
         }
 
         /**
@@ -591,11 +563,14 @@ public class IngestionVerticle extends AbstractVerticle {
                 if (!running.get())
                         return;
                 producer.send(kafkaRecord, ar -> {
+                        inFlightProducer.decrementAndGet();
+
                         if (ar.failed()) {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "
                                                 + ar.cause().getMessage());
                         }
                 });
+                inFlightProducer.incrementAndGet();
         }
 
         /* -------------------------------------------------------------------------- */

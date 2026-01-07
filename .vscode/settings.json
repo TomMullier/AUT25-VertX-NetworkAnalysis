@@ -3,5 +3,6 @@
         "files.associations": {
                 "stdio.h": "c",
                 "ndpi_typedefs.h": "c"
-        }
+        },
+        "java.configuration.updateBuildConfiguration": "automatic"
 }

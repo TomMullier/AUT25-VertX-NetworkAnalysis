@@ -14,8 +14,10 @@ import io.vertx.core.json.JsonArray;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,6 +34,12 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
         private long delay = 500; // Délai entre les polls Kafka en ms
 
         private final AtomicBoolean running = new AtomicBoolean(true);
+        private final List<JsonObject> buffer = new ArrayList<>();
+        private List<JsonObject> inflightBatch = null;
+        private final AtomicBoolean flushing = new AtomicBoolean(false);
+
+        private static final int FLUSH_INTERVAL_MS = 1000;
+        private static final int MAX_BATCH_SIZE = 200; // tu peux ajuster
 
         @Override
         public void start() throws Exception {
@@ -54,98 +62,54 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
 
                 consumer = KafkaConsumer.create(vertx, config);
 
-                logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     Connected to ClickHouse at " + jdbcUrl);
-                logger.debug(
-                                "[ CLICKHOUSE FLOWS VERTICLE ]     KafkaConsumer configured for topic network-flows : "
-                                                + config.toString());
-
                 consumer.handler(record -> {
                         if (!running.get())
                                 return;
 
                         String value = record.value();
-                        if (value == null || value.isEmpty() || value.equals("reset") || value.equals("PCAP_DONE")) {
+                        if (value == null || value.isEmpty() || value.equals("reset") || value.equals("PCAP_DONE"))
                                 return;
-                        }
+
                         try {
-                                JsonObject json = new JsonObject(value);
+                                buffer.add(new JsonObject(value));
+                        } catch (Exception e) {
+                                logger.error("Invalid JSON received: {}", e.getMessage());
+                        }
 
-                                String flowId = UUID.randomUUID().toString();
-                                long firstSeen = json.getLong("firstSeen", System.currentTimeMillis());
-                                long lastSeen = json.getLong("lastSeen", firstSeen);
-                                String srcIp = json.getString("srcIp", "0.0.0.0");
-                                String dstIp = json.getString("dstIp", "0.0.0.0");
-                                String srcPort = json.getString("srcPort");
-                                String dstPort = json.getString("dstPort");
+                        if (buffer.size() >= MAX_BATCH_SIZE) {
+                                flushBatch();
+                        }
+                });
 
-                                String protocol = json.getString("protocol", "UNKNOWN");
-                                long bytes = json.getLong("bytes", 0L);
-                                long packetCount = json.getLong("packetCount", 0L);
-                                long durationMs = json.getLong("durationMs", lastSeen - firstSeen);
-                                String flowKey = json.getString("flowKey", "N/A");
+                consumer.subscribe("network-flows", ar -> {
+                        if (ar.succeeded()) {
+                                logger.info(Colors.CYAN
+                                                + "[ CLICKHOUSE FLOWS VERTICLE ]     Subscribed to topic network-flows"
+                                                + Colors.RESET);
+                        } else {
+                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Failed to subscribe: {}",
+                                                ar.cause().getMessage());
+                        }
+                });
 
-                                // Additional fields
-                                double minPacketLength = getSafeDouble(json, "minPacketLength", 0.0);
-                                double maxPacketLength = getSafeDouble(json, "maxPacketLength", 0.0);
-                                double meanPacketLength = getSafeDouble(json, "meanPacketLength", 0.0);
-                                double stddevPacketLength = getSafeDouble(json, "stddevPacketLength", 0.0);
+                // Flush périodique
+                vertx.setPeriodic(FLUSH_INTERVAL_MS, id -> flushBatch());
 
-                                double bytesPerSecond = getSafeDouble(json, "bytesPerSecond", 0.0);
-                                double packetsPerSecond = getSafeDouble(json, "packetsPerSecond", 0.0);
+                logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
+        }
 
-                                double totalBytesUpstream = getSafeDouble(json, "totalBytesUpstream", 0.0);
-                                double totalBytesDownstream = getSafeDouble(json, "totalBytesDownstream", 0.0);
-                                double totalPacketsUpstream = getSafeDouble(json, "totalPacketsUpstream", 0.0);
-                                double totalPacketsDownstream = getSafeDouble(json, "totalPacketsDownstream", 0.0);
-                                double ratioBytesUpDown = getSafeDouble(json, "ratioBytesUpDown", 0.0);
-                                double ratioPacketsUpDown = getSafeDouble(json, "ratioPacketsUpDown", 0.0);
+        private void flushBatch() {
+                if (!running.get() || flushing.get() || buffer.isEmpty())
+                        return;
 
-                                long flowDurationMs = json.getLong("flowDurationMs", durationMs);
+                flushing.set(true);
+                inflightBatch = new ArrayList<>(buffer);
+                buffer.clear();
 
-                                double interArrivalTimeMean = getSafeDouble(json, "interArrivalTimeMean", 0.0);
-                                double interArrivalTimeStdDev = getSafeDouble(json, "interArrivalTimeStdDev", 0.0);
-                                double interArrivalTimeMin = getSafeDouble(json, "interArrivalTimeMin", 0.0);
-                                double interArrivalTimeMax = getSafeDouble(json, "interArrivalTimeMax", 0.0);
+                consumer.pause();
 
-                                double flowSymmetry = getSafeDouble(json, "flowSymmetry", 0.0);
-                                double synRate = getSafeDouble(json, "synRate", 0.0);
-                                double finRate = getSafeDouble(json, "finRate", 0.0);
-                                double rstRate = getSafeDouble(json, "rstRate", 0.0);
-                                double ackRate = getSafeDouble(json, "ackRate", 0.0);
-
-                                double tcpFraction = getSafeDouble(json, "tcpFraction", 0.0);
-                                double udpFraction = getSafeDouble(json, "udpFraction", 0.0);
-                                double otherFraction = getSafeDouble(json, "otherFraction", 0.0);
-
-                                double appProtocolBytes = getSafeDouble(json, "appProtocolBytes", 0.0);
-                                String appProtocol = json.getString("appProtocol", "UNKNOWN");
-                                long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
-
-                                int riskLevel = json.getInteger("riskLevel", -1);
-                                int riskMask = json.getInteger("riskMask", -1);
-                                String riskLabel = json.getString("riskLabel", "UNKNOWN");
-                                String[] riskLabels = riskLabel.isEmpty() ? new String[0] : riskLabel.split(",");
-                                String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
-
-                                String packetSummariesString = json.getString("packetSummariesString", "");
-                                String[] packetSummaries = packetSummariesString.isEmpty() ? new String[0]
-                                                : packetSummariesString.split(",");
-
-                                String reasonOfFlowEnd = json.getString("reasonOfFlowEnd", "");
-
-                                String srcCountry = json.getString("srcCountry", "N/A");
-                                String dstCountry = json.getString("dstCountry", "N/A");
-                                String srcDomain = json.getString("srcDomain", "N/A");
-                                String dstDomain = json.getString("dstDomain", "N/A");
-                                String srcOrg = json.getString("srcOrg", "N/A");
-                                String dstOrg = json.getString("dstOrg", "N/A");
-
-                                JsonArray treatmentDelayJson = json.getJsonArray("treatmentDelay");
-                                long[] treatmentDelayStrs = treatmentDelayJson
-                                                .stream()
-                                                .mapToLong(o -> ((Number) o).longValue())
-                                                .toArray();
-
+                vertx.executeBlocking(promise -> {
+                        try {
                                 // Insert into ClickHouse
                                 String insertSQL = "INSERT INTO network_flows " +
                                                 "(id, firstSeen, lastSeen, srcIp, dstIp, srcPort, dstPort, protocol, bytes, packets, durationMs, flowKey, treatmentDelay, "
@@ -163,108 +127,195 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 +
                                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
-                                        pstmt.setString(1, flowId);
-                                        pstmt.setLong(2, firstSeen);
-                                        pstmt.setLong(3, lastSeen);
-                                        pstmt.setString(4, srcIp);
-                                        pstmt.setString(5, dstIp);
-                                        pstmt.setString(6, srcPort);
-                                        pstmt.setString(7, dstPort);
-                                        pstmt.setString(8, protocol);
-                                        pstmt.setLong(9, bytes);
-                                        pstmt.setLong(10, packetCount);
-                                        pstmt.setLong(11, durationMs);
-                                        pstmt.setString(12, flowKey);
-                                        pstmt.setObject(13, treatmentDelayStrs);
+                                        for (JsonObject json : inflightBatch) {
 
-                                        pstmt.setDouble(14, minPacketLength);
-                                        pstmt.setDouble(15, maxPacketLength);
-                                        pstmt.setDouble(16, meanPacketLength);
-                                        pstmt.setDouble(17, stddevPacketLength);
+                                                String flowId = UUID.randomUUID().toString();
+                                                long firstSeen = json.getLong("firstSeen", System.currentTimeMillis());
+                                                long lastSeen = json.getLong("lastSeen", firstSeen);
+                                                String srcIp = json.getString("srcIp", "0.0.0.0");
+                                                String dstIp = json.getString("dstIp", "0.0.0.0");
+                                                String srcPort = json.getString("srcPort");
+                                                String dstPort = json.getString("dstPort");
 
-                                        pstmt.setDouble(18, bytesPerSecond);
-                                        pstmt.setDouble(19, packetsPerSecond);
+                                                String protocol = json.getString("protocol", "UNKNOWN");
+                                                long bytes = json.getLong("bytes", 0L);
+                                                long packetCount = json.getLong("packetCount", 0L);
+                                                long durationMs = json.getLong("durationMs", lastSeen - firstSeen);
+                                                String flowKey = json.getString("flowKey", "N/A");
 
-                                        pstmt.setDouble(20, totalBytesUpstream);
-                                        pstmt.setDouble(21, totalBytesDownstream);
-                                        pstmt.setDouble(22, totalPacketsUpstream);
-                                        pstmt.setDouble(23, totalPacketsDownstream);
-                                        pstmt.setDouble(24, ratioBytesUpDown);
-                                        pstmt.setDouble(25, ratioPacketsUpDown);
+                                                // Additional fields
+                                                double minPacketLength = getSafeDouble(json, "minPacketLength", 0.0);
+                                                double maxPacketLength = getSafeDouble(json, "maxPacketLength", 0.0);
+                                                double meanPacketLength = getSafeDouble(json, "meanPacketLength", 0.0);
+                                                double stddevPacketLength = getSafeDouble(json, "stddevPacketLength",
+                                                                0.0);
 
-                                        pstmt.setLong(26, flowDurationMs);
+                                                double bytesPerSecond = getSafeDouble(json, "bytesPerSecond", 0.0);
+                                                double packetsPerSecond = getSafeDouble(json, "packetsPerSecond", 0.0);
 
-                                        pstmt.setDouble(27, interArrivalTimeMean);
-                                        pstmt.setDouble(28, interArrivalTimeStdDev);
-                                        pstmt.setDouble(29, interArrivalTimeMin);
-                                        pstmt.setDouble(30, interArrivalTimeMax);
+                                                double totalBytesUpstream = getSafeDouble(json, "totalBytesUpstream",
+                                                                0.0);
+                                                double totalBytesDownstream = getSafeDouble(json,
+                                                                "totalBytesDownstream", 0.0);
+                                                double totalPacketsUpstream = getSafeDouble(json,
+                                                                "totalPacketsUpstream", 0.0);
+                                                double totalPacketsDownstream = getSafeDouble(json,
+                                                                "totalPacketsDownstream",
+                                                                0.0);
+                                                double ratioBytesUpDown = getSafeDouble(json, "ratioBytesUpDown", 0.0);
+                                                double ratioPacketsUpDown = getSafeDouble(json, "ratioPacketsUpDown",
+                                                                0.0);
 
-                                        pstmt.setDouble(31, flowSymmetry);
-                                        pstmt.setDouble(32, synRate);
-                                        pstmt.setDouble(33, finRate);
-                                        pstmt.setDouble(34, rstRate);
-                                        pstmt.setDouble(35, ackRate);
+                                                long flowDurationMs = json.getLong("flowDurationMs", durationMs);
 
-                                        pstmt.setDouble(36, tcpFraction);
-                                        pstmt.setDouble(37, udpFraction);
-                                        pstmt.setDouble(38, otherFraction);
+                                                double interArrivalTimeMean = getSafeDouble(json,
+                                                                "interArrivalTimeMean", 0.0);
+                                                double interArrivalTimeStdDev = getSafeDouble(json,
+                                                                "interArrivalTimeStdDev",
+                                                                0.0);
+                                                double interArrivalTimeMin = getSafeDouble(json, "interArrivalTimeMin",
+                                                                0.0);
+                                                double interArrivalTimeMax = getSafeDouble(json, "interArrivalTimeMax",
+                                                                0.0);
 
-                                        pstmt.setDouble(39, appProtocolBytes);
-                                        pstmt.setString(40, appProtocol);
-                                        pstmt.setLong(41, ndpiFlowPtr);
+                                                double flowSymmetry = getSafeDouble(json, "flowSymmetry", 0.0);
+                                                double synRate = getSafeDouble(json, "synRate", 0.0);
+                                                double finRate = getSafeDouble(json, "finRate", 0.0);
+                                                double rstRate = getSafeDouble(json, "rstRate", 0.0);
+                                                double ackRate = getSafeDouble(json, "ackRate", 0.0);
 
-                                        pstmt.setInt(42, riskLevel);
-                                        pstmt.setInt(43, riskMask);
-                                        pstmt.setString(44, setArrayAsClickHouseStringArray(riskLabels));
-                                        pstmt.setString(45, riskSeverity);
+                                                double tcpFraction = getSafeDouble(json, "tcpFraction", 0.0);
+                                                double udpFraction = getSafeDouble(json, "udpFraction", 0.0);
+                                                double otherFraction = getSafeDouble(json, "otherFraction", 0.0);
 
-                                        pstmt.setString(46, setArrayAsClickHouseStringArray(packetSummaries));
+                                                double appProtocolBytes = getSafeDouble(json, "appProtocolBytes", 0.0);
+                                                String appProtocol = json.getString("appProtocol", "UNKNOWN");
+                                                long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
 
-                                        pstmt.setString(47, reasonOfFlowEnd);
+                                                int riskLevel = json.getInteger("riskLevel", -1);
+                                                int riskMask = json.getInteger("riskMask", -1);
+                                                String riskLabel = json.getString("riskLabel", "UNKNOWN");
+                                                String[] riskLabels = riskLabel.isEmpty() ? new String[0]
+                                                                : riskLabel.split(",");
+                                                String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
 
-                                        pstmt.setString(48, srcCountry);
-                                        pstmt.setString(49, dstCountry);
-                                        pstmt.setString(50, srcDomain);
-                                        pstmt.setString(51, dstDomain);
-                                        pstmt.setString(52, srcOrg);
-                                        pstmt.setString(53, dstOrg);
+                                                String packetSummariesString = json.getString("packetSummariesString",
+                                                                "");
+                                                String[] packetSummaries = packetSummariesString.isEmpty()
+                                                                ? new String[0]
+                                                                : packetSummariesString.split(",");
 
-                                        pstmt.executeUpdate();
-                                }
+                                                String reasonOfFlowEnd = json.getString("reasonOfFlowEnd", "");
 
-                        } catch (Exception e) {
-                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Error processing record: {}",
-                                                e.getMessage());
-                                logger.error("Packet producing the error: {}", record.value());
-                        }
+                                                String srcCountry = json.getString("srcCountry", "N/A");
+                                                String dstCountry = json.getString("dstCountry", "N/A");
+                                                String srcDomain = json.getString("srcDomain", "N/A");
+                                                String dstDomain = json.getString("dstDomain", "N/A");
+                                                String srcOrg = json.getString("srcOrg", "N/A");
+                                                String dstOrg = json.getString("dstOrg", "N/A");
 
-                        // Commit manuel après traitement
-                        consumer.commit(ar -> {
-                                if (ar.failed()) {
+                                                JsonArray treatmentDelayJson = json.getJsonArray("treatmentDelay");
+                                                long[] treatmentDelayStrs = treatmentDelayJson
+                                                                .stream()
+                                                                .mapToLong(o -> ((Number) o).longValue())
+                                                                .toArray();
 
-                                        if (ar.cause().getMessage() != null) {
-                                                logger.error(
-                                                                "[ CLICKHOUSE FLOWS VERTICLE ]     Commit failed: "
-                                                                                + ar.cause().getMessage());
+                                                pstmt.setString(1, flowId);
+                                                pstmt.setLong(2, firstSeen);
+                                                pstmt.setLong(3, lastSeen);
+                                                pstmt.setString(4, srcIp);
+                                                pstmt.setString(5, dstIp);
+                                                pstmt.setString(6, srcPort);
+                                                pstmt.setString(7, dstPort);
+                                                pstmt.setString(8, protocol);
+                                                pstmt.setLong(9, bytes);
+                                                pstmt.setLong(10, packetCount);
+                                                pstmt.setLong(11, durationMs);
+                                                pstmt.setString(12, flowKey);
+                                                pstmt.setObject(13, treatmentDelayStrs);
+
+                                                pstmt.setDouble(14, minPacketLength);
+                                                pstmt.setDouble(15, maxPacketLength);
+                                                pstmt.setDouble(16, meanPacketLength);
+                                                pstmt.setDouble(17, stddevPacketLength);
+
+                                                pstmt.setDouble(18, bytesPerSecond);
+                                                pstmt.setDouble(19, packetsPerSecond);
+
+                                                pstmt.setDouble(20, totalBytesUpstream);
+                                                pstmt.setDouble(21, totalBytesDownstream);
+                                                pstmt.setDouble(22, totalPacketsUpstream);
+                                                pstmt.setDouble(23, totalPacketsDownstream);
+                                                pstmt.setDouble(24, ratioBytesUpDown);
+                                                pstmt.setDouble(25, ratioPacketsUpDown);
+
+                                                pstmt.setLong(26, flowDurationMs);
+
+                                                pstmt.setDouble(27, interArrivalTimeMean);
+                                                pstmt.setDouble(28, interArrivalTimeStdDev);
+                                                pstmt.setDouble(29, interArrivalTimeMin);
+                                                pstmt.setDouble(30, interArrivalTimeMax);
+
+                                                pstmt.setDouble(31, flowSymmetry);
+                                                pstmt.setDouble(32, synRate);
+                                                pstmt.setDouble(33, finRate);
+                                                pstmt.setDouble(34, rstRate);
+                                                pstmt.setDouble(35, ackRate);
+
+                                                pstmt.setDouble(36, tcpFraction);
+                                                pstmt.setDouble(37, udpFraction);
+                                                pstmt.setDouble(38, otherFraction);
+
+                                                pstmt.setDouble(39, appProtocolBytes);
+                                                pstmt.setString(40, appProtocol);
+                                                pstmt.setLong(41, ndpiFlowPtr);
+
+                                                pstmt.setInt(42, riskLevel);
+                                                pstmt.setInt(43, riskMask);
+                                                pstmt.setString(44, setArrayAsClickHouseStringArray(riskLabels));
+                                                pstmt.setString(45, riskSeverity);
+
+                                                pstmt.setString(46, setArrayAsClickHouseStringArray(packetSummaries));
+
+                                                pstmt.setString(47, reasonOfFlowEnd);
+
+                                                pstmt.setString(48, srcCountry);
+                                                pstmt.setString(49, dstCountry);
+                                                pstmt.setString(50, srcDomain);
+                                                pstmt.setString(51, dstDomain);
+                                                pstmt.setString(52, srcOrg);
+                                                pstmt.setString(53, dstOrg);
+
+                                                pstmt.addBatch();
                                         }
 
+                                        pstmt.executeBatch();
                                 }
-                        });
-                });
-
-                // Subscribe to topic
-                consumer.subscribe("network-flows", ar -> {
+                                promise.complete();
+                        } catch (Exception e) {
+                                promise.fail(e);
+                        }
+                }, ar -> {
+                        Logger logger = LoggerFactory.getLogger(ClickHouseFlowsVerticle.class);
                         if (ar.succeeded()) {
-                                logger.info(Colors.CYAN
-                                                + "[ CLICKHOUSE FLOWS VERTICLE ]     Subscribed to topic network-flows"
-                                                + Colors.RESET);
+                                // Commit Kafka après succès ClickHouse
+                                consumer.commit(commitAr -> {
+                                        if (commitAr.failed()) {
+                                                logger.error("Kafka commit failed: {}", commitAr.cause().getMessage());
+                                                buffer.addAll(inflightBatch); // retry batch
+                                        }
+                                        inflightBatch = null;
+                                        flushing.set(false);
+                                        consumer.resume();
+                                });
                         } else {
-                                logger.error("[ CLICKHOUSE FLOWS VERTICLE ]     Failed to subscribe: {}",
-                                                ar.cause().getMessage());
+                                logger.error("ClickHouse batch insert failed: {}", ar.cause().getMessage());
+                                buffer.addAll(inflightBatch); // retry
+                                inflightBatch = null;
+                                flushing.set(false);
+                                vertx.setTimer(1000, id -> consumer.resume());
                         }
                 });
-
-                logger.debug("[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle deployed successfully!");
         }
 
         private String setArrayAsClickHouseStringArray(String[] array) {
@@ -281,9 +332,6 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 return sb.toString();
         }
 
-        
-
-        @Override
         public void stop() throws Exception {
                 running.set(false);
                 if (consumer != null)
@@ -291,7 +339,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                 if (clickhouseConn != null)
                         clickhouseConn.close();
                 Logger logger = LoggerFactory.getLogger(ClickHouseFlowsVerticle.class);
-                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle stopped!"
+                logger.info(Colors.RED + "[ CLICKHOUSE FLOWS VERTICLE ]     ClickHouseFlowsVerticle stopped."
                                 + Colors.RESET);
         }
 

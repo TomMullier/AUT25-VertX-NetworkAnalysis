@@ -31,6 +31,9 @@ import com.aut25.vertx.utils.NdpiFlowWrapper;
 
 import static java.lang.Thread.sleep;
 
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,6 +65,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private long FLOW_MAX_AGE_MS_OTHER = 300_000; // 5 minutes
 
         private static final long FLOW_CLEAN_PERIOD_MS = 100;
+
+        private long total_published_flows_ = 0;
 
         private KafkaConsumer<String, String> consumer;
         private KafkaProducer<String, String> producer;
@@ -97,7 +102,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private final ConcurrentHashMap<Integer, Long> lastTsPerPartition = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Integer, AtomicInteger> countPerPartition = new ConcurrentHashMap<>();
-
+        private int partition;
         private final Map<Integer, Long> lastOffsetPerPartition = new HashMap<>();
         private final Map<Integer, Map<String, Long>> lastTsPerPartitionFlow = new HashMap<>();
 
@@ -195,7 +200,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("max.poll.interval.ms", "600000");
 
                 // Identification client
-                consumerConfig.put("client.id", "high-throughput-consumer");
+                String clientId = "flow-aggregator-" + vertx.getOrCreateContext().deploymentID();
+                consumerConfig.put("client.id", clientId);
 
                 consumer = KafkaConsumer.create(vertx, consumerConfig);
                 // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Kafka consumer created : " +
@@ -252,7 +258,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 return;
 
                         // Debug partition stats
-                        final int partition = record.partition();
+                        partition = record.partition();
                         countPerPartition.computeIfAbsent(partition, k -> new AtomicInteger()).incrementAndGet();
 
                         if (inFlight.incrementAndGet() > MAX_IN_FLIGHT) {
@@ -352,23 +358,76 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 });
 
                 vertx.setPeriodic(5000, id -> { // toutes les 5 secondes
-                        countPerPartition.forEach((p, c) -> {
-                                logger.info(
-                                                "[ FLOWAGGREGATOR VERTICLE ]       Partition {} processed {} messages in last 5s",
-                                                p, c.get());
-                                long totalTime = c.get() > 0
-                                                ? (System.currentTimeMillis() - lastTsPerPartition.getOrDefault(p, 0L))
-                                                : 0;
-                                double debitTimePerPacket = c.get() > 0 ? (double) totalTime / c.get() : 0;
-                                logger.info(
-                                                "[ FLOWAGGREGATOR VERTICLE ]       Partition {} average debit time per packet: {} ms",
-                                                p, debitTimePerPacket);
-                                // logger.info(flows.size() + " flows remaining in the map.");
+                        // countPerPartition.forEach((p, c) -> {
+                        // logger.info(
+                        // "[ FLOWAGGREGATOR VERTICLE ] Partition {} processed {} messages in last 5s",
+                        // p, c.get());
+                        // long totalTime = c.get() > 0
+                        // ? (System.currentTimeMillis() - lastTsPerPartition.getOrDefault(p, 0L))
+                        // : 0;
+                        // double debitTimePerPacket = c.get() > 0 ? (double) totalTime / c.get() : 0;
+                        // logger.info(
+                        // "[ FLOWAGGREGATOR VERTICLE ] Partition {} average debit time per packet: {}
+                        // ms",
+                        // p, debitTimePerPacket);
+                        // logger.info(flows.size() + " flows remaining in the map.");
 
-                        });
-                        countPerPartition.clear();
+                        // });
+                        // countPerPartition.clear();
+                        // // Display total processed packets
+                        // logger.info("[ FLOWAGGREGATOR VERTICLE ] {} packets processed so far for
+                        // partition.",
+                        // total_processed_packets);
                 });
 
+                vertx.eventBus().consumer("pcap.global.done", msg -> {
+                        logger.warn("[FLOW {}] GLOBAL_PCAP_DONE received", deploymentID());
+
+                        flushRemainingFlowsSafely()
+                                        .onSuccess(v -> commitAndShutdown())
+                                        .onFailure(err -> logger.error("[FLOW {}] Flush failed", deploymentID(), err));
+                });
+
+        }
+
+        private Future<Void> flushRemainingFlowsSafely() {
+
+                Promise<Void> promise = Promise.promise();
+
+                vertx.runOnContext(v -> {
+                        try {
+                                for (Flow f : new ArrayList<>(flows.values())) {
+                                        // nDPI analysis on flow packets if not already detected
+                                        f.appProtocol = getNDPIProcol(f);
+                                        f.riskLevel = getNDPIFlowRisk(f);
+                                        f.riskMask = getNDPIFlowRiskMask(f);
+                                        f.riskLabel = getNDPIFlowRiskLabel(f);
+                                        f.riskSeverity = getNDPIFlowRiskSeverity(f);
+
+                                        publishFlow(f, "PCAP_DONE");
+                                        flows.remove(f.key);
+                                        ndpiFlows.remove(f.key);
+                                }
+
+                                promise.complete();
+
+                        } catch (Exception e) {
+                                promise.fail(e);
+                        }
+                });
+
+                return promise.future();
+        }
+
+        private void commitAndShutdown() {
+                consumer.commit(ar -> {
+                        if (ar.succeeded()) {
+                                logger.info("[FLOW {}] Final commit OK", deploymentID());
+                        } else {
+                                logger.error("[FLOW {}] Final commit FAILED", deploymentID(), ar.cause());
+                        }
+                        consumer.close();
+                });
         }
 
         private void loopFlushEveryDelay() {
@@ -490,9 +549,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private void flushRemainingFlows() {
                 logger.info(Colors.CYAN
-                                + "[ FLOWAGGREGATOR VERTICLE ]       Flushing remaining flows (end of pcap)..."
-                                + Colors.RESET);
+                                + "[ FLOWAGGREGATOR VERTICLE {} ]       Flushing remaining flows before shutdown...",
+                                deploymentID() + Colors.RESET);
                 toFlush = new ArrayList<>(flows.values());
+                // Display how many packet still in queue
 
                 Iterator<Flow> iterator = toFlush.iterator();
                 while (iterator.hasNext()) {
@@ -546,7 +606,11 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 vertx.eventBus().publish("currentFlows.data", ongoingFlowsJson);
                         }
                 }
-                // Logger info to debug
+                // Remaining
+                logger.info(Colors.CYAN
+                                + "[ FLOWAGGREGATOR VERTICLE {} ]       Flush complete. Total published flows before shutdown: {}",
+                                deploymentID(), total_published_flows_ + Colors.RESET);
+                // print toflush
 
         }
 
@@ -676,22 +740,49 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @param jsonStr JSON string representing a network packet
          */
         private void processRecord(JsonObject json) throws Exception {
-                if ("PCAP_DONE".equals(json.getString("status"))) {
-                        logger.info("[FLOWAGGREGATOR {}] Received PCAP_DONE signal, flushing remaining flows...",
-                                        deploymentID());
+                // if ("PCAP_DONE".equals(json.getString("status"))) {
 
+                // vertx.executeBlocking(promise -> {
+                // while (inFlight.get() > 0) {
+                // try {
+                // Thread.sleep(100);
+                // } catch (InterruptedException e) {
+                // // Ignore
+                // }
+                // }
+                // consumer.pause();
+                // flushRemainingFlows();
+                // }, res -> {
+                // consumer.commit(ar -> {
+                // logger.info("[FLOWAGGREGATOR {}] Shutdown complete", deploymentID());
+                // });
+                // if (res.failed()) {
+                // logger.error("[ FLOWAGGREGATOR VERTICLE ] Error during PCAP_DONE flush: {}",
+                // res.cause().getMessage());
+                // } else {
+                // logger.info(Colors.CYAN + "Remaining flows to flush: {}", toFlush.size());
+                // logger.info(Colors.CYAN + "Remaining flows in map: {}", flows.size());
+                // }
+                // });
+
+                // return;
+
+                // }
+                if ("PCAP_DONE".equals(json.getString("status"))) {
+
+                        logger.debug("[FLOW {}] PCAP_DONE received for partition {}",
+                                        deploymentID(), partition);
+
+                        // Stop consuming further records for this partition
                         consumer.pause();
 
-                        vertx.executeBlocking(promise -> {
-                                flushRemainingFlows();
-                        }, res -> {
-                                consumer.commit(ar -> {
-                                        logger.info("[FLOWAGGREGATOR {}] Shutdown complete", deploymentID());
-                                });
-                        });
+                        // Signale au coordinateur que CETTE partition est terminée
+                        vertx.eventBus().send("pcap.partition.done",
+                                        new JsonObject()
+                                                        .put("verticleId", deploymentID())
+                                                        .put("partition", partition));
 
                         return;
-
                 }
 
                 // Parse the raw packet data
@@ -1142,6 +1233,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private void publishFlow(Flow f, String reasonOfFlowEnd) {
                 f.reasonOfFlowEnd = reasonOfFlowEnd;
                 f.calculateStats();
+                total_published_flows_++;
                 // Enrichissement avant publication
 
                 f.enrich(geoIPService, dnsService, whoisService, vertx)

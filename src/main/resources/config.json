@@ -7,7 +7,7 @@
     "ingestion-interval-ms": 1000
   },
   "pcap": {
-    "file-path": "_tests/benchmark/01_phase/pcap/reference.pcap",
+    "file-path": "_tests/benchmark/000_PCAP/reference.pcap",
     "delay": "false"
   },
   "realtime_test": {

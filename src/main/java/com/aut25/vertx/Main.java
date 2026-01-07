@@ -69,8 +69,8 @@ public class Main extends AbstractVerticle {
         while (!exitMenu) {
             // --- Menu principal ---
             logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 Choose ingestion method:");
-            logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 1. JSON (provide file path)");
-            logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 2. PCAP (provide file path)");
+            logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 1. PCAP Instant (provide file path)");
+            logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 2. PCAP Replay (provide file path)");
             logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 3. Realtime");
             logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 4. Exit" + Colors.RESET);
 
@@ -86,37 +86,38 @@ public class Main extends AbstractVerticle {
             }
 
             switch (choice) {
-                case 1: // JSON
+                case 1: // PCAP Instant
 
-                    ingestionMethod = "json";
-                    logger.info(Colors.MAGENTA + "[ MAIN VERTICLE ]                 JSON ingestion method selected."
-                            + Colors.RESET);
+                    ingestionMethod = "pcap-instant";
+                    logger.info(
+                            Colors.MAGENTA + "[ MAIN VERTICLE ]                 PCAP Instant ingestion method selected."
+                                    + Colors.RESET);
                     logger.info(Colors.MAGENTA
-                            + "[ MAIN VERTICLE ]                 Enter JSON file path (or type 'menu' to return): "
+                            + "[ MAIN VERTICLE ]                 Enter PCAP file path (or type 'menu' to return): "
                             + Colors.RESET);
-                    String jsonPath = scanner.nextLine();
-                    if ("menu".equalsIgnoreCase(jsonPath.trim())) {
+                    String pcapPath_instant = scanner.nextLine();
+                    if ("menu".equalsIgnoreCase(pcapPath_instant.trim())) {
                         break; // revient au menu principal
                     }
-                    if (jsonPath.trim().isEmpty()) {
-                        jsonPath = config.getJsonObject("json").getString("file-path",
-                                "src/main/resources/data/network-data.json");
+                    if (pcapPath_instant.trim().isEmpty()) {
+                        pcapPath_instant = config.getJsonObject("pcap").getString("file-path",
+                                "_tests/benchmark/000_PCAP/reference.pcap");
                         logger.info(Colors.YELLOW
                                 + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
-                                + jsonPath + Colors.RESET);
+                                + pcapPath_instant + Colors.RESET);
                     }
-                    config.put("mode", "json");
-                    config.put("json.file-path", jsonPath);
+                    config.put("mode", "pcap-instant");
+                    config.put("pcap.file-path", pcapPath_instant);
 
-                    JsonObject jsonConfig = new JsonObject()
-                            .put("file-path", jsonPath)
-                            .put("ingestion-interval-ms",
-                                    config.getJsonObject("json").getInteger("ingestion-interval-ms", 1000));
-                    sharedData.getLocalMap("config").put("json", jsonConfig);
+                    JsonObject pcapConfig_instant = new JsonObject()
+                            .put("file-path", pcapPath_instant)
+                            .put("delay", "false");
+                    sharedData.getLocalMap("config").put("pcap", pcapConfig_instant);
                     sharedData.getLocalMap("config").put("ingestionMethod", ingestionMethod);
-                    sharedData.getLocalMap("config").put("mode", "json");
+                    sharedData.getLocalMap("config").put("mode", "pcap-instant");
 
-                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 JSON file path set to: " + jsonPath
+                    logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 PCAP file path set to: "
+                            + pcapPath_instant
                             + Colors.RESET);
                     exitMenu = true;
                     break;
@@ -134,7 +135,7 @@ public class Main extends AbstractVerticle {
                     }
                     if (pcapPath.trim().isEmpty()) {
                         pcapPath = config.getJsonObject("pcap").getString("file-path",
-                                "_tests/benchmark/01_phase/pcap/reference.pcap");
+                                "_tests/benchmark/000_PCAP/reference.pcap");
                         logger.info(Colors.YELLOW
                                 + "[ MAIN VERTICLE ]                 No input provided. Using default path: "
                                 + pcapPath + Colors.RESET);
@@ -221,6 +222,7 @@ public class Main extends AbstractVerticle {
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         // :verticles.add(webServerVerticle);
         verticles.add(new IngestionVerticle());
+        verticles.add(new PcapCoordinatorVerticle());
 
         if (store) {
             verticles.add(new ClickHousePacketVerticle());
@@ -403,7 +405,7 @@ public class Main extends AbstractVerticle {
         sharedData.getLocalMap("config").put("json", jsonConfig);
 
         JsonObject pcapConfig = config.getJsonObject("pcap", new JsonObject()
-                .put("file-path", "_tests/benchmark/01_phase/pcap/reference.pcap")
+                .put("file-path", "_tests/benchmark/000_PCAP/reference.pcap")
                 .put("delay", "true"));
         sharedData.getLocalMap("config").put("pcap", pcapConfig);
 
