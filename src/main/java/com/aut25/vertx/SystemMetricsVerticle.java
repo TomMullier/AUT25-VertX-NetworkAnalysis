@@ -12,13 +12,14 @@ public class SystemMetricsVerticle extends AbstractVerticle {
         @Override
         public void start() {
                 osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
-
+                Runtime runtime = Runtime.getRuntime();
                 // Publier CPU & RAM toutes les secondes
                 vertx.setPeriodic(50, id -> {
                         double cpu = osBean.getProcessCpuLoad() * 100; // %
-                        long ramUsed = osBean.getTotalPhysicalMemorySize() - osBean.getFreePhysicalMemorySize();
-                        long ramTotal = osBean.getTotalPhysicalMemorySize();
-                        double ramPercent = ((double) ramUsed / ramTotal) * 100;
+                        long usedHeap = runtime.totalMemory() - runtime.freeMemory();
+                        long maxHeap = runtime.maxMemory();
+
+                        double heapPercent = ((double) usedHeap / maxHeap) * 100;
 
                         vertx.eventBus().send("metrics.core", new JsonObject()
                                         .put("type", "SYSTEM_CPU")
@@ -28,7 +29,7 @@ public class SystemMetricsVerticle extends AbstractVerticle {
                         vertx.eventBus().send("metrics.core", new JsonObject()
                                         .put("type", "SYSTEM_RAM")
                                         .put("source", "SystemMetrics")
-                                        .put("value", ramPercent));
+                                        .put("value", heapPercent));
                 });
         }
 }

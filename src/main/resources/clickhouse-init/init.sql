@@ -74,6 +74,16 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
 ) ENGINE = MergeTree()
 ORDER BY (firstSeen, flowKey);
 
+DROP TABLE IF EXISTS network_analysis.metrics;
+
+CREATE TABLE IF NOT EXISTS network_analysis.metrics (
+    type String,
+    rate Float64,
+    unit String,
+    timestamp Int64
+) ENGINE = MergeTree()
+ORDER BY (timestamp, type);
+
 CREATE USER IF NOT EXISTS admin IDENTIFIED WITH plaintext_password BY 'admin';
 GRANT ALL ON network_analysis.* TO admin;
 GRANT ALL ON network_analysis.network_data TO admin;
