@@ -80,10 +80,10 @@ public class Flow {
 
         public double flowDurationMs = -1;
 
-        public double interArrivalTimeMean = -1;
-        public double interArrivalTimeStdDev = -1;
-        public double interArrivalTimeMin = -1;
-        public double interArrivalTimeMax = -1;
+        public double interArrivalTimeMean = 0;
+        public double interArrivalTimeStdDev = 0;
+        public double interArrivalTimeMin = 0;
+        public double interArrivalTimeMax = 0;
 
         // IDS-friendly features
         public double flowSymmetry = -1;
@@ -91,6 +91,11 @@ public class Flow {
         public double finRate = -1;
         public double rstRate = -1;
         public double ackRate = -1;
+        public double pshRate = -1;
+
+        // Flags counters
+        private long synCount = 0, finCount = 0, rstCount = 0, ackCount = 0, pshCount = 0;
+        private long tcpCount = 0, udpCount = 0, otherCount = 0;
 
         public double tcpFraction = -1;
         public double udpFraction = -1;
@@ -202,6 +207,13 @@ public class Flow {
                 jo.put("finRate", (double) this.finRate);
                 jo.put("rstRate", (double) this.rstRate);
                 jo.put("ackRate", (double) this.ackRate);
+                jo.put("pshRate", (double) this.pshRate);
+
+                jo.put("synCount", this.synCount);
+                jo.put("finCount", this.finCount);
+                jo.put("rstCount", this.rstCount);
+                jo.put("ackCount", this.ackCount);
+                jo.put("pshCount", this.pshCount);
 
                 jo.put("tcpFraction", (double) this.tcpFraction);
                 jo.put("udpFraction", (double) this.udpFraction);
@@ -310,34 +322,37 @@ public class Flow {
                 long upstreamBytes = 0, downstreamBytes = 0;
                 long upstreamPackets = 0, downstreamPackets = 0;
 
-                // Flags counters
-                long synCount = 0, finCount = 0, rstCount = 0, ackCount = 0;
-                long tcpCount = 0, udpCount = 0, otherCount = 0;
-
                 /* -------------------------------- Main loop ------------------------------- */
                 for (int i = 0; i < packets.size(); i++) {
                         Packet pkt = packets.get(i);
                         long ts = packetTimestamps.get(i);
-                        int length = pkt.length();
-                        packetLengths.add(length);
-                        this.bytes += length; // Add packet length to total bytes
 
-                        // Get direction of packet (upstream / downstream)
+                        // --- Longueur totale du paquet (inclut tous les headers et payload) ---
+                        int pktLength = pkt.length();
+                        packetLengths.add(pktLength);
+                        this.bytes += pktLength; // total bytes sur le flow
+
+                        // --- Direction du paquet (upstream / downstream) ---
                         if (pkt.contains(IpPacket.class)) {
                                 IpPacket ip = pkt.get(IpPacket.class);
-                                int payloadLength = ip.getPayload() != null ? ip.getPayload().length() : 0;
 
-                                if (ip.getHeader().getSrcAddr().getHostAddress().equals(this.srcIp)) {
-                                        upstreamBytes += payloadLength;
+                                String srcAddr = ip.getHeader().getSrcAddr().getHostAddress();
+                                String dstAddr = ip.getHeader().getDstAddr().getHostAddress();
+
+                                if (srcAddr.equals(this.srcIp)) {
+                                        upstreamBytes += pktLength; // paquet entier
                                         upstreamPackets++;
-                                } else if (ip.getHeader().getDstAddr().getHostAddress().equals(this.srcIp)) {
-                                        downstreamBytes += payloadLength;
+                                } else if (dstAddr.equals(this.srcIp)) {
+                                        downstreamBytes += pktLength; // paquet entier
                                         downstreamPackets++;
                                 } else {
                                         logger.warn("Flow.calculateStats: Packet IPs do not match flow IPs (src: {}, dst: {})",
-                                                        ip.getHeader().getSrcAddr().getHostAddress(),
-                                                        ip.getHeader().getDstAddr().getHostAddress());
+                                                        srcAddr, dstAddr);
                                 }
+                        } else {
+                                // Paquet non-IP : on peut juste l'ignorer pour upstream/downstream
+                                logger.debug("Non-IP packet ignored for upstream/downstream calculation: length={}",
+                                                pktLength);
                         }
 
                         // Protocol fractions and TCP flags
@@ -353,6 +368,8 @@ public class Flow {
                                         rstCount++;
                                 if (hdr.getAck())
                                         ackCount++;
+                                if (hdr.getPsh())
+                                        pshCount++;
                         } else if (pkt.contains(UdpPacket.class)) {
                                 udpCount++;
                         } else {
@@ -375,13 +392,23 @@ public class Flow {
                 /* ------------------------ Stats packet length stats ----------------------- */
                 this.minPacketLength = packetLengths.stream().mapToInt(v -> v).min().orElse(0);
                 this.maxPacketLength = packetLengths.stream().mapToInt(v -> v).max().orElse(0);
-                this.meanPacketLength = (long) packetLengths.stream().mapToInt(v -> v).average().orElse(0);
-                this.stddevPacketLength = (long) Math.sqrt(packetLengths.stream()
-                                .mapToDouble(v -> Math.pow(v - this.meanPacketLength, 2)).average().orElse(0));
+                this.meanPacketLength = (double) packetLengths.stream().mapToInt(v -> v).average().orElse(0);
+                int n = packetLengths.size();
+                double mean = packetLengths.stream().mapToInt(v -> v).average().orElse(0.0);
+
+                double variance = packetLengths.stream()
+                                .mapToDouble(v -> Math.pow(v - mean, 2))
+                                .sum() / (n - 1); // correction de Bessel
+                this.stddevPacketLength = Math.sqrt(variance);
 
                 /* ------------------------------- Stats débit ------------------------------ */
-                this.bytesPerSecond = (long) ((bytes * 1000.0) / flowDurationMs);
-                this.packetsPerSecond = (long) ((packetCount * 1000.0) / flowDurationMs);
+                if (firstSeen == lastSeen) {
+                        this.packetsPerSecond = 0;
+                        this.bytesPerSecond = 0;
+                } else {
+                        this.bytesPerSecond = (double) ((bytes * 1000) / flowDurationMs);
+                        this.packetsPerSecond = (double) ((packetCount * 1000) / flowDurationMs);
+                }
 
                 /* -------------------------- Upstream / Downstream ------------------------- */
                 this.totalBytesUpstream = upstreamBytes;
@@ -406,10 +433,15 @@ public class Flow {
                 if (!interArrivals.isEmpty()) {
                         this.interArrivalTimeMin = interArrivals.stream().mapToLong(v -> v).min().orElse(0);
                         this.interArrivalTimeMax = interArrivals.stream().mapToLong(v -> v).max().orElse(0);
+                        int n2 = interArrivals.size();
                         double meanIAT = interArrivals.stream().mapToLong(v -> v).average().orElse(0.0);
                         this.interArrivalTimeMean = meanIAT;
-                        this.interArrivalTimeStdDev = Math.sqrt(interArrivals.stream()
-                                        .mapToDouble(v -> Math.pow(v - meanIAT, 2)).average().orElse(0.0));
+
+                        double variance2 = interArrivals.stream()
+                                        .mapToDouble(v -> Math.pow(v - meanIAT, 2))
+                                        .sum() / (n2 - 1); // Correction de Bessel
+                        this.interArrivalTimeStdDev = Math.sqrt(variance2);
+
                 }
 
                 /* -------------------------- Protocols repartition ------------------------- */
@@ -423,6 +455,7 @@ public class Flow {
                         this.finRate = (double) finCount / tcpCount;
                         this.rstRate = (double) rstCount / tcpCount;
                         this.ackRate = (double) ackCount / tcpCount;
+                        this.pshRate = (double) pshCount / tcpCount;
                 }
 
                 /* ------------------- Additional stats can be added here ------------------- */
@@ -452,16 +485,22 @@ public class Flow {
 
                 this.flowDurationMs = -1;
 
-                this.interArrivalTimeMean = -1;
-                this.interArrivalTimeStdDev = -1;
-                this.interArrivalTimeMin = -1;
-                this.interArrivalTimeMax = -1;
+                this.interArrivalTimeMean = 0;
+                this.interArrivalTimeStdDev = 0;
+                this.interArrivalTimeMin = 0;
+                this.interArrivalTimeMax = 0;
 
-                this.flowSymmetry = -1;
-                this.synRate = -1;
-                this.finRate = -1;
-                this.rstRate = -1;
-                this.ackRate = -1;
+                this.flowSymmetry = 0;
+                this.synRate = 0;
+                this.finRate = 0;
+                this.rstRate = 0;
+                this.ackRate = 0;
+
+                this.synCount = 0;
+                this.finCount = 0;
+                this.rstCount = 0;
+                this.ackCount = 0;
+                this.pshCount = 0;
 
                 this.tcpFraction = -1;
                 this.udpFraction = -1;

@@ -53,7 +53,7 @@ public class WebServerVerticle extends AbstractVerticle {
                         new SettingsRoute(vertx, mainVerticle).mount(router);
                         new PcapRoute(vertx, mainVerticle).mount(router);
                         new NetworkRoute(vertx, mainVerticle).mount(router);
-                        new UtilsRoute(vertx, mainVerticle).mount(router);                    
+                        new UtilsRoute(vertx, mainVerticle).mount(router);
                         router.route("/*").handler(StaticHandler.create("webroot").setCachingEnabled(false));
 
                         HttpServer server = vertx.createHttpServer();
@@ -91,11 +91,11 @@ public class WebServerVerticle extends AbstractVerticle {
                         });
 
                         // vertx.eventBus().consumer("packets.data", msg -> {
-                        //         if (!(msg.body() instanceof JsonObject))
-                        //                 return;
-                        //         JsonObject data = ((JsonObject) msg.body()).copy();
-                        //         data.put("type", "packet");
-                        //         broadcast(data);
+                        // if (!(msg.body() instanceof JsonObject))
+                        // return;
+                        // JsonObject data = ((JsonObject) msg.body()).copy();
+                        // data.put("type", "packet");
+                        // broadcast(data);
                         // });
 
                         vertx.eventBus().consumer("currentFlows.data", msg -> {
@@ -111,6 +111,14 @@ public class WebServerVerticle extends AbstractVerticle {
                                         return;
                                 JsonObject data = ((JsonObject) msg.body()).copy();
                                 data.put("type", "malformedPacket");
+                                broadcast(data);
+                        });
+
+                        vertx.eventBus().consumer("metrics.core", message -> {
+                                JsonObject data = (JsonObject) message.body();
+                                // FLOW_AGGREGATION_RATE
+                                // SYSTEM_CPU
+                                // SYSTEM_RAM
                                 broadcast(data);
                         });
 

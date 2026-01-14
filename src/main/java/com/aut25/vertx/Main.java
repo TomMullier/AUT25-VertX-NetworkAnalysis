@@ -220,9 +220,9 @@ public class Main extends AbstractVerticle {
         verticles.add(new MetricsVerticle());
         verticles.add(new SystemMetricsVerticle());
         // verticles.add(new BenchmarkVerticle());
-        // verticles.add(new FlowConsumerVerticle());
+        verticles.add(new FlowConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
-        // :verticles.add(webServerVerticle);
+        verticles.add(webServerVerticle);
         verticles.add(new IngestionVerticle());
         verticles.add(new PcapCoordinatorVerticle());
 

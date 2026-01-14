@@ -305,8 +305,8 @@ export function updateFlowDelay(flowKey, delays) {
                 data.datasets[0].data[index] = avgDelay;
         }
 
-        // scrolling automatique : conserver max 50 flows visibles
-        const MAX_POINTS = 50;
+        // scrolling automatique : conserver max 30 flows visibles
+        const MAX_POINTS = 30;
         while (data.labels.length > MAX_POINTS) {
                 data.labels.shift();
                 data.datasets[0].data.shift();

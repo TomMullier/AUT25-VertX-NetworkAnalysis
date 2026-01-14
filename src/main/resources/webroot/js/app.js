@@ -137,6 +137,13 @@ ws.onmessage = (event) => {
                         handleCurrentFlowData(data);
                 } else if (data.type === "malformedPacket") {
                         handleMalformedPacketData(data);
+                } else if (data.type === "FLOW_AGGREGATION_RATE") {
+                        console.log("Flow aggregation rate data received:", data);
+                        // handleFlowAggregationRateData(data);
+                } else if (data.type === "SYSTEM_RAM") {
+                        // handleSystemRamData(data);
+                } else if (data.type === "SYSTEM_CPU") {
+                        // handleSystemCpuData(data);
                 } else {
                         console.warn("Unknown WebSocket message type:", data.type);
                 }

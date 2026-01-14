@@ -48,6 +48,8 @@ import io.vertx.kafka.client.producer.KafkaProducer;
 import io.vertx.kafka.client.producer.KafkaProducerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
+import io.vertx.core.shareddata.Lock;
+
 public class FlowAggregatorVerticle extends AbstractVerticle {
 
         private static final Logger logger = LoggerFactory.getLogger(FlowAggregatorVerticle.class);
@@ -101,7 +103,6 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         AtomicLong processed = new AtomicLong(0);
         AtomicLong processed_rate_second = new AtomicLong(0);
 
-
         private final ConcurrentHashMap<Integer, Long> lastTsPerPartition = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<Integer, AtomicInteger> countPerPartition = new ConcurrentHashMap<>();
         private int partition;
@@ -150,25 +151,26 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 "src/main/resources/GeoLite2-ASN.mmdb");
                 dnsService = new DnsService();
                 whoisService = new WhoisService();
-                
-                // Initialize nDPI
-                LocalMap<String, Object> sharedData = vertx.sharedData().getLocalMap("config");
 
-                // Essaie d'initialiser atomiquement
-                Object prev = sharedData.putIfAbsent("ndpi_initialized", true);
-                if (prev != null) {
-                        // nDPI déjà initialisé par un autre verticle
-                        logger.debug("[ FLOWAGGREGATOR VERTICLE ]       nDPI already initialized by another verticle.");
-                } else {
-                        try {
-                                ndpi.init();
-                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
-                        } catch (Exception e) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]      Failed to initialize nDPI: {}",
-                                                e.getMessage());
-                                sharedData.put("ndpi_initialized", false); // rollback
+                vertx.sharedData().getLock("ndpi_init_lock", ar -> {
+                        if (ar.succeeded()) {
+                                Lock lock = ar.result();
+                                try {
+                                        // LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+
+                                        if (!Boolean.TRUE.equals(map.get("ndpi_initialized"))) {
+                                                ndpi.init();
+                                                map.put("ndpi_initialized", true);
+                                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
+                                        }
+                                } catch (Exception e) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error initializing nDPI: {}",
+                                                        e.getMessage());
+                                } finally {
+                                        lock.release();
+                                }
                         }
-                }
+                });
 
                 Map<String, String> consumerConfig = new HashMap<>();
                 consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
@@ -247,7 +249,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 .subscribe(IN_TOPIC, ar -> {
                                         if (ar.succeeded()) {
                                                 logger.debug(Colors.CYAN
-                                                                + "[ FLOWAGGREGATOR VERTICLE {} ]       Subscribed to topic {}", 
+                                                                + "[ FLOWAGGREGATOR VERTICLE {} ]       Subscribed to topic {}",
                                                                 deploymentID(), IN_TOPIC + Colors.RESET);
                                                 start = System.nanoTime();
 
@@ -318,7 +320,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         processed.incrementAndGet();
                                 } finally {
                                         int current = inFlight.decrementAndGet();
-                                        
+
                                         if (current < MAX_IN_FLIGHT / 2) {
                                                 consumer.resume();
                                         }
@@ -365,7 +367,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                         loopFlushEveryDelay();
                 });
 
-                vertx.setPeriodic(50, id -> { 
+                vertx.setPeriodic(50, id -> {
                         // Log treated packets rate per second
                         long rate = processed_rate_second.getAndSet(0);
                         vertx.eventBus().publish("metrics.rates",
