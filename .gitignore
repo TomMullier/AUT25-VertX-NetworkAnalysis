@@ -27,3 +27,5 @@ replay_pid*
 target/
 _tests/benchmark/000_PCAP/*.pcap
 _tests/benchmark/01_phase/csv/*.csv
+
+.sh
