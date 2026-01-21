@@ -55,6 +55,12 @@ public class ClickHousePacketVerticle extends AbstractVerticle {
                 config.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
                 config.put("auto.offset.reset", "earliest");
                 config.put("enable.auto.commit", "false"); // commit manuel
+                        config.put("max.poll.records", "2000"); // nombre max de messages par poll
+                        config.put("fetch.max.wait.ms", "100"); // attendre max 100ms si fetch.min.bytes non rempli
+                        config.put("fetch.min.bytes", "1"); // fetch minimal 1 octet (ou 32KB si gros)
+                        config.put("max.partition.fetch.bytes", "2097152"); // 2MB max par partition
+                        config.put("session.timeout.ms", "10000"); // timeout session consumer
+                        config.put("heartbeat.interval.ms", "3000"); // interval heartbeat
 
                 consumer = KafkaConsumer.create(vertx, config);
 

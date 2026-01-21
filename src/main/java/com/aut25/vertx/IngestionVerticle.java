@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Scanner;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,10 +33,13 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.pcap4j.core.BpfProgram;
+import org.pcap4j.core.NotOpenException;
 import org.pcap4j.core.PacketListener;
 import org.pcap4j.core.PcapHandle;
 import org.pcap4j.core.PcapNativeException;
 import org.pcap4j.core.PcapNetworkInterface;
+import org.pcap4j.core.PcapStat;
 import org.pcap4j.core.Pcaps;
 import org.pcap4j.packet.IpPacket;
 import org.pcap4j.packet.Packet;
@@ -64,6 +69,7 @@ public class IngestionVerticle extends AbstractVerticle {
         AtomicLong inFlightProducer = new AtomicLong();
         private final AtomicBoolean publishingDone = new AtomicBoolean(false);
         private long start, end;
+        private final AtomicLong droppedPackets = new AtomicLong(0);
 
         private class PacketWrapper {
                 Packet packet;
@@ -312,41 +318,109 @@ public class IngestionVerticle extends AbstractVerticle {
          * to Kafka.
          */
         private void ingestInRealTime(String networkInterface) {
+
+                if (!running.get()) {
+                        return;
+                }
+
                 try {
-                        if (running.get() == false)
-                                return;
                         PcapNetworkInterface nif = Pcaps.getDevByName(networkInterface);
                         if (nif == null) {
-                                logger.error("[ INGESTION VERTICLE ]            Network interface not found: "
-                                                + networkInterface);
+                                logger.error("[ INGESTION VERTICLE ] Network interface not found: {}",
+                                                networkInterface);
                                 return;
                         }
 
-                        final int snapLen = 65536;
-                        final int timeout = 10;
-                        PcapHandle handle = nif.openLive(snapLen, PcapNetworkInterface.PromiscuousMode.PROMISCUOUS,
-                                        timeout);
+                        final int SNAPLEN = 65536;
+                        final int TIMEOUT_MS = 100;
+                        final int PCAP_BUFFER_SIZE = 64 * 1024 * 1024; // 64 MB
+                        final int QUEUE_CAPACITY = 100_000;
+                        final int WORKER_COUNT = Runtime.getRuntime().availableProcessors();
 
-                        AtomicReference<Long> timestamp = new AtomicReference<>(System.currentTimeMillis());
+                        // ===== File de découplage capture / traitement =====
+                        BlockingQueue<Packet> captureQueue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
+
+                        // ===== Construction du handle PCAP =====
+                        PcapHandle handle = new PcapHandle.Builder(nif.getName())
+                                        .snaplen(SNAPLEN)
+                                        .promiscuousMode(PcapNetworkInterface.PromiscuousMode.PROMISCUOUS)
+                                        .timeoutMillis(TIMEOUT_MS)
+                                        .bufferSize(PCAP_BUFFER_SIZE)
+                                        .build();
+
+                        // Optionnel mais fortement recommandé
+                        // handle.setFilter("ip", BpfProgram.BpfCompileMode.OPTIMIZE);
+
+                        logger.info("[ INGESTION VERTICLE ] Capture started on {} (workers={}, buffer={}MB)",
+                                        networkInterface, WORKER_COUNT, PCAP_BUFFER_SIZE / 1024 / 1024);
+
+                        // ===== THREAD DE CAPTURE =====
+                        ExecutorService captureExecutor = Executors.newSingleThreadExecutor();
+
                         PacketListener listener = packet -> {
-                                long packetTimestamp = System.currentTimeMillis();
-                                long delay = packetTimestamp - timestamp.get();
-                                timestamp.set(packetTimestamp);
-                                processPacket(packet, delay, packetTimestamp);
+                                // Offre non bloquante → si la queue est pleine, on drop volontairement
+                                boolean accepted = captureQueue.offer(packet);
+                                if (!accepted) {
+                                        // Drop applicatif assumé
+                                        droppedPackets.incrementAndGet();
+                                }
                         };
 
-                        ExecutorService pool = Executors.newSingleThreadExecutor();
-                        pool.execute(() -> {
+                        captureExecutor.execute(() -> {
                                 try {
                                         handle.loop(-1, listener);
+                                } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
                                 } catch (Exception e) {
-                                        e.printStackTrace();
+                                        logger.error("[ INGESTION VERTICLE ] Capture error", e);
+                                }
+                        });
+
+                        // ===== WORKERS DE TRAITEMENT =====
+                        ExecutorService workerPool = Executors.newFixedThreadPool(WORKER_COUNT);
+
+                        for (int i = 0; i < WORKER_COUNT; i++) {
+                                workerPool.execute(() -> {
+                                        while (running.get()) {
+                                                try {
+                                                        Packet packet = captureQueue.take();
+
+                                                        long timestampNs = System.nanoTime();
+                                                        processPacket(packet,0, timestampNs);
+
+                                                } catch (InterruptedException e) {
+                                                        Thread.currentThread().interrupt();
+                                                        break;
+                                                } catch (Exception e) {
+                                                        logger.error("[ INGESTION VERTICLE ] Processing error", e);
+                                                }
+                                        }
+                                });
+                        }
+
+                        // ===== MONITORING DES DROPS KERNEL =====
+                        vertx.setPeriodic(5000, id -> {
+                                try {
+                                        PcapStat stats = null;
+                                        try {
+                                                stats = handle.getStats();
+                                        } catch (NotOpenException e) {
+                                                // TODO Auto-generated catch block
+                                                e.printStackTrace();
+                                        }
+                                        logger.info(
+                                                        "[ INGESTION STATS ] received={} dropped(kernel)={} dropped(app)={} queue={}",
+                                                        stats.getNumPacketsReceived(),
+                                                        stats.getNumPacketsDropped(),
+                                                        droppedPackets.get(),
+                                                        captureQueue.size());
+                                } catch (PcapNativeException e) {
+                                        logger.warn("[ INGESTION VERTICLE ] Unable to read pcap stats", e);
                                 }
                         });
 
                 } catch (PcapNativeException e) {
-                        logger.error("[ INGESTION VERTICLE ]            Error accessing network interface: "
-                                        + e.getMessage());
+                        logger.error("[ INGESTION VERTICLE ] Error accessing network interface", e);
                 }
         }
 

@@ -159,7 +159,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         // LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
 
                                         if (!Boolean.TRUE.equals(map.get("ndpi_initialized"))) {
-                                                ndpi.init();
+                                                // ndpi.init();
                                                 map.put("ndpi_initialized", true);
                                                 logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
                                         }
@@ -187,9 +187,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("auto.offset.reset", "earliest"); // Depuis le début si pas d'offset
 
                 // Lecture efficace
-                consumerConfig.put("max.poll.records", "500"); // Traite 500 messages par poll (au lieu de 1)
-                consumerConfig.put("fetch.min.bytes", "1"); // Attend au moins 32 KB de données
-                // consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de
+                consumerConfig.put("max.poll.records", "2000"); // Traite 500 messages par poll (au lieu de 1)
+                consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de
                 // données
                 consumerConfig.put("fetch.max.wait.ms", "50"); // Max 50ms d'attente pour atteindre fetch.min.bytes
                 consumerConfig.put("max.partition.fetch.bytes", "2097152"); // 2 MB max par partition

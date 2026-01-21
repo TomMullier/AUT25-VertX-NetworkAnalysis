@@ -3,6 +3,8 @@ package com.aut25.vertx;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.shareddata.LocalMap;
 import io.vertx.core.shareddata.SharedData;
@@ -42,6 +44,9 @@ public class Main extends AbstractVerticle {
     @Override
     public void start(Promise<Void> startPromise) throws Exception {
         logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Starting MainVerticle..." + Colors.RESET);
+        // Set workers to 40
+       
+
         // Load configuration from JSON file
         config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
@@ -225,23 +230,26 @@ public class Main extends AbstractVerticle {
         verticles.add(webServerVerticle);
         verticles.add(new IngestionVerticle());
         verticles.add(new PcapCoordinatorVerticle());
-
+        DeploymentOptions options = new DeploymentOptions();
+        options.setConfig(config);
+        options.setInstances(1);
+        options.setWorker(true);
         if (store) {
-            verticles.add(new ClickHousePacketVerticle());
-            verticles.add(new ClickHouseFlowsVerticle());
+            // verticles.add(new ClickHousePacketVerticle());
+            // verticles.add(new ClickHouseFlowsVerticle());
+            vertx.deployVerticle(new ClickHousePacketVerticle(), options);
+            vertx.deployVerticle(new ClickHouseFlowsVerticle(), options);
         } else {
             logger.info(Colors.YELLOW
                     + "[ MAIN VERTICLE ]                 Skipping ClickHouse verticles as per configuration."
                     + Colors.RESET);
         }
         sharedData.getLocalMap("config").put("ndpi_initialized", false);
-        int numAggregators = 50;
+        int cpu = Runtime.getRuntime().availableProcessors();
+        int numAggregators = 500;
         for (int i = 0; i < numAggregators; i++) {
             FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
-            DeploymentOptions options = new DeploymentOptions();
-            options.setConfig(config);
-            options.setInstances(1);
-            options.setWorker(true);
+
             vertx.deployVerticle(verticle, options);
         }
 
