@@ -579,7 +579,7 @@ public class Flow {
                 Promise<Flow> promise = Promise.promise();
                 logger.debug("Enriching flow: srcIp={}, dstIp={}", srcIp, dstIp);
 
-                CompositeFuture.all(
+               /* CompositeFuture.all(
                                 lookupGeo(geoIPService, vertx, srcIp),
                                 lookupGeo(geoIPService, vertx, dstIp),
                                 lookupDns(dnsService, vertx, srcIp),
@@ -594,7 +594,7 @@ public class Flow {
                                         this.dstOrg = cf.resultAt(5);
                                         promise.complete(this);
                                 }).onFailure(err -> promise.complete(this));
-
+*/
                 return promise.future();
         }
 

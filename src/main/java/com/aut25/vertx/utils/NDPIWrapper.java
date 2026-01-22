@@ -3,7 +3,7 @@ package com.aut25.vertx.utils;
 public class NDPIWrapper {
 
     static {
-        System.load("/home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/native/libndpi_jni.so");
+        System.load("/home/tom/IMAGIN_LAB/MULLIER_Tom/AUT25-VertX-NetworkAnalysis/native/libndpi_jni.so");
     }
 
     // Initialise nDPI et retourne le pointeur vers le contexte nDPI

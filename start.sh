@@ -197,11 +197,39 @@ if [ "$SKIP_DEPS" = false ]; then
         echo ""
         echo -e "${BLUE}=== Docker installation ===${NC}"
     fi
-    install_package dnf-plugins-core
-    install_package docker-cli
-    install_package containerd
-    install_package docker-compose
-    install_package docker-compose-switch
+    #install_package dnf-plugins-core
+    #install_package docker-cli
+    #install_package containerd
+    #install_package docker-compose
+    #install_package docker-compose-switch
+if [[ "$DISTRO" == "ubuntu" || "$DISTRO" == "debian" ]]; then
+    echo -e "${BLUE}Installing Docker CE (Ubuntu/Debian)...${NC}"
+
+    sudo apt-get update
+    sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+        sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+    echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" | \
+    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+    sudo systemctl enable containerd
+    sudo systemctl start containerd
+    sudo systemctl enable docker
+    sudo systemctl start docker
+else
+    echo -e "${RED}Docker installation not supported on $DISTRO by this script.${NC}"
+    exit 1
+fi
     if [ "$QUIET" = false ]; then
         echo ""
         echo -e "${BLUE}=== Docker activation and startup ===${NC}"
@@ -224,7 +252,11 @@ fi
 
 # === Function to check and start a service ===
 check_and_start_service() {
-    local service_name=$1
+if ! docker info >/dev/null 2>&1; then
+    echo -e "${RED}❌ Docker daemon not running.${NC}"
+    exit 1
+fi
+local service_name=$1
     local compose_file=$2
 
     if [ "$QUIET" = false ]; then
@@ -241,7 +273,7 @@ check_and_start_service() {
         fi
     else
         [ "$QUIET" = false ] && echo -e "${YELLOW}Launching ${service_name}...${NC}"
-        docker-compose -f "${compose_file}" up -d "${service_name}" >/dev/null
+        docker compose -f "${compose_file}" up -d "${service_name}" >/dev/null
     fi
 
     until docker ps --filter "name=${service_name}" --filter "status=running" | grep -q "${service_name}"; do

@@ -159,7 +159,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                         // LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
 
                                         if (!Boolean.TRUE.equals(map.get("ndpi_initialized"))) {
-                                                // ndpi.init();
+                                                ndpi.init();
                                                 map.put("ndpi_initialized", true);
                                                 logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
                                         }
@@ -187,16 +187,16 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 consumerConfig.put("auto.offset.reset", "earliest"); // Depuis le début si pas d'offset
 
                 // Lecture efficace
-                consumerConfig.put("max.poll.records", "2000"); // Traite 500 messages par poll (au lieu de 1)
-                consumerConfig.put("fetch.min.bytes", "32768"); // Attend au moins 32 KB de
+                consumerConfig.put("max.poll.records", "5000"); // Traite 500 messages par poll (au lieu de 1)
+                consumerConfig.put("fetch.min.bytes", "65536"); // Attend au moins 32 KB de
                 // données
-                consumerConfig.put("fetch.max.wait.ms", "50"); // Max 50ms d'attente pour atteindre fetch.min.bytes
+                consumerConfig.put("fetch.max.wait.ms", "20"); // Max 50ms d'attente pour atteindre fetch.min.bytes
                 consumerConfig.put("max.partition.fetch.bytes", "2097152"); // 2 MB max par partition
 
                 // Timeouts
-                consumerConfig.put("session.timeout.ms", "10000"); // 10s
-                consumerConfig.put("heartbeat.interval.ms", "3000"); // 3s
-                consumerConfig.put("request.timeout.ms", "30000"); // 30s, plus large pour gros fetch
+                consumerConfig.put("session.timeout.ms", "30000"); // 10s
+                consumerConfig.put("heartbeat.interval.ms", "10000"); // 3s
+                consumerConfig.put("request.timeout.ms", "1200000"); // 30s, plus large pour gros fetch
 
                 // Buffers réseau
                 consumerConfig.put("receive.buffer.bytes", "262144"); // 256 KB
@@ -307,7 +307,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                                 long lastTs = lastTsPerFlow.getOrDefault(flowKey, 0L);
                                 if (packetTs < lastTs) {
-                                        logger.warn(
+                                        logger.debug(
                                                         "[ FLOWAGGREGATOR VERTICLE ] Flow {} timestamp backward (partition={}): {} -> {}",
                                                         flowKey, partition, lastTs, packetTs);
                                 }

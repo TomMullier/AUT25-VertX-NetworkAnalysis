@@ -27,5 +27,8 @@ replay_pid*
 target/
 _tests/benchmark/000_PCAP/*.pcap
 _tests/benchmark/01_phase/csv/*.csv
-
-.sh
+*.sh
+/native/*.so
+/native/*.h
+src/main/java/com/aut25/vertx/utils/NDPIWrapper.java
+/native/*.c

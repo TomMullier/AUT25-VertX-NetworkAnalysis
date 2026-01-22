@@ -265,7 +265,9 @@ public class IngestionVerticle extends AbstractVerticle {
                 props.put("batch.size", "32768"); // 32 KB
 
                 // Absorption des bursts PCAP
-                props.put("buffer.memory", "67108864"); // 64 MB
+                props.put("buffer.memory", "268435456"); // 256 MB
+		props.put("max.request.size", "2097152"); // 2 MB par requête
+
 
                 // Compression rapide
                 props.put("compression.type", "lz4");
@@ -333,8 +335,8 @@ public class IngestionVerticle extends AbstractVerticle {
 
                         final int SNAPLEN = 65536;
                         final int TIMEOUT_MS = 100;
-                        final int PCAP_BUFFER_SIZE = 64 * 1024 * 1024; // 64 MB
-                        final int QUEUE_CAPACITY = 100_000;
+                        final int PCAP_BUFFER_SIZE = 256 * 1024 * 1024; // 256 MB
+                        final int QUEUE_CAPACITY = 100_000_000;
                         final int WORKER_COUNT = Runtime.getRuntime().availableProcessors();
 
                         // ===== File de découplage capture / traitement =====
