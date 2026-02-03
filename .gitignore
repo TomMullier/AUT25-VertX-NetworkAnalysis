@@ -32,3 +32,8 @@ _tests/benchmark/01_phase/csv/*.csv
 /native/*.h
 src/main/java/com/aut25/vertx/utils/NDPIWrapper.java
 /native/*.c
+# Datasets massifs (ne pas committer)
+src/main/resources/IDS_Training/data/GeneratedLabelledFlows/
+*.pcap
+*.pcap_ISCX.csv
+*.csv
