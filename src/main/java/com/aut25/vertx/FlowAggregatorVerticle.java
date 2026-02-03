@@ -52,6 +52,8 @@ import io.vertx.core.shareddata.Lock;
 
 public class FlowAggregatorVerticle extends AbstractVerticle {
 
+        private static final Boolean ENABLE_NDPI = true;
+
         private static final Logger logger = LoggerFactory.getLogger(FlowAggregatorVerticle.class);
 
         private static final String BOOTSTRAP_SERVERS = "localhost:9092";
@@ -90,7 +92,8 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private final Map<String, NdpiFlowWrapper> ndpiFlows = new ConcurrentHashMap<>();
 
         // Start ndpi
-        private final NDPIWrapper ndpi = new NDPIWrapper();
+        private NDPIWrapper ndpi;
+        private long ndpiContext;
 
         // Enrichment services
         private GeoIPService geoIPService;
@@ -119,6 +122,12 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         @Override
         public void start() throws Exception {
+                if (ENABLE_NDPI) {
+                        ndpi = new NDPIWrapper();
+                } else {
+                        ndpi = null;
+                }
+
                 logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
                 LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
@@ -152,25 +161,36 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 dnsService = new DnsService();
                 whoisService = new WhoisService();
 
-                vertx.sharedData().getLock("ndpi_init_lock", ar -> {
-                        if (ar.succeeded()) {
-                                Lock lock = ar.result();
-                                try {
-                                        // LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+                // Initialize nDPI context once
+                if (ENABLE_NDPI) {
+                        // ndpiContext = ndpi.init();
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully in verticle {}.",
+                                        deploymentID());
+                } else {
+                        ndpiContext = 0;
+                        logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI is DISABLED in verticle {}.",
+                                        deploymentID());
+                }
 
-                                        if (!Boolean.TRUE.equals(map.get("ndpi_initialized"))) {
-                                                ndpi.init();
-                                                map.put("ndpi_initialized", true);
-                                                logger.info("[ FLOWAGGREGATOR VERTICLE ]       nDPI initialized successfully.");
-                                        }
-                                } catch (Exception e) {
-                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Error initializing nDPI: {}",
-                                                        e.getMessage());
-                                } finally {
-                                        lock.release();
-                                }
-                        }
-                });
+                // vertx.sharedData().getLock("ndpi_init_lock", ar -> {
+                // if (ar.succeeded()) {
+                // Lock lock = ar.result();
+                // try {
+                // // LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
+
+                // if (!Boolean.TRUE.equals(map.get("ndpi_initialized"))) {
+                // ndpi.init();
+                // map.put("ndpi_initialized", true);
+                // logger.info("[ FLOWAGGREGATOR VERTICLE ] nDPI initialized successfully.");
+                // }
+                // } catch (Exception e) {
+                // logger.error("[ FLOWAGGREGATOR VERTICLE ] Error initializing nDPI: {}",
+                // e.getMessage());
+                // } finally {
+                // lock.release();
+                // }
+                // }
+                // });
 
                 Map<String, String> consumerConfig = new HashMap<>();
                 consumerConfig.put("bootstrap.servers", BOOTSTRAP_SERVERS);
@@ -618,6 +638,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return detected protocol as String, or "UNKNOWN" if not identified
          */
         private String getNDPIProcol(Flow f) {
+                if (ndpi == null) {
+                        return "nDPI_DISABLED";
+                }
                 if (f.ndpiFlowPtr != 0 && !f.getPacketsByte().isEmpty()) {
                         String proto = "UNKNOWN";
                         for (byte[] pkt : f.getPacketsByte()) {
@@ -642,6 +665,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return risk level as int, or 0 if not identified
          */
         private int getNDPIFlowRisk(Flow f) {
+                if (ndpi == null) {
+                        return 0;
+                }
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskScore = ndpi.getFlowRiskScore(f.ndpiFlowPtr);
@@ -662,6 +688,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return risk mask as int, or 0 if not identified
          */
         private int getNDPIFlowRiskMask(Flow f) {
+                if (ndpi == null) {
+                        return 0;
+                }
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 int riskMask = ndpi.getFlowRiskMask(f.ndpiFlowPtr);
@@ -682,6 +711,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return risk label as String, or "UNKNOWN" if not identified
          */
         private String getNDPIFlowRiskLabel(Flow f) {
+                if (ndpi == null) {
+                        return "nDPI_DISABLED";
+                }
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskLabel = ndpi.getFlowRiskLabel(f.ndpiFlowPtr);
@@ -702,6 +734,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          * @return risk severity as String, or "UNKNOWN" if not identified
          */
         private String getNDPIFlowRiskSeverity(Flow f) {
+                if (ndpi == null) {
+                        return "nDPI_DISABLED";
+                }
                 if (f.ndpiFlowPtr != 0) {
                         try {
                                 String riskSeverity = ndpi.getFlowRiskSeverity(f.ndpiFlowPtr);
@@ -911,10 +946,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 try {
                         IpPacket ip = packet.get(IpPacket.class); // IpPacket
                         byte[] payload = ip.getRawData();
-
-                        String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
-
-                        ndpiFlow.detectedProtocol = ndpiProtocol;
+                        if (ENABLE_NDPI) {
+                                String ndpiProtocol = ndpi.analyzePacket(payload, ts, ndpiFlow.ndpiFlowPtr); // analyse
+                                ndpiFlow.detectedProtocol = ndpiProtocol;
+                        }
 
                 } catch (Exception e) {
                         logger.warn("[ FLOWAGGREGATOR VERTICLE ] Could not analyze flow with nDPI: {}",
@@ -1233,45 +1268,57 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 f.calculateStats();
                 total_published_flows_++;
                 // Enrichissement avant publication
+                KafkaProducerRecord<String, String> record = KafkaProducerRecord
+                                .create(OUT_TOPIC, f.key, f.getJsonObject().encode());
 
-                f.enrich(geoIPService, dnsService, whoisService, vertx)
-                                .onSuccess(enrichedFlow -> {
-                                        JsonObject jo = enrichedFlow.getJsonObject();
-                                        String value = jo.encode();
+                producer.write(record, ar -> {
+                        if (ar.failed()) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
+                                                f.key,
+                                                ar.cause().getMessage());
+                        }
+                });
+                // f.enrich(geoIPService, dnsService, whoisService, vertx)
+                // .onSuccess(enrichedFlow -> {
+                // JsonObject jo = enrichedFlow.getJsonObject();
+                // String value = jo.encode();
 
-                                        // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={} protocol={}
-                                        // appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={} packets={}
-                                        // durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={} srcOrg={}
-                                        // dstOrg={}",
-                                        // enrichedFlow.key, enrichedFlow.protocol,
-                                        // enrichedFlow.appProtocol,
-                                        // enrichedFlow.riskLevel, enrichedFlow.riskLabel,
-                                        // enrichedFlow.riskSeverity,
-                                        // enrichedFlow.bytes, enrichedFlow.packetCount,
-                                        // (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
-                                        // enrichedFlow.srcCountry, enrichedFlow.dstCountry,
-                                        // enrichedFlow.srcDomain, enrichedFlow.dstDomain,
-                                        // enrichedFlow.srcOrg, enrichedFlow.dstOrg);
+                // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={}
+                // protocol={}
+                // // appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={}
+                // packets={}
+                // // durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={}
+                // srcOrg={}
+                // // dstOrg={}",
+                // // enrichedFlow.key, enrichedFlow.protocol,
+                // // enrichedFlow.appProtocol,
+                // // enrichedFlow.riskLevel, enrichedFlow.riskLabel,
+                // // enrichedFlow.riskSeverity,
+                // // enrichedFlow.bytes, enrichedFlow.packetCount,
+                // // (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
+                // // enrichedFlow.srcCountry, enrichedFlow.dstCountry,
+                // // enrichedFlow.srcDomain, enrichedFlow.dstDomain,
+                // // enrichedFlow.srcOrg, enrichedFlow.dstOrg);
 
-                                        KafkaProducerRecord<String, String> record = KafkaProducerRecord
-                                                        .create(OUT_TOPIC, enrichedFlow.key, value);
+                // KafkaProducerRecord<String, String> record = KafkaProducerRecord
+                // .create(OUT_TOPIC, enrichedFlow.key, value);
 
-                                        producer.write(record, ar -> {
-                                                if (ar.failed()) {
-                                                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
-                                                                        enrichedFlow.key,
-                                                                        ar.cause().getMessage());
-                                                }
-                                        });
-                                })
-                                .onFailure(err -> {
-                                        logger.warn("[ FLOWAGGREGATOR VERTICLE ]       Enrichment failed for flow {}: {}",
-                                                        f.key, err.getMessage());
-                                        // Publier quand même le flow non enrichi
-                                        JsonObject jo = f.getJsonObject();
-                                        producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
-                                                        jo.encode()));
-                                });
+                // producer.write(record, ar -> {
+                // if (ar.failed()) {
+                // logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {}: {}",
+                // enrichedFlow.key,
+                // ar.cause().getMessage());
+                // }
+                // });
+                // })
+                // .onFailure(err -> {
+                // logger.warn("[ FLOWAGGREGATOR VERTICLE ] Enrichment failed for flow {}: {}",
+                // f.key, err.getMessage());
+                // // Publier quand même le flow non enrichi
+                // JsonObject jo = f.getJsonObject();
+                // producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
+                // jo.encode()));
+                // });
         }
 
         /**

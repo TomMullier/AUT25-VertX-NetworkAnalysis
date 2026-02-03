@@ -34,16 +34,6 @@ services:
       - clickhouse_data:/var/lib/clickhouse
       - clickhouse_logs:/var/log/clickhouse-server
       - ./clickhouse-init:/docker-entrypoint-initdb.d  # scripts d’init
-
-  clickhouse-client:
-    image: clickhouse/clickhouse-client:24.8
-    container_name: clickhouse-client
-    depends_on:
-      - clickhouse
-    entrypoint: >
-      /bin/sh -c "while ! nc -z clickhouse 9000; do sleep 1; done;
-      clickhouse-client --host clickhouse"
-
 volumes:
   clickhouse_data:
   clickhouse_logs:

@@ -26,7 +26,8 @@ static struct ndpi_proto_sorter *proto_sorter = NULL;
  * @brief Definition of the protocol file path
  *
  */
-const char *proto_file_path = "/home/tom/IMAGIN_LAB/MULLIER_Tom/AUT25-VertX-NetworkAnalysis/native/protos_huge.txt";
+// const char *proto_file_path = "/home/tom/IMAGIN_LAB/MULLIER_Tom/AUT25-VertX-NetworkAnalysis/native/protos_huge.txt";
+const char *proto_file_path = "/home/tommullier/Documents/AUT25_Projet/AUT25-VertX-NetworkAnalysis/native/protos_huge.txt";
 
 /**
  * @brief Check if the protocol file is accessible and initialize nDPI if it is.

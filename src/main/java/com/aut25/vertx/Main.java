@@ -45,7 +45,6 @@ public class Main extends AbstractVerticle {
     public void start(Promise<Void> startPromise) throws Exception {
         logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Starting MainVerticle..." + Colors.RESET);
         // Set workers to 40
-       
 
         // Load configuration from JSON file
         config = new JsonObject(
@@ -222,8 +221,6 @@ public class Main extends AbstractVerticle {
 
         // Créer la liste de verticles à déployer
         long start_deployement = System.nanoTime();
-        verticles.add(new MetricsVerticle());
-        verticles.add(new SystemMetricsVerticle());
         // verticles.add(new BenchmarkVerticle());
         verticles.add(new FlowConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
@@ -274,6 +271,8 @@ public class Main extends AbstractVerticle {
                                 .put("endTime", end_deployment));
             }
         });
+        verticles.add(new MetricsVerticle());
+        verticles.add(new SystemMetricsVerticle());
     }
 
     /**

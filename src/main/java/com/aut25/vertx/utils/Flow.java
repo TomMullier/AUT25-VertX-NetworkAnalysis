@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -321,6 +322,38 @@ public class Flow {
                 // Up/Down counters
                 long upstreamBytes = 0, downstreamBytes = 0;
                 long upstreamPackets = 0, downstreamPackets = 0;
+                // Vérifie si les timestamps sont croissants
+                boolean sorted = true;
+                for (int i = 1; i < packetTimestamps.size(); i++) {
+                        if (packetTimestamps.get(i) < packetTimestamps.get(i - 1)) {
+                                sorted = false;
+                                break;
+                        }
+                }
+
+                // Si pas trié, on trie les paquets et timestamps
+                if (!sorted) {
+                        List<Integer> indices = new ArrayList<>();
+                        for (int i = 0; i < packetTimestamps.size(); i++) {
+                                indices.add(i);
+                        }
+
+                        // Trie les indices selon les timestamps
+                        indices.sort(Comparator.comparingLong(packetTimestamps::get));
+
+                        // Crée des nouvelles listes triées
+                        CopyOnWriteArrayList<Packet> sortedPackets = new CopyOnWriteArrayList<>();
+                        CopyOnWriteArrayList<Long> sortedTimestamps = new CopyOnWriteArrayList<>();
+
+                        for (int idx : indices) {
+                                sortedPackets.add(packets.get(idx));
+                                sortedTimestamps.add(packetTimestamps.get(idx));
+                        }
+
+                        // Remplace les listes originales
+                        packets = sortedPackets;
+                        packetTimestamps = sortedTimestamps;
+                }
 
                 /* -------------------------------- Main loop ------------------------------- */
                 for (int i = 0; i < packets.size(); i++) {
@@ -387,6 +420,12 @@ public class Flow {
                 this.packetCount = packets.size();
                 this.firstSeen = packetTimestamps.get(0);
                 this.lastSeen = packetTimestamps.get(packetTimestamps.size() - 1);
+                // If inverted timestamps invert
+                if (this.firstSeen > this.lastSeen) {
+                        long temp = this.firstSeen;
+                        this.firstSeen = this.lastSeen;
+                        this.lastSeen = temp;
+                }
                 this.flowDurationMs = Math.max(1, lastSeen - firstSeen);
 
                 /* ------------------------ Stats packet length stats ----------------------- */
@@ -445,9 +484,15 @@ public class Flow {
                 }
 
                 /* -------------------------- Protocols repartition ------------------------- */
-                this.tcpFraction = (double) tcpCount / packetCount;
-                this.udpFraction = (double) udpCount / packetCount;
-                this.otherFraction = (double) otherCount / packetCount;
+                if (packetCount > 0) {
+                        this.tcpFraction = (double) tcpCount / packetCount;
+                        this.udpFraction = (double) udpCount / packetCount;
+                        this.otherFraction = (double) otherCount / packetCount;
+                } else {
+                        this.tcpFraction = 0.0;
+                        this.udpFraction = 0.0;
+                        this.otherFraction = 0.0;
+                }
 
                 /* -------------------------- TCP Flags repartition ------------------------- */
                 if (tcpCount > 0) {
@@ -579,22 +624,23 @@ public class Flow {
                 Promise<Flow> promise = Promise.promise();
                 logger.debug("Enriching flow: srcIp={}, dstIp={}", srcIp, dstIp);
 
-               /* CompositeFuture.all(
-                                lookupGeo(geoIPService, vertx, srcIp),
-                                lookupGeo(geoIPService, vertx, dstIp),
-                                lookupDns(dnsService, vertx, srcIp),
-                                lookupDns(dnsService, vertx, dstIp),
-                                lookupWhois(whoisService, vertx, srcIp),
-                                lookupWhois(whoisService, vertx, dstIp)).onSuccess(cf -> {
-                                        this.srcCountry = cf.resultAt(0);
-                                        this.dstCountry = cf.resultAt(1);
-                                        this.srcDomain = cf.resultAt(2);
-                                        this.dstDomain = cf.resultAt(3);
-                                        this.srcOrg = cf.resultAt(4);
-                                        this.dstOrg = cf.resultAt(5);
-                                        promise.complete(this);
-                                }).onFailure(err -> promise.complete(this));
-*/
+                /*
+                 * CompositeFuture.all(
+                 * lookupGeo(geoIPService, vertx, srcIp),
+                 * lookupGeo(geoIPService, vertx, dstIp),
+                 * lookupDns(dnsService, vertx, srcIp),
+                 * lookupDns(dnsService, vertx, dstIp),
+                 * lookupWhois(whoisService, vertx, srcIp),
+                 * lookupWhois(whoisService, vertx, dstIp)).onSuccess(cf -> {
+                 * this.srcCountry = cf.resultAt(0);
+                 * this.dstCountry = cf.resultAt(1);
+                 * this.srcDomain = cf.resultAt(2);
+                 * this.dstDomain = cf.resultAt(3);
+                 * this.srcOrg = cf.resultAt(4);
+                 * this.dstOrg = cf.resultAt(5);
+                 * promise.complete(this);
+                 * }).onFailure(err -> promise.complete(this));
+                 */
                 return promise.future();
         }
 
