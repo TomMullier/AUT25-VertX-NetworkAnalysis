@@ -37,3 +37,4 @@ src/main/resources/IDS_Training/data/GeneratedLabelledFlows/
 *.pcap
 *.pcap_ISCX.csv
 *.csv
+node_modules

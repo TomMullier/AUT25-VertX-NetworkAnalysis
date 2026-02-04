@@ -9,8 +9,8 @@ com/aut25/vertx/services/DnsService.class
 com/aut25/vertx/MetricsVerticle.class
 com/aut25/vertx/IngestionVerticle.class
 com/aut25/vertx/ApiVerticle.class
-com/aut25/vertx/api/routes/PcapRoute.class
 com/aut25/vertx/BenchmarkVerticle.class
+com/aut25/vertx/api/routes/PcapRoute.class
 com/aut25/vertx/api/routes/SettingsRoute.class
 com/aut25/vertx/utils/NDPIWrapper.class
 com/aut25/vertx/SystemMetricsVerticle.class
