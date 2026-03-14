@@ -38,3 +38,28 @@ src/main/resources/IDS_Training/data/GeneratedLabelledFlows/
 *.pcap_ISCX.csv
 *.csv
 node_modules
+_tests/benchmark/02_phase/env/
+/env
+# Build / output
+bin/
+build/
+dist/
+target/
+out/
+
+# Python env
+venv/
+*/venv/
+env/
+*/env/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# IDE
+.vscode/
+.idea/
