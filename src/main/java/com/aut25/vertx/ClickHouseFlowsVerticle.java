@@ -131,9 +131,12 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 +
                                                 "flowSymmetry, synRate, finRate, rstRate, ackRate, pshRate, synCount, finCount, rstCount, ackCount, pshCount, "
                                                 +
-                                                "tcpFraction, udpFraction, otherFraction, appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg) "
+                                                "tcpFraction, udpFraction, otherFraction,"
+                                                + 
+                                                // "appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, "+
+                                                "packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         for (JsonObject json : inflightBatch) {
 
@@ -202,16 +205,16 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 double udpFraction = getSafeDouble(json, "udpFraction", 0.0);
                                                 double otherFraction = getSafeDouble(json, "otherFraction", 0.0);
 
-                                                double appProtocolBytes = getSafeDouble(json, "appProtocolBytes", 0.0);
-                                                String appProtocol = json.getString("appProtocol", "UNKNOWN");
-                                                long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
+                                                // double appProtocolBytes = getSafeDouble(json, "appProtocolBytes", 0.0);
+                                                // String appProtocol = json.getString("appProtocol", "UNKNOWN");
+                                                // long ndpiFlowPtr = json.getLong("ndpiFlowPtr", 0L);
 
-                                                int riskLevel = json.getInteger("riskLevel", -1);
-                                                int riskMask = json.getInteger("riskMask", -1);
-                                                String riskLabel = json.getString("riskLabel", "UNKNOWN");
-                                                String[] riskLabels = riskLabel.isEmpty() ? new String[0]
-                                                                : riskLabel.split(",");
-                                                String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
+                                                // int riskLevel = json.getInteger("riskLevel", -1);
+                                                // int riskMask = json.getInteger("riskMask", -1);
+                                                // String riskLabel = json.getString("riskLabel", "UNKNOWN");
+                                                // String[] riskLabels = riskLabel.isEmpty() ? new String[0]
+                                                //                 : riskLabel.split(",");
+                                                // String riskSeverity = json.getString("riskSeverity", "UNKNOWN");
 
                                                 String packetSummariesString = json.getString("packetSummariesString",
                                                                 "");
@@ -286,25 +289,18 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 pstmt.setDouble(43, udpFraction);
                                                 pstmt.setDouble(44, otherFraction);
 
-                                                pstmt.setDouble(45, appProtocolBytes);
-                                                pstmt.setString(46, appProtocol);
-                                                pstmt.setLong(47, ndpiFlowPtr);
+                                                
 
-                                                pstmt.setInt(48, riskLevel);
-                                                pstmt.setInt(49, riskMask);
-                                                pstmt.setString(50, setArrayAsClickHouseStringArray(riskLabels));
-                                                pstmt.setString(51, riskSeverity);
+                                                pstmt.setString(45, setArrayAsClickHouseStringArray(packetSummaries));
 
-                                                pstmt.setString(52, setArrayAsClickHouseStringArray(packetSummaries));
+                                                pstmt.setString(46, reasonOfFlowEnd);
 
-                                                pstmt.setString(53, reasonOfFlowEnd);
-
-                                                pstmt.setString(54, srcCountry);
-                                                pstmt.setString(55, dstCountry);
-                                                pstmt.setString(56, srcDomain);
-                                                pstmt.setString(57, dstDomain);
-                                                pstmt.setString(58, srcOrg);
-                                                pstmt.setString(59, dstOrg);
+                                                pstmt.setString(47, srcCountry);
+                                                pstmt.setString(48, dstCountry);
+                                                pstmt.setString(49, srcDomain);
+                                                pstmt.setString(50, dstDomain);
+                                                pstmt.setString(51, srcOrg);
+                                                pstmt.setString(52, dstOrg);
 
                                                 pstmt.addBatch();
                                         }

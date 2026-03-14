@@ -5,8 +5,8 @@ import sys
 # ----------------------------------- Paths ---------------------------------- #
 # nfstream_path = "./csv/nfstream_flows_reference.csv"
 # vertx_path = "./csv/vertx_flows_reference.csv"
-nfstream_path = "./csv/nfstream_flows_benign_slowloris.csv"
-vertx_path = "./csv/vertx_flows_benign_slowloris.csv"
+nfstream_path = "./csv/nfstream_flows_eth2dump-pingFloodDDoS-30m-12h_1.csv"
+vertx_path = "./csv/vertx__flows_eth2dump-pingFloodDDoS-30m-12h_1.csv"
 
 # Augmente la limite maximale des champs CSV
 csv.field_size_limit(sys.maxsize)
@@ -81,6 +81,10 @@ def flowkey_constructor(flow, type):
         protocol = "ICMPv4"
     if protocol == "IPv6 Hop-by-Hop Option":
         protocol = "IPv6-ICMP"
+    if protocol == "ICMPv6":
+        protocol = "IPv6-ICMP"
+    if protocol == "any local network":
+        protocol = "unknown"
     src_ip = normalize_ip(src_ip)
     dst_ip = normalize_ip(dst_ip)
     return src_ip + "_" + dst_ip + "_" + src_port + "_" + dst_port + "_" + protocol

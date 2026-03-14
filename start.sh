@@ -319,19 +319,99 @@ until docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list >/
     sleep 2
 done
 
-# Reset topics
-echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME 2>/dev/null
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create \
-    --topic $TOPIC_NAME \
-    --partitions $NUM_PARTITIONS \
-    --replication-factor 1
-echo "✅ Topic $TOPIC_NAME has been reset with $NUM_PARTITIONS partitions."
+# # Reset topics
+# echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
+# docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME 2>/dev/null
+# docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create \
+#     --topic $TOPIC_NAME \
+#     --partitions $NUM_PARTITIONS \
+#     --replication-factor 1
+# echo "✅ Topic $TOPIC_NAME has been reset with $NUM_PARTITIONS partitions."
 
-echo "=== Resetting Kafka topic: $TOPIC_NAME2 ==="
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME2 2>/dev/null
-docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --topic $TOPIC_NAME2 --partitions 1 --replication-factor 1
-echo "✅ Topic $TOPIC_NAME2 has been reset."
+# echo "=== Resetting Kafka topic: $TOPIC_NAME2 ==="
+# docker exec kafka kafka-topics --bootstrap-server localhost:9092 --delete --topic $TOPIC_NAME2 2>/dev/null
+# docker exec kafka kafka-topics --bootstrap-server localhost:9092 --create --topic $TOPIC_NAME2 --partitions 1 --replication-factor 1
+# echo "✅ Topic $TOPIC_NAME2 has been reset."
+
+BROKER="localhost:9092"
+DOCKER_CONTAINER="kafka"    # nom du conteneur
+NUM_PARTITIONS="${NUM_PARTITIONS:-500}"
+TOPIC_NAME="${TOPIC_NAME:-network-data}"
+TOPIC_NAME2="${TOPIC_NAME2:-network-flows}"
+
+# Temps d'attente max (secondes) pour la suppression
+DELETE_TIMEOUT=120
+
+wait_topic_deleted() {
+  local topic="$1"
+  local start_ts
+  start_ts=$(date +%s)
+
+  echo "⏳ Attente de la suppression complète du topic '$topic'…"
+  while true; do
+    # 1) Est-ce que le topic existe encore ?
+    if docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --list 2>/dev/null | grep -Fxq "$topic"; then
+      :
+    else
+      # 2) Vérifie l’état "marked for deletion" via describe; certains brokers ne le listent plus quand MD supprimées
+      if docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --describe --topic "$topic" 2>&1 \
+          | grep -qi "marked for deletion"; then
+        :
+      else
+        echo "✅ Suppression confirmée pour '$topic'."
+        break
+      fi
+    fi
+
+    # Timeout
+    local now
+    now=$(date +%s)
+    if (( now - start_ts > DELETE_TIMEOUT )); then
+      echo "⚠️  Timeout atteint (${DELETE_TIMEOUT}s) : le topic '$topic' semble encore en suppression."
+      echo "    Vérifie les logs broker/contrôleur et l’état disque. Je poursuis quand même."
+      break
+    fi
+    sleep 2
+  done
+}
+
+reset_topic() {
+  local topic="$1"
+  local partitions="$2"
+
+  echo "=== Resetting Kafka topic: $topic ==="
+  # Suppression idempotente (ignore l’erreur si non présent)
+  docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --delete --topic "$topic" >/dev/null 2>&1 || true
+
+  # Attendre la suppression complète
+  wait_topic_deleted "$topic"
+
+  # Création idempotente (si option dispo dans ta version Kafka)
+  if docker exec "$DOCKER_CONTAINER" kafka-topics --help 2>&1 | grep -q -- "--if-not-exists"; then
+    docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --create \
+      --topic "$topic" \
+      --partitions "$partitions" \
+      --replication-factor 1 \
+      --if-not-exists
+  else
+    # Fallback sans --if-not-exists : on vérifie avant
+    if ! docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --list | grep -Fxq "$topic"; then
+      docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --create \
+        --topic "$topic" \
+        --partitions "$partitions" \
+        --replication-factor 1
+    fi
+  fi
+
+  echo "✅ Topic $topic has been reset with $partitions partitions."
+}
+
+# Gestion propre du Ctrl-C pour éviter d’interrompre entre delete/create
+trap 'echo; echo "🛑 Interruption reçue. Sortie propre…"; exit 130' INT
+
+# Reset topics
+reset_topic "$TOPIC_NAME" "$NUM_PARTITIONS"
+reset_topic "$TOPIC_NAME2" "1"
 
 
 

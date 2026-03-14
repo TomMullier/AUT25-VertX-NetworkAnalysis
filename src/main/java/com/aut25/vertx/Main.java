@@ -221,7 +221,7 @@ public class Main extends AbstractVerticle {
 
         // Créer la liste de verticles à déployer
         long start_deployement = System.nanoTime();
-        // verticles.add(new BenchmarkVerticle());
+        verticles.add(new BenchmarkVerticle());
         verticles.add(new FlowConsumerVerticle());
         WebServerVerticle webServerVerticle = new WebServerVerticle(this);
         verticles.add(webServerVerticle);

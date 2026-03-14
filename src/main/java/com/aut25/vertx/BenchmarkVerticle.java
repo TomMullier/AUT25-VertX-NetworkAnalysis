@@ -46,8 +46,8 @@ public class BenchmarkVerticle extends AbstractVerticle {
         private final AtomicBoolean running = new AtomicBoolean(true);// Analyse avec nDPI
         private int lineCount_packet = 0;
 
-        private String path_csv_packets = "_tests/benchmark/01_phase/csv/plateform_output_friday.csv";
-        private long lineCount = 152730; // Nombre de lignes à écrire dans le CSV
+        private String path_csv_packets = "_tests/benchmark/01_phase/CSV/eth2dump-pingFloodDDoS-30m-12h_1_vertx.csv";
+        private long lineCount = 889755; // Nombre de lignes à écrire dans le CSV
 
         @Override
         public void start() throws Exception {

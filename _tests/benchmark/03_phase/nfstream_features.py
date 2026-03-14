@@ -8,8 +8,8 @@ IDLE_TIMEOUT = 5  # Temps d'inactivité avant fermeture d'un flux
 ACTIVE_TIMEOUT = 300  # Durée maximale de vie d'un flux
 
 # Chemins des fichiers
-PCAP_INPUT_PATH = "../000_PCAP/benign+slowloris_net_packets.pcap"
-CSV_OUTPUT_PATH = "csv/nfstream_features_benign_slowloris.csv"
+PCAP_INPUT_PATH = "../000_PCAP/eth2dump-pingFloodDDoS-30m-12h_1.pcap"
+CSV_OUTPUT_PATH = "csv/nfstream_features_eth2dump-pingFloodDDoS-30m-12h_1.csv"
 
 # ----------------------- Mapping Protocoles ---------------------- #
 # Dictionnaire pour convertir les numéros de protocole en noms

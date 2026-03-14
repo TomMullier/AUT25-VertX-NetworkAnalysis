@@ -6,8 +6,9 @@ import math
 # ----------------------------------- Paths ---------------------------------- #
 # csv_a_path = "./csv/nfstream_features_reference.csv"
 # csv_b_path = "./csv/vertx_flows_features_reference.csv"
-csv_a_path = "./csv/nfstream_features_benign_slowloris.csv"
-csv_b_path = "./csv/vertx_flows_features_benign_slowloris.csv"
+csv_a_path = "./csv/nfstream_features_eth2dump-pingFloodDDoS-30m-12h_1.csv"
+csv_b_path = "./csv/vertx__flows_eth2dump-pingFloodDDoS-30m-12h_1.csv"
+
 diff_output_path = "./csv/flows_differences.csv"
 
 csv.field_size_limit(sys.maxsize)

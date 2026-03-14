@@ -2,7 +2,8 @@ import csv
 import os
 import ipaddress
 
-print("Comparaison des fichiers CSV des paquets, générés par la plateforme et Scapy")
+print("Comparaison des fichiers CSV des paquets, générés par FlowVertex et Tshark")
+
 
 # Fonction demandée : normalisation IPv6 en format fully exploded
 def normalize_ip(ip):
@@ -18,16 +19,16 @@ def normalize_ip(ip):
 
 
 # Dossier contenant les fichiers CSV
-csv_folder = "csv"
+csv_folder = "CSV"
 
 # Noms des fichiers CSV à comparer
 csv_file_names = [
-    "plateform_output_benign_slowloris.csv",
-    "plateform_output_friday.csv",
-    "plateform_output_reference.csv",
-    "scapy_output_benign_slowloris.csv",
-    "scapy_output_friday.csv",
-    "scapy_output_reference.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_tshark.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_tsharkv.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_tshark.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_vertx.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_tshark.csv",
+    "eth2dump-pingFloodDDoS-30m-12h_1_tshark.csv",
 ]
 
 # Charger les fichiers CSV
@@ -35,8 +36,6 @@ csv_files = [f for f in os.listdir(csv_folder) if f.endswith(".csv")]
 
 csv_file_1 = os.path.join(csv_folder, csv_file_names[0])
 csv_file_2 = os.path.join(csv_folder, csv_file_names[3])
-csv_file_5 = os.path.join(csv_folder, csv_file_names[2])
-csv_file_6 = os.path.join(csv_folder, csv_file_names[5])
 
 
 def load_csv(file_path):
@@ -56,13 +55,15 @@ def load_csv(file_path):
 # Charger les données des fichiers
 data_1 = load_csv(csv_file_1)
 data_2 = load_csv(csv_file_2)
-data_5 = load_csv(csv_file_5)
-data_6 = load_csv(csv_file_6)
 
 
 def compare_csv(data_a, data_b, label_a, label_b):
     line_number = 0
     different_lines = 0
+
+    print(f"Comparaison des fichiers {label_a} et {label_b}...")
+    print(f"Nombre de lignes dans {label_a}: {len(data_a)}")
+    print(f"Nombre de lignes dans {label_b}: {len(data_b)}")
 
     if len(data_a) != len(data_b):
         print(f"Les fichiers {label_a} et {label_b} ont un nombre de lignes différent.")
@@ -79,11 +80,11 @@ def compare_csv(data_a, data_b, label_a, label_b):
                 for j, (val_a, val_b) in enumerate(zip(row_a, row_b))
                 if val_a != val_b
             ]
-            if differences:
-                print(f"Différences à la ligne {i + 1} entre {label_a} et {label_b}:")
-                different_lines += 1
-                for col, val_a, val_b in differences:
-                    print(f"  Colonne {col + 1}: {val_a} != {val_b}")
+            # if differences:
+            #     print(f"Différences à la ligne {i + 1} entre {label_a} et {label_b}:")
+            #     different_lines += 1
+            #     for col, val_a, val_b in differences:
+            #         print(f"  Colonne {col + 1}: {val_a} != {val_b}")
         line_number += 1
 
     print(f"Comparaison terminée entre {label_a} et {label_b}.")
@@ -101,4 +102,3 @@ def compare_csv(data_a, data_b, label_a, label_b):
 
 # Comparer les fichiers CSV
 compare_csv(data_1, data_2, csv_file_names[0], csv_file_names[3])
-compare_csv(data_5, data_6, csv_file_names[2], csv_file_names[5])
