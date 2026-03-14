@@ -76,7 +76,8 @@ CREATE TABLE IF NOT EXISTS network_analysis.network_flows (
     srcDomain Nullable(String),
     dstDomain Nullable(String),
     srcOrg Nullable(String),
-    dstOrg Nullable(String)
+    dstOrg Nullable(String),
+    label Nullable(String)
 ) ENGINE = MergeTree()
 ORDER BY (firstSeen, flowKey);
 

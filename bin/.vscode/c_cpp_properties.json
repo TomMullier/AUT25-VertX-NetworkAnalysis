@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/native",
+                "${workspaceFolder}/native/**",
+                "/usr/local/include/ndpi",
+                "/usr/lib/jvm/java-21-openjdk/include",
+		        "/usr/local/include/ndpi/src/include",
+                "/usr/local/include",
+                "/usr/lib/jvm/java-21-openjdk/include/linux",
+                "/usr/include",
+                "/usr/include/linux",
+                "/usr/include/*",
+                "/usr/lib/",
+                "/usr/lib/gcc/",
+                "/usr/lib/gcc/x86_64-redhat-linux/14/include/",
+                "/usr/local/include"
+            ],
+            "browse": {
+                "path": [
+                    "/usr/local/include/ndpi",
+ 		            "/usr/local/include/ndpi/src/include",
+                    "/usr/lib/jvm/java-21-openjdk/include",
+                    "/usr/lib/jvm/java-21-openjdk/include/linux",
+                    "/usr/include",
+                    "/usr/include/*",
+                "/usr/lib/gcc/x86_64-redhat-linux/14/include/",
+                "/usr/lib/",
+                "/usr/local/include",
+                "/usr/include/linux"
+
+                ]
+            },
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }        
+    ],
+    "version": 4
+}

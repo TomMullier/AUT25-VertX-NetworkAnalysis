@@ -1,0 +1,4 @@
+{
+    "pcap_file_address": "../01_phase/pcap/reference.pcap",
+    "output_file_address": "./csv/ntlflowlyzer_flows.csv"
+}

@@ -1,0 +1,8 @@
+{
+        "C_Cpp.errorSquiggles": "enabled",
+        "files.associations": {
+                "stdio.h": "c",
+                "ndpi_typedefs.h": "c"
+        },
+        "java.configuration.updateBuildConfiguration": "automatic"
+}

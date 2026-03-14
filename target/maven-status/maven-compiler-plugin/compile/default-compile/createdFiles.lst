@@ -24,5 +24,6 @@ com/aut25/vertx/api/WebServerVerticle.class
 com/aut25/vertx/ApiVerticle.class
 com/aut25/vertx/utils/NdpiFlowWrapper.class
 com/aut25/vertx/SystemMetricsVerticle.class
+com/aut25/vertx/prediction/FlowModelPredictor.class
 com/aut25/vertx/api/routes/SettingsRoute.class
 com/aut25/vertx/utils/Colors.class

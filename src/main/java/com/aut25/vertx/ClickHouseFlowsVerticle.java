@@ -134,9 +134,9 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 "tcpFraction, udpFraction, otherFraction,"
                                                 + 
                                                 // "appProtocolBytes, appProtocol, ndpiFlowPtr, riskLevel, riskMask, riskLabel, riskSeverity, "+
-                                                "packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg) "
+                                                "packetSummaries, reasonOfFlowEnd, srcCountry, dstCountry, srcDomain, dstDomain, srcOrg, dstOrg, label) "
                                                 +
-                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                                                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                                 try (PreparedStatement pstmt = clickhouseConn.prepareStatement(insertSQL)) {
                                         for (JsonObject json : inflightBatch) {
 
@@ -237,6 +237,8 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                                 .mapToLong(o -> ((Number) o).longValue())
                                                                 .toArray();
 
+                                                String label = json.getString("label", "N/A");
+
                                                 pstmt.setString(1, flowId);
                                                 pstmt.setLong(2, firstSeen);
                                                 pstmt.setLong(3, lastSeen);
@@ -301,6 +303,7 @@ public class ClickHouseFlowsVerticle extends AbstractVerticle {
                                                 pstmt.setString(50, dstDomain);
                                                 pstmt.setString(51, srcOrg);
                                                 pstmt.setString(52, dstOrg);
+                                                pstmt.setString(53, label);
 
                                                 pstmt.addBatch();
                                         }

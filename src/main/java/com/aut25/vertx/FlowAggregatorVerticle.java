@@ -28,6 +28,7 @@ import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
 import com.aut25.vertx.utils.NdpiFlowWrapper;
+import com.aut25.vertx.prediction.FlowModelPredictor;
 
 import static java.lang.Thread.sleep;
 
@@ -1096,17 +1097,44 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         private void publishFlow(Flow f, String reasonOfFlowEnd) {
                 f.reasonOfFlowEnd = reasonOfFlowEnd;
+
+                // calcule toutes les features réseau
                 f.calculateStats();
+
                 total_published_flows_++;
-                // Enrichissement avant publication
-                KafkaProducerRecord<String, String> record = KafkaProducerRecord
-                                .create(OUT_TOPIC, f.key, f.getJsonObject().encode());
+
+                // JSON du flow
+                JsonObject flowJson = f.getJsonObject();
+
+                try {
+
+                        // conversion Json → Map pour le modèle PMML
+                        // if not arp
+                        if (!"ARP".equals(f.protocol)) {    
+                                Map<String, Object> features = FlowModelPredictor.filterFeatures(f.getJsonObject().getMap());
+                                String label = FlowModelPredictor.predict(features);
+                                flowJson.put("label", label);
+                        } else {
+                                flowJson.put("label", "ARP");
+                        }
+
+                } catch (Exception e) {
+
+                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       ML prediction failed for flow {} : {}",
+                                f.key,
+                                e.getMessage());
+
+                        flowJson.put("label", "UNKNOWN"); // fallback
+                }
+
+                KafkaProducerRecord<String, String> record =
+                        KafkaProducerRecord.create(OUT_TOPIC, f.key, flowJson.encode());
 
                 producer.write(record, ar -> {
                         if (ar.failed()) {
-                                logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
-                                                f.key,
-                                                ar.cause().getMessage());
+                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
+                                f.key,
+                                ar.cause().getMessage());
                         }
                 });
                 // f.enrich(geoIPService, dnsService, whoisService, vertx)
@@ -1147,9 +1175,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                 // f.key, err.getMessage());
                 // // Publier quand même le flow non enrichi
                 // JsonObject jo = f.getJsonObject();
-                // producer.write(KafkaProducerRecord.create(OUT_TOPIC, f.key,
+                // producer.write(KafkaProducerRecord.create!= null ? prediction.toString() : null;(OUT_TOPIC, f.key,
                 // jo.encode()));
-                // });
+                // });private void publishFlow(Flow f, String reasonOfFlowEnd) {
+
         }
 
         /**

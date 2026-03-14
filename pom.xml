@@ -16,6 +16,7 @@
         <!-- Maven plugins -->
         <vertx-maven-plugin.version>2.0.2</vertx-maven-plugin.version>
         <jackson.version>2.19.0</jackson.version>
+        <jpmml.version>1.7.7</jpmml.version>
 
     </properties>
 
@@ -113,6 +114,30 @@
             <artifactId>smile-core</artifactId>
             <version>5.1.0</version>
         </dependency>
+        
+        <dependency>
+            <groupId>org.jpmml</groupId>
+            <artifactId>pmml-evaluator</artifactId>
+            <version>${jpmml.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jpmml</groupId>
+            <artifactId>pmml-model</artifactId>
+            <version>${jpmml.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.glassfish.jaxb</groupId>
+            <artifactId>jaxb-runtime</artifactId>
+            <version>4.0.5</version>
+        </dependency>
+
 
     </dependencies>
     <build>

@@ -1,0 +1,160 @@
+::-webkit-scrollbar {
+        width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+        background: #9ca3af;
+        border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+}
+
+* {
+        font-family: 'Inter', sans-serif;
+}
+
+header {
+        background-color: #ebebeb;
+
+        .loupe-icon {
+                color: #2563eb;
+        }
+}
+
+body {
+        background-color: #ffffff;
+}
+
+.welcome-message {
+        margin-top: 10px;
+}
+
+main {
+        background-color: #ffffff;
+
+        #left-col {
+                margin-right: 5px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                border: 1px solid #e5e7eb;
+                padding: 10px;
+                border-radius: 8px;
+
+                #status-title {
+                        font-size: 1rem;
+                        font-weight: 600;
+                        color: #2563eb;
+                }
+
+                h2 {
+                        color: #000000;
+                        font-size: 0.9rem;
+                        font-weight: normal;
+                }
+
+                section {
+                        padding: 0%;
+                }
+
+                #connectionStatus {
+                        font-size: 0.85rem;
+                        color: #808080;
+
+                        &::before {
+                                content: '> ';
+                        }
+                }
+        }
+
+        #right-col {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                margin-left: 5px;
+
+                #settings {
+                        border: 1px solid #e5e7eb;
+                        padding: 10px;
+                        border-radius: 8px;
+
+                        h2 {
+                                margin-bottom: 0%;
+                        }
+
+                        form {
+                                padding-top: 5px;
+                                padding-bottom: 5px;
+
+                                button {
+                                        background-color: #2563eb;
+                                        color: #ffffff;
+                                        border: none;
+                                        padding: 8px 20px;
+                                        border-radius: 4px;
+                                        cursor: pointer;
+                                        font-size: 0.9rem;
+
+                                        &:hover {
+                                                background-color: #1e40af;
+                                        }
+                                }
+                        }
+
+                        legend,
+                        label {
+                                color: #000000;
+                                font-size: 0.9rem;
+                                font-weight: normal;
+                        }
+                }
+
+                h2 {
+                        font-size: 1rem;
+                        font-weight: 600;
+                        color: #2563eb;
+                }
+
+                #flows {
+                        border: 1px solid #e5e7eb;
+                        padding: 10px;
+                        border-radius: 8px;
+                }
+
+                .risk-level-legend {
+                        border-bottom: 1px solid #e5e7eb;
+                        padding-bottom: 10px;
+                        margin: 0;
+                        margin-bottom: 20px;
+
+                        h3 {
+                                font-size: 1rem;
+                                font-weight: normal;
+                                color: #000000;
+                                margin-bottom: 10px;
+                        }
+                }
+
+        }
+}
+
+section {
+        background-color: #ffffff;
+        box-shadow: none;
+        padding: 10px;
+
+        h2 {
+                font-size: 1rem;
+                font-weight: bold;
+                margin-bottom: 12px;
+                color: #2563eb;
+        }
+}
+
+#flowTables {
+        background-color: transparent;
+        box-shadow: none;
+        padding: 0;
+}

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Kafka Realtime Dashboard</title>
+
+        <!-- Tailwind (CDN) -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="text-gray-400 flex flex-col min-h-screen">
+
+        <!-- ------------------------------- Header -------------------------------- -->
+        <header class=" text-white p-4">
+                <div class="flex justify-between items-center h-16 space-x-10">
+                        <h1 class="text-2xl font-normal text-left text-gray-400">
+                                { network dashboard - flow analysis }
+                        </h1>
+                        <div class="flex items-center space-x-2">
+                                <div class="flex items-center rounded rounded-2xl">
+                                        <span class="pl-2 pr-1 loupe-icon">
+                                                <svg width="20px" height="20px" viewBox="0 0 20 20"
+                                                        xmlns="http://www.w3.org/2000/svg">
+                                                        <path
+                                                                d="M17.545 15.467l-3.779-3.779a6.15 6.15 0 0 0 .898-3.21c0-3.417-2.961-6.377-6.378-6.377A6.185 6.185 0 0 0 2.1 8.287c0 3.416 2.961 6.377 6.377 6.377a6.15 6.15 0 0 0 3.115-.844l3.799 3.801a.953.953 0 0 0 1.346 0l.943-.943c.371-.371.236-.84-.135-1.211zM4.004 8.287a4.282 4.282 0 0 1 4.282-4.283c2.366 0 4.474 2.107 4.474 4.474a4.284 4.284 0 0 1-4.283 4.283c-2.366-.001-4.473-2.109-4.473-4.474z" />
+                                                </svg>
+                                        </span>
+                                        <input type="text" id="searchInput" placeholder="search for a flow"
+                                                class="flex-1 pl-4 pr-4 pt-2 pb-2 border-none focus:outline-none rounded-2xl text-gray-800 opacity-70 placeholder-gray-400 focus:opacity-100">
+                                        <button id="resetButton"
+                                                class="p-1 bg-gray-400 text-white font-extrabold rounded-2xl hover:bg-gray-400 transition ml-2">
+                                                <svg fill="#000000" width="12px" height="12px" viewBox="0 0 24 24"
+                                                        id="cross" data-name="Line Color"
+                                                        xmlns="http://www.w3.org/2000/svg" class="icon line-color">
+                                                        <line id="primary" x1="19" y1="19" x2="5" y2="5"
+                                                                style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
+                                                        </line>
+
+                                                        <line id="primary-2" data-name="primary" x1="19" y1="5" x2="5"
+                                                                y2="19"
+                                                                style="fill: none; stroke: rgb(255, 255, 255); stroke-linecap: round; stroke-linejoin: round; stroke-width: 3;">
+                                                        </line>
+                                                </svg>
+                                        </button>
+                                </div>
+                        </div>
+        </header>
+
+        <!-- ---------------------------- Main Content ----------------------------- -->
+        <div class="text-gray-800 text-3xl font-black welcome-message pl-4 mb-0">
+                welcome back, <span id="username" class="text-gray-400">Tom !</span>
+        </div>
+        <main class="flex-1 flex flex-row space-x-6 p-4">
+                <div id="left-col" class="flex flex-col flex-1 w-[20%]">
+                        <h2 id="status-title">Status</h2>
+                        <section id="status" class="">
+                                <h2 class="" style="font-family: Inter;">Websocket connection</h2>
+                                <p id="connectionStatus" class="font-mono text-gray-400" style="font-family: Inter;">
+                                        Connecting to WebSocket...</p>
+                        </section>
+                        <section id="treatmentDelays" class="">
+                                <h2 class="">Packet Treatment Delays
+                                        <span>Average on last 50 flows: <span id="averageDelayValue">0</span>
+                                                ms</span>
+                                </h2>
+                                <div class="flex justify-center">
+                                        <canvas id="treatmentDelaysChart" class="w-[800px] h-[100px]"></canvas>
+                                </div>
+                        </section>
+                </div>
+                <div id="right-col">
+
+
+                        <!-- --------------------------- Settings section ---------------------------- -->
+                        <section id="settings" class="">
+                                <h2 class=" flex justify-between items-center cursor-pointer" id="settingsToggle">
+                                        <span>Settings</span>
+                                        <span id="settingsArrow" class="ml-2">▶</span>
+                                </h2>
+
+
+                                <!-- Ingestion Method -->
+                                <form id="SettingsForm" class="space-y-4" style="display: none;">
+                                        <fieldset>
+                                                <legend class="block text-sm font-medium text-gray-700 mb-2">Ingestion
+                                                        Method
+                                                </legend>
+                                                <div class="grid grid-cols-8 gap-4">
+                                                        <div class=" flex items-center">
+                                                                <input type="radio" id="pcap" name="ingestionMethod"
+                                                                        value="pcap" class="mr-2">
+                                                                <label for="pcap" class="text-gray-700">PCAP</label>
+                                                        </div>
+                                                        <div class="flex items-center">
+                                                                <input type="radio" id="realtime" name="ingestionMethod"
+                                                                        value="realtime" class="mr-2">
+                                                                <label for="realtime"
+                                                                        class="text-gray-700">Realtime</label>
+                                                        </div>
+                                                </div>
+                                        </fieldset>
+
+                                        <div id="pcapSelectContainer" style="display:none; margin-top: 10px;">
+                                                <label for="pcapFile">Fichier PCAP :</label>
+                                                <select id="pcapFile"></select>
+                                        </div>
+
+                                        <div id="realtimeSelectContainer" style="display:none; margin-top: 10px;">
+                                                <label for="realtimeInterface">Interface réseau :</label>
+                                                <select id="realtimeInterface"></select>
+                                        </div>
+
+
+                                        <hr class="my-6 border-gray-300" />
+
+                                        <div class="grid grid-cols-2 gap-6">
+                                                <!-- Timeout Delays -->
+                                                <div class="space-y-4">
+                                                        <div>
+                                                                <label for="tcpTimeout"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">TCP
+                                                                        Timeout (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                5000)</span></label>
+                                                                <input type="number" id="tcpTimeout" name="tcpTimeout"
+                                                                        placeholder="5000" value="5000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                        <div>
+                                                                <label for="udpTimeout"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">UDP
+                                                                        Timeout (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                30000)</span></label>
+                                                                <input type="number" id="udpTimeout" name="udpTimeout"
+                                                                        placeholder="30000" value="30000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                        <div>
+                                                                <label for="otherTimeout"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">Other
+                                                                        Timeout (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                60000)</span></label>
+                                                                <input type="number" id="otherTimeout"
+                                                                        name="otherTimeout" placeholder="60000"
+                                                                        value="60000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                </div>
+
+                                                <!-- Max Age Settings -->
+                                                <div class="space-y-4">
+                                                        <div>
+                                                                <label for="tcpMaxAge"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">TCP
+                                                                        Max Age (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                300000)</span></label>
+                                                                <input type="number" id="tcpMaxAge" name="tcpMaxAge"
+                                                                        placeholder="300000" value="300000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                        <div>
+                                                                <label for="udpMaxAge"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">UDP
+                                                                        Max Age (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                120000)</span></label>
+                                                                <input type="number" id="udpMaxAge" name="udpMaxAge"
+                                                                        placeholder="120000" value="120000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                        <div>
+                                                                <label for="otherMaxAge"
+                                                                        class="block text-sm font-medium text-gray-700 mb-2">Other
+                                                                        Max
+                                                                        Age
+                                                                        (ms) <span
+                                                                                class="text-gray-400 text-xs">(Default:
+                                                                                300000)</span></label>
+                                                                <input type="number" id="otherMaxAge" name="otherMaxAge"
+                                                                        placeholder="300000" value="300000"
+                                                                        class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                                        </div>
+                                                </div>
+
+                                                <!-- Apply Button -->
+                                                <div class="col-span-2 flex justify-center mt-4">
+                                                        <button type="submit"
+                                                                class="px-10 py-2 bg-gray-400 text-white font-bold rounded hover:bg-gray-400 transition">
+                                                                Apply configuration
+                                                        </button>
+                                                </div>
+                                        </div>
+                                </form>
+                        </section>
+
+                        <!-- ---------------------------- Flow section ----------------------------- -->
+                        <section id="flows" class="">
+                                <h2 class="text-xl font-semibold mb-2 text-blue-600">Received Flows</h2>
+                                <!-- ----------------------------- Search bar ------------------------------ -->
+
+                                <div id="resetMessage" class="mb-4 text-gray-400 font-medium">
+                                </div>
+                                <!-- ----------------------------- Flow table ------------------------------ -->
+                                <section id="flowTables" class="space-y-6">
+                                        <div class="severity-section" data-severity="Emergency" style="display: none;">
+                                                <h3
+                                                        class="bg-red-900 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>Emergency Risk Level Flows</span>
+                                                        <span id="count-Emergency" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-red-900 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-red-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-Emergency"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+                                        <div class="severity-section" data-severity="Critical" style="display: none;">
+                                                <h3
+                                                        class="bg-red-700 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>Critical Risk Level Flows</span>
+                                                        <span id="count-Critical" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-red-700 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-red-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-Critical"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+                                        <div class="severity-section" data-severity="High" style="display: none;">
+                                                <h3
+                                                        class="bg-orange-600 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>High Risk Level Flows</span>
+                                                        <span id="count-High" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-orange-600 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-orange-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-High"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+                                        <div class="severity-section" data-severity="Severe" style="display: none;">
+                                                <h3
+                                                        class="bg-yellow-300 px-4 py-2 rounded-t-lg font-semibold text-black flex justify-between">
+                                                        <span>Severe Risk Level Flows</span>
+                                                        <span id="count-Severe" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-yellow-300 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-yellow-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-Severe"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+
+
+
+                                        <div class="severity-section" data-severity="Medium" style="display: none;">
+                                                <h3
+                                                        class="bg-green-500 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>Medium Risk Level Flows</span>
+                                                        <span id="count-Medium" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-green-500 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-green-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-Medium"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+
+
+
+                                        <div class="severity-section" data-severity="Low" style="display: none;">
+                                                <h3
+                                                        class="bg-blue-500 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>Low Risk Level Flows</span>
+                                                        <span id="count-Low" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-blue-500 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-blue-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-Low"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+
+                                        <div class="severity-section" data-severity="None" style="display: none;">
+                                                <h3
+                                                        class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between">
+                                                        <span>No Risk Level Flows</span>
+                                                        <span id="count-None" class="text-sm font-normal">Count :
+                                                                0</span>
+                                                </h3>
+                                                <div
+                                                        class="overflow-y-auto border border-gray-400 rounded-b-lg max-h-[25vh]">
+                                                        <table class="min-w-full text-xs text-left border-collapse">
+                                                                <thead
+                                                                        class="bg-gray-100 font-semibold sticky top-0 z-10">
+                                                                        <tr>
+                                                                                <th class="p-2 border text-center">First
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Last
+                                                                                        Seen
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source IP
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        IP</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Port
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Port</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Country</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Source Org
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Destination
+                                                                                        Org</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Protocol</th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Packets</th>
+                                                                                <th class="p-2 border text-center">Bytes
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">
+                                                                                        Duration (ms)
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Risk
+                                                                                        Label
+                                                                                </th>
+                                                                                <th class="p-2 border text-center">Flow
+                                                                                        Key</th>
+                                                                        </tr>
+                                                                </thead>
+                                                                <tbody id="table-None"></tbody>
+                                                        </table>
+                                                </div>
+                                        </div>
+
+                                </section>
+                                <!-- -------------------------- Risk evel legend --------------------------- -->
+                                <div class="risk-level-legend">
+                                        <h3 class="">Risk Level Legend</h3>
+                                        <div class="grid grid-cols-2">
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-red-900 inline-block mr-2"></span>
+                                                        <span class="text-red-900 mr-1">Emergency : </span>
+                                                        Emergency
+                                                        risk
+                                                        level
+                                                </div>
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-yellow-300 inline-block mr-2"></span>
+                                                        <span class="text-yellow-300 mr-1">Severe : </span>
+                                                        Severe
+                                                        risk
+                                                        level
+                                                </div>
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-red-700 inline-block mr-2"></span>
+                                                        <span class="text-red-700 mr-1">Critical : </span>
+                                                        Critical
+                                                        risk
+                                                        level
+                                                </div>
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-green-500 inline-block mr-2"></span>
+                                                        <span class="text-green-500 mr-1">Medium : </span>
+                                                        Medium risk
+                                                        level
+                                                </div>
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-orange-600 inline-block mr-2"></span>
+                                                        <span class="text-orange-600 mr-1">High : </span> High
+                                                        risk
+                                                        level
+                                                </div>
+                                                <div class="flex items-center">
+                                                        <span class="w-8 h-4 bg-blue-500 inline-block mr-2"></span>
+                                                        <span class="text-blue-500 mr-1">Low : </span> Low
+                                                        risk level
+                                                </div>
+                                        </div>
+                                </div>
+
+                                <!-- ---------------------------- Current flows ---------------------------- -->
+                                <div class="currentFlowContainer mb-4" data-severity="CurrentFlow"
+                                        id="currentFlowContainer">
+                                        <h3 id="currentFlowTitle"
+                                                class="bg-gray-400 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between cursor-pointer">
+                                                <span>Current Flow</span>
+                                                <span id="count-CurrentFlow" class="text-sm font-normal">Count :
+                                                        0</span>
+                                                <span id="arrow-CurrentFlow" class="ml-2">▼</span>
+                                        </h3>
+                                        <div class="overflow-y-auto border border-gray-400 rounded-b-lg max-h-[25vh]">
+                                                <table class="min-w-full text-xs text-left border-collapse">
+                                                        <thead class="bg-gray-100 font-semibold sticky top-0 z-10">
+                                                                <tr>
+                                                                        <th class="p-2 border text-center">First Seen
+                                                                        </th>
+                                                                        <th class="p-2 border text-center">Last Seen
+                                                                        </th>
+                                                                        <th class="p-2 border text-center">Source IP
+                                                                        </th>
+                                                                        <th class="p-2 border text-center">Destination
+                                                                                IP</th>
+                                                                        <th class="p-2 border text-center">Source Port
+                                                                        </th>
+                                                                        <th class="p-2 border text-center">Destination
+                                                                                Port</th>
+                                                                        <th class="p-2 border text-center">Protocol</th>
+                                                                </tr>
+                                                        </thead>
+                                                        <tbody id="currentFlowTable">
+                                                                <tr>
+                                                                        <td class="p-2 border-b text-center"
+                                                                                colspan="7">No
+                                                                                current flows available</td>
+                                                                </tr>
+                                                        </tbody>
+                                                </table>
+                                        </div>
+                                </div>
+
+                                <!-- --------------------------- Malformed Packets section ---------------------------- -->
+                                <div class="malformedPacketContainer mb-4" data-severity="MalformedPacket"
+                                        id="malformedPacketContainer">
+                                        <h3 id="malformedPacketTitle"
+                                                class="bg-red-500 px-4 py-2 rounded-t-lg font-semibold text-white flex justify-between cursor-pointer">
+                                                <span>Malformed Packets</span>
+                                                <span id="count-MalformedPacket" class="text-sm font-normal">Count :
+                                                        0</span>
+                                                <span id="arrow-MalformedPacket" class="ml-2">▼</span>
+                                        </h3>
+                                        <div class="overflow-y-auto border border-red-500 rounded-b-lg max-h-[25vh]">
+                                                <table class="min-w-full text-xs text-left border-collapse">
+                                                        <thead class="bg-red-100 font-semibold sticky top-0 z-10">
+                                                                <tr>
+                                                                        <th class="p-2 border text-center">Error Details
+                                                                        </th>
+                                                                        <th class="p-2 border text-center">Raw Data</th>
+                                                                </tr>
+                                                        </thead>
+                                                        <tbody id="malformedPacketTable">
+                                                                <tr>
+                                                                        <td class="p-2 border-b text-center"
+                                                                                colspan="2">No
+                                                                                malformed packets available</td>
+                                                                </tr>
+                                                        </tbody>
+                                                </table>
+                                        </div>
+                                </div>
+
+                                <!-- --------------------------- Packet section ---------------------------- -->
+                                <!-- <section id="packets" class="p-4 bg-white rounded-2xl shadow">
+                        <h2 class="text-xl font-semibold mb-2">Received Packets</h2>
+                        <div id="packetContainer"
+                                class="font-mono text-sm overflow-y-auto max-h-[400px] p-2 border rounded bg-gray-100">
+                        </div>
+                </section> -->
+
+                                <!-- --------------------------- Charts section ---------------------------- -->
+                                <section id="charts" class="p-2 bg-#070707 rounded-l border border-gray-200 bg-white">
+                                        <h2 class="text-xl font-semibold mb-2 text-blue-600">Visualizations</h2>
+
+                                        <div class="grid grid-cols-4 gap-6 justify-items-center items-center">
+
+                                                <div class="col-span-1 flex flex-col items-center">
+                                                        <canvas id="severityChart" class="w-[400px] h-[400px]"></canvas>
+                                                </div>
+
+                                                <div class="col-span-2 flex flex-col items-center">
+                                                        <canvas id="riskChart" class="w-[800px] h-[400px]"></canvas>
+                                                </div>
+
+                                                <div class="col-span-1 flex flex-col items-center">
+                                                        <canvas id="protocolChart" class="w-[400px] h-[400px]"></canvas>
+                                                </div>
+                                        </div>
+                                        <div id="trafficMap" style="width: 100%; height: 500px;"></div>
+
+                                </section>
+
+                                <!-- ------------------------------- Modale -------------------------------- -->
+                                <div id="flowModal"
+                                        class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300">
+                                        <div class="bg-white rounded-xl shadow-xl p-6 max-w-4xl w-full relative transform transition-all duration-300 scale-95"
+                                                style="margin:auto; margin-top:10vh; max-height:80vh; overflow-y:auto;">
+                                                <button id="closeModal"
+                                                        class="absolute top-2 right-2 text-gray-400 hover:text-black text-xl font-bold">&times;</button>
+                                                <h3 class="text-lg font-semibold mb-4" id="modalTitle">Flow Details</h3>
+                                                <pre id="jsonContent"
+                                                        class="bg-gray-100 rounded-lg p-4 overflow-auto max-h-[70vh] text-sm font-mono"></pre>
+                                        </div>
+                                </div>
+                </div>
+
+
+
+        </main>
+
+        <!-- ------------------------------- Footer -------------------------------- -->
+        <footer class="bg-gray-200 text-center p-2 text-sm">
+                © 2025 - Kafka Real-Time Dashboard. All rights reserved.
+        </footer>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+        <script type="module" src="js/app.js"></script>
+</body>
+
+</html>
