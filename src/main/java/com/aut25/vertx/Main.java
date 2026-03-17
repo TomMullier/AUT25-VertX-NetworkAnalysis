@@ -59,7 +59,7 @@ public class Main extends AbstractVerticle {
         boolean exitProgram = false;
         scanner = new Scanner(System.in);
         if ("menu".equalsIgnoreCase(mode)) {
-            logger.info(
+            logger.debug(
                     Colors.YELLOW + "[ MAIN VERTICLE ] [ CONFIG ]      Mode set to 'menu'. Launching interactive menu."
                             + Colors.RESET);
             exitMenu = false;
@@ -435,8 +435,8 @@ public class Main extends AbstractVerticle {
         JsonObject realtimeConfig = config.getJsonObject("realtime", new JsonObject());
         sharedData.getLocalMap("config").put("realtime", realtimeConfig);
 
-        logger.info("[ MAIN VERTICLE ]                 Based configuration : "
-                + sharedData.getLocalMap("config").toString());
+        // logger.info("[ MAIN VERTICLE ]                 Based configuration : "
+        //         + sharedData.getLocalMap("config").toString());
 
         return sharedData;
     }

@@ -8,11 +8,13 @@ import java.util.List;
 import java.util.Map;
 
 import java.util.ArrayList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class FlowModelPredictor {
 
     private static Evaluator evaluator;
-
+    public static Logger logger = LoggerFactory.getLogger(FlowModelPredictor.class);
     static {
 
         String path = "IDS_Training/dataset_10-03-26/xgb_full_pipeline.pmml";
@@ -24,7 +26,7 @@ public class FlowModelPredictor {
                 throw new RuntimeException("PMML not found in classpath: " + path);
             }
 
-            System.out.println("Loading PMML model: " + path);
+            logger.info("[ FlowModelPredictor ]            Loading PMML model from: " + path);
 
             evaluator = new LoadingModelEvaluatorBuilder()
                     .load(is)
@@ -32,7 +34,7 @@ public class FlowModelPredictor {
 
             evaluator.verify();
 
-            System.out.println("PMML model loaded successfully");
+            logger.info("[ FlowModelPredictor ]            PMML model loaded successfully");
 
         Map<String, Object> arguments = new HashMap<>();
 

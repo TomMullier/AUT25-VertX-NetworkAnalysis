@@ -16,70 +16,99 @@ NC='\033[0m' # No Color
 SKIP_DEPS=false
 QUIET=false
 
-for arg in "$@"; do
-    case $arg in
-        --skip-deps)
-            SKIP_DEPS=true
-            shift
-            ;;
-        --quiet)
-            QUIET=true
-            shift
-            ;;
-    esac
+usage() {
+  cat <<EOF
+Usage: $0 [options]
+
+Options:
+  -s, --skip-deps   Saute l'étape de build Maven (clean install -DskipTests)
+  -q, --quiet       Mode silencieux (réduit la verbosité, Maven -q, logs dans ${LOG_DIR})
+  -h, --help        Affiche cette aide
+
+Exemples:
+  $0                         # Build + run (verbeux)
+  $0 -s                      # Saute le build, lance directement
+  $0 --quiet                 # Silencieux, redirige les sorties vers fichiers de logs
+  $0 -s -q                   # Saute le build et lance en silencieux
+EOF
+}
+
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s|--skip-deps)
+      SKIP_DEPS=true
+      shift
+      ;;
+    -q|--quiet)
+      QUIET=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      err "Unknown option: $1"
+      usage
+      exit 2
+      ;;
+  esac
 done
 
-# === Title ===
-echo " __    __             __                                        __       ";
-echo "|  \\  |  \\           |  \\                                      |  \\      ";
-echo "| \$\$\\ | \$\$  ______  _| \$\$_    __   __   __   ______    ______  | \$\$   __ ";
-echo "| \$\$\$\\| \$\$ /      \\|   \$\$ \\  |  \\ |  \\ |  \\ /      \\  /      \\ | \$\$  /  \\";
-echo "| \$\$\$\$\\ \$\$|  \$\$\$\$\$\$\\\\\$\$\$\$\$\$  | \$\$ | \$\$ | \$\$|  \$\$\$\$\$\$\\|  \$\$\$\$\$\$\\| \$\$_/  \$\$";
-echo "| \$\$\\\$\$ \$\$| \$\$    \$\$ | \$\$ __ | \$\$ | \$\$ | \$\$| \$\$  | \$\$| \$\$   \\\$\$| \$\$   \$\$ ";
-echo "| \$\$ \\\$\$\$\$| \$\$\$\$\$\$\$\$ | \$\$|  \\| \$\$_/ \$\$_/ \$\$| \$\$__/ \$\$| \$\$      | \$\$\$\$\$\$\\ ";
-echo "| \$\$  \\\$\$\$ \\\$\$     \\  \\\$\$  \$\$ \\\$\$   \$\$   \$\$ \\\$\$    \$\$| \$\$      | \$\$  \\\$\$\\";
-echo " \\\$\$   \\\$\$  \\\$\$\$\$\$\$\$   \\\$\$\$\$   \\\$\$\$\$\$\\\$\$\$\$   \\\$\$\$\$\$\$  \\\$\$       \\\$\$   \\\$\$";
-echo " ________                    ______    ______   __           ";
-echo "|        \\                  /      \\  /      \\ |  \\          ";
-echo " \\\$\$\$\$\$\$\$\$______   ______  |  \$\$\$\$\$\$\\|  \$\$\$\$\$\$\\ \\\$\$  _______ ";
-echo "   | \$\$  /      \\ |      \\ | \$\$_  \\\$\$| \$\$_  \\\$\$|  \\ /       \\";
-echo "   | \$\$ |  \$\$\$\$\$\$\\ \\\$\$\$\$\$\$\\| \$\$ \\    | \$\$ \\    | \$\$|  \$\$\$\$\$\$\$";
-echo "   | \$\$ | \$\$   \\\$\$/      \$\$| \$\$\$\$    | \$\$\$\$    | \$\$| \$\$      ";
-echo "   | \$\$ | \$\$     |  \$\$\$\$\$\$\$| \$\$      | \$\$      | \$\$| \$\$_____ ";
-echo "   | \$\$ | \$\$      \\\$\$    \$\$| \$\$      | \$\$      | \$\$ \\\$\$     \\";
-echo "    \\\$\$  \\\$\$       \\\$\$\$\$\$\$\$ \\\$\$       \\\$\$       \\\$\$  \\\$\$\$\$\$\$\$";
-echo "  ______                       __                                         ";
-echo " /      \\                     |  \\                                        ";
-echo "|  \$\$\$\$\$\$\\ _______    ______  | \$\$ __    __  ________   ______    ______  ";
-echo "| \$\$__| \$\$|       \\  |      \\ | \$\$|  \\  |  \\|        \\ /      \\  /      \\ ";
-echo "| \$\$    \$\$| \$\$\$\$\$\$\$\\  \\\$\$\$\$\$\$\\| \$\$| \$\$  | \$\$ \\\$\$\$\$\$\$\$\$|  \$\$\$\$\$\$\\|  \$\$\$\$\$\$\\";
-echo "| \$\$\$\$\$\$\$\$| \$\$  | \$\$ /      \$\$| \$\$| \$\$  | \$\$  /    \$\$ | \$\$    \$\$| \$\$   \\\$\$";
-echo "| \$\$  | \$\$| \$\$  | \$\$|  \$\$\$\$\$\$\$| \$\$| \$\$__/ \$\$ /  \$\$\$\$_ | \$\$\$\$\$\$\$\$| \$\$      ";
-echo "| \$\$  | \$\$| \$\$  | \$\$ \\\$\$    \$\$| \$\$ \\\$\$    \$\$|  \$\$    \\ \\\$\$     \\| \$\$      ";
-echo " \\\$\$   \\\$\$ \\\$\$   \\\$\$  \\\$\$\$\$\$\$\$ \\\$\$ _\\\$\$\$\$\$\$\$ \\\$\$\$\$\$\$\$\$  \\\$\$\$\$\$\$\$ \\\$\$      ";
-echo "                                  |  \\__| \$\$                              ";
-echo "                                   \\\$\$    \$\$                              ";
-echo "                                    \\\$\$\$\$\$\$                               ";   
 
-echo ""
-echo -e "${CYAN}=== Automated Setup Script for AUT25 VertX Network Analysis Project ===${NC}"
-echo -e "${CYAN}=== Supports Ubuntu, Debian, Fedora, CentOS, Arch, OpenSUSE, and SUSE ===${NC}"
-echo ""
-echo -e "${WHITE}>> By Tom MULLIER${NC}"
-echo ""
-echo ""
-echo -e "${YELLOW}=== Installing dependencies ===${NC}"
 
-# === Minimal mode check ===
+MVN_Q_OPTS=()
 if [ "$QUIET" = true ]; then
-    echo -e "${YELLOW}Mode silencieux activé (affichage minimal).${NC}"
+  MVN_Q_OPTS+=("-q" "--no-transfer-progress")
+else
+  MVN_Q_OPTS+=("--no-transfer-progress")
+fi
+
+
+
+
+# === Title ===
+echo " ███████████ ████                           █████   █████                     █████                        ";
+echo "▒▒███▒▒▒▒▒▒█▒▒███                          ▒▒███   ▒▒███                     ▒▒███                         ";
+echo " ▒███   █ ▒  ▒███   ██████  █████ ███ █████ ▒███    ▒███   ██████  ████████  ███████    ██████  █████ █████";
+echo " ▒███████    ▒███  ███▒▒███▒▒███ ▒███▒▒███  ▒███    ▒███  ███▒▒███▒▒███▒▒███▒▒▒███▒    ███▒▒███▒▒███ ▒▒███ ";
+echo " ▒███▒▒▒█    ▒███ ▒███ ▒███ ▒███ ▒███ ▒███  ▒▒███   ███  ▒███████  ▒███ ▒▒▒   ▒███    ▒███████  ▒▒▒█████▒  ";
+echo " ▒███  ▒     ▒███ ▒███ ▒███ ▒▒███████████    ▒▒▒█████▒   ▒███▒▒▒   ▒███       ▒███ ███▒███▒▒▒    ███▒▒▒███ ";
+echo " █████       █████▒▒██████   ▒▒████▒████       ▒▒███     ▒▒██████  █████      ▒▒█████ ▒▒██████  █████ █████";
+echo "▒▒▒▒▒       ▒▒▒▒▒  ▒▒▒▒▒▒     ▒▒▒▒ ▒▒▒▒         ▒▒▒       ▒▒▒▒▒▒  ▒▒▒▒▒        ▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒▒▒ ";
+echo "                                                                                                           ";
+echo "                                                                                                           ";
+echo "                                                                                                           ";
+
+
+hr() { printf "${BLUE}%s${NC}\n" "────────────────────────────────────────────────────────────────"; }
+section() { printf "${CYAN}◆ %s${NC}\n" "$1"; }
+ok() { printf "${GREEN}✔ %s${NC}\n" "$1"; }
+warn() { printf "${YELLOW}⚠ %s${NC}\n" "$1"; }
+fail() { printf "${RED}✖ %s${NC}\n" "$1" >&2; }
+
+banner() {
+  echo -e "${BLUE}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
+  echo -e "${BLUE}┃${NC}  ${CYAN}Automated Setup • AUT25 VertX Network Analysis Project${NC}        ${BLUE}        ┃${NC}"
+  echo -e "${BLUE}┃${NC}  ${WHITE}Supports: Ubuntu · Debian · Fedora · CentOS · Arch · OpenSUSE · SUSE${NC} ${BLUE} ┃${NC}"
+  echo -e "${BLUE}┃${NC}  ${MAGENTA}By Tom MULLIER${NC}                                             ${BLUE}           ┃${NC}"
+  echo -e "${BLUE}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
+  echo ""
+}
+
+# En-tête stylé (remplace tes echos initiaux)
+banner
+if [ "$QUIET" = true ]; then
+  warn "Running in quiet mode: output will be minimal."
 fi
 if [ "$SKIP_DEPS" = true ]; then
-    echo -e "${YELLOW}Skipping dependencies installation as per user request.${NC}"
+  warn "Skipping dependencies installation as per user request."
 else
-    echo -e "${YELLOW}Dependencies installation will proceed.${NC}"
+  section "Installing dependencies"
 fi
 echo ""
+
 
 # === Detect OS function ===
 detect_distro() {
@@ -92,69 +121,69 @@ detect_distro() {
     fi
 }
 detect_distro
-echo -e "${GREEN}>> Detected distribution: $DISTRO${NC}"
+echo -e "${BLUE}┃${NC}  ${GREEN}Detected distribution: $DISTRO${NC}"
 echo ""
 
-# Check NDPI installed
-if [ "$SKIP_DEPS" = false ]; then
-    echo -e "${YELLOW}=== Checking for nDPI installation ===${NC}"
-    MISSING_NDPI=false
-    echo ""
+# # Check NDPI installed
+# if [ "$SKIP_DEPS" = false ]; then
+#     echo -e "${YELLOW}=== Checking for nDPI installation ===${NC}"
+#     MISSING_NDPI=false
+#     echo ""
 
-    # Vérifie la présence de la commande ndpiReader
-    if ! command -v ndpiReader &> /dev/null; then
-        echo -e "${RED}❌ nDPI is not installed or ndpiReader not found.${NC}"
-        echo -e "${YELLOW}You can install it manually by following:${NC}"
-        echo -e "${WHITE}  git clone https://github.com/ntop/nDPI.git${NC}"
-        echo -e "${WHITE}  cd nDPI && sudo ./autogen.sh && ./configure && make && sudo make install${NC}"
-        MISSING_NDPI=true
-        exit 1
-    else
-        echo -e "${GREEN}✅ ndpiReader is available.${NC}"
-    fi
+#     # Vérifie la présence de la commande ndpiReader
+#     if ! command -v ndpiReader &> /dev/null; then
+#         echo -e "${RED}❌ nDPI is not installed or ndpiReader not found.${NC}"
+#         echo -e "${YELLOW}You can install it manually by following:${NC}"
+#         echo -e "${WHITE}  git clone https://github.com/ntop/nDPI.git${NC}"
+#         echo -e "${WHITE}  cd nDPI && sudo ./autogen.sh && ./configure && make && sudo make install${NC}"
+#         MISSING_NDPI=true
+#         exit 1
+#     else
+#         echo -e "${GREEN}✅ ndpiReader is available.${NC}"
+#     fi
 
-    # Vérifie le dossier des headers
-    if [ ! -d "/usr/include/ndpi" ]; then
-        echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
-        echo -e "${YELLOW}Please ensure nDPI headers are installed properly.${NC}"
-        MISSING_NDPI=true
-        exit 1
-    else
-        echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
-    fi
+#     # Vérifie le dossier des headers
+#     if [ ! -d "/usr/include/ndpi" ]; then
+#         echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
+#         echo -e "${YELLOW}Please ensure nDPI headers are installed properly.${NC}"
+#         MISSING_NDPI=true
+#         exit 1
+#     else
+#         echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
+#     fi
 
-    # Check if /usr/local/include/ndpi exists
-    if [ ! -d "/usr/local/include/ndpi" ]; then
-        echo -e "${RED}❌ Missing directory: /usr/local/include/ndpi/${NC}"
-        echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/local/include.${NC}"
-        MISSING_NDPI=true
-        exit 1
-    else
-        echo -e "${GREEN}✅ Found: /usr/local/include/ndpi/${NC}"
-    fi
+#     # Check if /usr/local/include/ndpi exists
+#     if [ ! -d "/usr/local/include/ndpi" ]; then
+#         echo -e "${RED}❌ Missing directory: /usr/local/include/ndpi/${NC}"
+#         echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/local/include.${NC}"
+#         MISSING_NDPI=true
+#         exit 1
+#     else
+#         echo -e "${GREEN}✅ Found: /usr/local/include/ndpi/${NC}"
+#     fi
 
-    # Check if /usr/include/ndpi exists
-    if [ ! -d "/usr/include/ndpi" ]; then
-        echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
-        echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/include.${NC}"
-        MISSING_NDPI=true
-        exit 1
-    else
-        echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
-    fi
+#     # Check if /usr/include/ndpi exists
+#     if [ ! -d "/usr/include/ndpi" ]; then
+#         echo -e "${RED}❌ Missing directory: /usr/include/ndpi/${NC}"
+#         echo -e "${YELLOW}Please ensure nDPI headers are installed properly in /usr/include.${NC}"
+#         MISSING_NDPI=true
+#         exit 1
+#     else
+#         echo -e "${GREEN}✅ Found: /usr/include/ndpi/${NC}"
+#     fi
 
 
-    # Stoppe l’installation si nDPI est manquant
-    if [ "$MISSING_NDPI" = true ]; then
-        echo ""
-        echo -e "${RED}⚠️ nDPI installation is incomplete. Please install it before continuing.${NC}"
-        echo ""
-        exit 1
-    fi
+#     # Stoppe l’installation si nDPI est manquant
+#     if [ "$MISSING_NDPI" = true ]; then
+#         echo ""
+#         echo -e "${RED}⚠️ nDPI installation is incomplete. Please install it before continuing.${NC}"
+#         echo ""
+#         exit 1
+#     fi
 
-    echo -e "${GREEN}=== ✅ nDPI installation verified successfully ===${NC}"
-    echo ""
-fi
+#     echo -e "${GREEN}=== ✅ nDPI installation verified successfully ===${NC}"
+#     echo ""
+# fi
 
 # === Install packages function ===
 install_package() {
@@ -286,9 +315,9 @@ local service_name=$1
 # === Delete log file ===
 LOG_FILE="logs/app.log"
 if [ -f "$LOG_FILE" ]; then
-    echo -e "${BLUE}=== Deleting old log file: ${YELLOW}$LOG_FILE${NC}"
+    echo -e "${BLUE}┃${NC}  ${BLUE}Deleting old log file: ${YELLOW}$LOG_FILE${NC}"
     rm "$LOG_FILE"
-    echo -e "${GREEN}✅ Old log file deleted.${NC}"
+    echo -e "    ${BLUE}┃${NC}  ${GREEN}Old log file deleted.${NC}"
     echo ""
 fi
 
@@ -302,22 +331,36 @@ TOPIC_NAME="network-data"
 TOPIC_NAME2="network-flows"
 NUM_PARTITIONS=500
 
-# Ensure Kafka is running
-echo "=== Vérification de Kafka ==="
+echo -e "${BLUE}┃${NC}  Checking Kafka...${NC}"
+
+# Check container is running
 if ! docker ps --format '{{.Names}}' | grep -q '^kafka$'; then
-    echo "❌ Kafka n'est pas lancé. Tentative de démarrage..."
+    echo "❌ Kafka container is not running. Attempting to start it..."
     docker start kafka >/dev/null 2>&1 || {
-        echo "Erreur : impossible de démarrer le conteneur Kafka."
+        echo "❌ Failed to start Kafka container. Please check Docker and try again."
         exit 1
     }
     sleep 5
 fi
 
-# Wait until Kafka is ready
-until docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1; do
-    echo "⏳ Kafka n'est pas encore prêt..."
+# Detect kafka-topics command
+KAFKA_TOPICS_CMD=$(docker exec kafka sh -c "command -v kafka-topics || command -v kafka-topics.sh")
+
+if [ -z "$KAFKA_TOPICS_CMD" ]; then
+  echo "❌ kafka-topics is not found in the Kafka container."
+  exit 1
+fi
+
+# Wait until Kafka answers
+echo -e "    ${BLUE}┃${NC}  Waiting for Kafka to be ready..."
+until docker exec kafka sh -c "$KAFKA_TOPICS_CMD --bootstrap-server kafka:9092 --list" >/dev/null 2>&1; do
+    echo -e "    ${BLUE}┃${NC}  ⏳ Kafka is not ready yet..."
     sleep 2
 done
+
+echo -e "    ${BLUE}┃${NC}  ${GREEN}Kafka is ready.${NC}"
+echo ""
+
 
 # # Reset topics
 # echo "=== Resetting Kafka topic: $TOPIC_NAME ==="
@@ -347,7 +390,7 @@ wait_topic_deleted() {
   local start_ts
   start_ts=$(date +%s)
 
-  echo "⏳ Attente de la suppression complète du topic '$topic'…"
+  echo -e "    ${BLUE}┃${NC}  ⏳ Waiting for complete deletion of topic '$topic'…"
   while true; do
     # 1) Est-ce que le topic existe encore ?
     if docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --list 2>/dev/null | grep -Fxq "$topic"; then
@@ -358,7 +401,7 @@ wait_topic_deleted() {
           | grep -qi "marked for deletion"; then
         :
       else
-        echo "✅ Suppression confirmée pour '$topic'."
+        echo -e "    ${BLUE}┃${NC}  ${GREEN}Deletion confirmed for '$topic'.${NC}"
         break
       fi
     fi
@@ -367,8 +410,8 @@ wait_topic_deleted() {
     local now
     now=$(date +%s)
     if (( now - start_ts > DELETE_TIMEOUT )); then
-      echo "⚠️  Timeout atteint (${DELETE_TIMEOUT}s) : le topic '$topic' semble encore en suppression."
-      echo "    Vérifie les logs broker/contrôleur et l’état disque. Je poursuis quand même."
+      echo -e "⚠️  Timeout reached (${DELETE_TIMEOUT}s) : the topic '$topic' seems to still be deleting."
+      echo -e "    Please check the broker/controller logs and disk status. I will continue anyway."
       break
     fi
     sleep 2
@@ -379,7 +422,7 @@ reset_topic() {
   local topic="$1"
   local partitions="$2"
 
-  echo "=== Resetting Kafka topic: $topic ==="
+  echo -e "${BLUE}┃${NC}  Resetting Kafka topic: $topic with $partitions partitions..."
   # Suppression idempotente (ignore l’erreur si non présent)
   docker exec "$DOCKER_CONTAINER" kafka-topics --bootstrap-server "$BROKER" --delete --topic "$topic" >/dev/null 2>&1 || true
 
@@ -403,11 +446,11 @@ reset_topic() {
     fi
   fi
 
-  echo "✅ Topic $topic has been reset with $partitions partitions."
+  echo -e "    ${BLUE}┃${NC}  ${GREEN}Topic $topic has been reset with $partitions partitions.${NC}"
 }
 
 # Gestion propre du Ctrl-C pour éviter d’interrompre entre delete/create
-trap 'echo; echo "🛑 Interruption reçue. Sortie propre…"; exit 130' INT
+trap 'echo; echo "🛑 Stopping..."; exit 130' INT
 
 # Reset topics
 reset_topic "$TOPIC_NAME" "$NUM_PARTITIONS"
@@ -416,37 +459,39 @@ reset_topic "$TOPIC_NAME2" "1"
 
 
 # === ClickHouse setup ===
-echo -e "${BLUE}=== Ensuring ClickHouse database exists ===${NC}"
+echo -e "${BLUE}┃${NC}  Ensuring ClickHouse database exists...${NC}"
 docker exec -i clickhouse clickhouse-client --multiquery < src/main/resources/clickhouse-init/init.sql
-echo -e "${GREEN}✅ ClickHouse database, users and tables are ready.${NC}"
+echo -e "    ${BLUE}┃${NC}  ${GREEN}ClickHouse database, users and tables are ready.${NC}"
 echo ""
 
 # === Maven build ===
 if [ "$SKIP_DEPS" = false ]; then
-    echo -e "${BLUE}=== Building the project with Maven ===${NC}"
-    mvn clean install -DskipTests -q
-    echo -e "${GREEN}✅ Maven build completed.${NC}"
+    echo -e "${BLUE}┃${NC}  Building the project with Maven ${NC}"
+    mvn clean install -DskipTests "${MVN_Q_OPTS[@]}" >/dev/null 2>&1
+    echo -e "    ${BLUE}┃${NC}  ${GREEN}Maven build completed.${NC}"
     echo ""
 fi
 
 # === Launch Application ===
-echo -e "${CYAN}=== Starting the application ===${NC}"
-mvn compile vertx:run 
-echo -e "${MAGENTA}=== Application has stopped ===${NC}"
+echo -e "${GREEN}┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓${NC}"
+echo -e "${GREEN}┃${NC}  ${GREEN}Starting the application${NC}                                              ${GREEN}┃${NC}"
+echo -e "${GREEN}┃${NC}  ${GREEN}Press Ctrl-C to stop the application${NC}                                  ${GREEN}┃${NC}"
+echo -e "${GREEN}┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛${NC}"
+mvn -q -Dvertx.disableDebug=true compile vertx:run
+echo -e "${BLUE}┃${NC}  ${MAGENTA}Application has stopped${NC}"
 
-# === Autocompletion for flags ===
+
+# === Autocomplétion pour les flags ===
 _autocomplete_flags() {
-    local cur prev opts
+    local cur opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    opts="--skip-deps --quiet"
+    # Flags longs + alias courts
+    opts="--skip-deps --quiet --help -s -q -h"
 
-    # Si tu veux plus tard ajouter d’autres flags, ajoute-les ici :
-    # opts="--skip-deps --quiet --no-cache --force"
-
-    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
     return 0
 }
 
-# Lie la fonction d’autocomplétion au script
-complete -F _autocomplete_flags ./start.sh
+# Lier la fonction d’autocomplétion au script (chemin relatif ou absolu)
+complete -F _autocomplete_flags ./start.s
