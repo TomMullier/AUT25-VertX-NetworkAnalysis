@@ -5,6 +5,7 @@ com/aut25/vertx/services/WhoisService.class
 com/aut25/vertx/api/routes/UtilsRoute.class
 com/aut25/vertx/IngestionVerticle$Ports.class
 com/aut25/vertx/api/routes/NetworkRoute.class
+com/aut25/vertx/MetricsVerticle$ConsoleHud.class
 com/aut25/vertx/api/utils/PacketConsumerVerticle.class
 com/aut25/vertx/PcapCoordinatorVerticle.class
 com/aut25/vertx/ClickHouseFlowsVerticle.class

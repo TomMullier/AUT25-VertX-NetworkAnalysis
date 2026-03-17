@@ -107,7 +107,7 @@ public class BenchmarkVerticle extends AbstractVerticle {
                 KafkaConsumer<String, String> consumer = KafkaConsumer.create(vertx, config);
 
                 consumer.subscribe("network-data")
-                                .onSuccess(v -> logger.info("[ANALYSE VERTICLE] Subscribed to topic network-data"))
+                                .onSuccess(v -> logger.debug("[ANALYSE VERTICLE] Subscribed to Kafka topic 'network-data' successfully."))
                                 .onFailure(err -> logger
                                                 .error("[ANALYSE VERTICLE] Failed to subscribe: " + err.getMessage()));
 
@@ -133,7 +133,7 @@ public class BenchmarkVerticle extends AbstractVerticle {
 
                                 String value = record.value();
                                 if (value == null || value.isEmpty() || value.equals("reset")) {
-                                        logger.warn("[ANALYSE VERTICLE] Received empty record, skipping.");
+                                        logger.debug("[ANALYSE VERTICLE] Received empty record, skipping.");
                                         return;
                                 }
 

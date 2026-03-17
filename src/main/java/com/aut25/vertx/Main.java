@@ -242,7 +242,6 @@ public class Main extends AbstractVerticle {
                     + Colors.RESET);
         }
         sharedData.getLocalMap("config").put("ndpi_initialized", false);
-        logger.info("CHeck");
         int cpu = Runtime.getRuntime().availableProcessors();
         int numAggregators = 500;
         for (int i = 0; i < numAggregators; i++) {

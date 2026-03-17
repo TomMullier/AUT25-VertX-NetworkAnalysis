@@ -70,6 +70,8 @@ public class IngestionVerticle extends AbstractVerticle {
         private final AtomicBoolean publishingDone = new AtomicBoolean(false);
         private long start, end;
         private final AtomicLong droppedPackets = new AtomicLong(0);
+        private final AtomicLong sentPackets = new AtomicLong(0);
+        private final AtomicLong queueDepth = new AtomicLong(0);
 
         private class PacketWrapper {
                 Packet packet;
@@ -116,6 +118,10 @@ public class IngestionVerticle extends AbstractVerticle {
                 }
                 logger.info(Colors.GREEN + "[ INGESTION VERTICLE ]            Ingestion mode: " + mode.toUpperCase()
                                 + Colors.RESET);
+
+                vertx.setPeriodic(1000, id -> vertx.eventBus().publish("ingestion.stats", new JsonObject()
+                                .put("received", sentPackets.get())
+                                .put("queue", queueDepth.get())));
 
                 /* ----------------------- Creation of Kafka producer ----------------------- */
                 configureKafkaProducer();
@@ -353,7 +359,7 @@ public class IngestionVerticle extends AbstractVerticle {
                         // Optionnel mais fortement recommandé
                         // handle.setFilter("ip", BpfProgram.BpfCompileMode.OPTIMIZE);
 
-                        logger.info("[ INGESTION VERTICLE ] Capture started on {} (workers={}, buffer={}MB)",
+                        logger.debug("[ INGESTION VERTICLE ] Capture started on {} (workers={}, buffer={}MB)",
                                         networkInterface, WORKER_COUNT, PCAP_BUFFER_SIZE / 1024 / 1024);
 
                         // ===== THREAD DE CAPTURE =====
@@ -366,6 +372,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                         // Drop applicatif assumé
                                         droppedPackets.incrementAndGet();
                                 }
+                                queueDepth.set(captureQueue.size());
                         };
 
                         captureExecutor.execute(() -> {
@@ -389,6 +396,7 @@ public class IngestionVerticle extends AbstractVerticle {
 
                                                         long timestampNs = System.nanoTime();
                                                         processPacket(packet,0, timestampNs);
+                                                        queueDepth.set(captureQueue.size());
 
                                                 } catch (InterruptedException e) {
                                                         Thread.currentThread().interrupt();
@@ -410,12 +418,13 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 // TODO Auto-generated catch block
                                                 e.printStackTrace();
                                         }
-                                        logger.info(
+                                        logger.debug(
                                                         "[ INGESTION STATS ] received={} dropped(kernel)={} dropped(app)={} queue={}",
                                                         stats.getNumPacketsReceived(),
                                                         stats.getNumPacketsDropped(),
                                                         droppedPackets.get(),
                                                         captureQueue.size());
+                                        queueDepth.set(captureQueue.size());
                                 } catch (PcapNativeException e) {
                                         logger.warn("[ INGESTION VERTICLE ] Unable to read pcap stats", e);
                                 }
@@ -603,6 +612,7 @@ public class IngestionVerticle extends AbstractVerticle {
                 }
 
                 PacketWrapper pw = packetQueue.poll();
+                queueDepth.set(packetQueue.size());
 
                 // Plus rien à publier
                 if (pw == null) {
@@ -651,6 +661,9 @@ public class IngestionVerticle extends AbstractVerticle {
                         return;
                 producer.send(kafkaRecord, ar -> {
                         inFlightProducer.decrementAndGet();
+                        if (ar.succeeded()) {
+                                sentPackets.incrementAndGet();
+                        }
 
                         if (ar.failed()) {
                                 logger.error("[ INGESTION VERTICLE ]            Failed to send packet record: "

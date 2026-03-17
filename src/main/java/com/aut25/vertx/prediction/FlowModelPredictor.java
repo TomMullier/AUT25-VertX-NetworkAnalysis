@@ -26,7 +26,7 @@ public class FlowModelPredictor {
                 throw new RuntimeException("PMML not found in classpath: " + path);
             }
 
-            logger.info("[ FlowModelPredictor ]            Loading PMML model from: " + path);
+            logger.info("[ FLOWMODELPREDICTOR ]            Loading PMML model from: " + path);
 
             evaluator = new LoadingModelEvaluatorBuilder()
                     .load(is)
@@ -34,7 +34,7 @@ public class FlowModelPredictor {
 
             evaluator.verify();
 
-            logger.info("[ FlowModelPredictor ]            PMML model loaded successfully");
+            logger.info("[ FLOWMODELPREDICTOR ]            PMML model loaded successfully");
 
         Map<String, Object> arguments = new HashMap<>();
 

@@ -116,7 +116,7 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         @Override
         public void start() throws Exception {
-                logger.info(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
+                logger.debug(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
                 LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
                 JsonObject config = new JsonObject(map);
