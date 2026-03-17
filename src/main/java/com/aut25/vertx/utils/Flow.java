@@ -619,28 +619,39 @@ public class Flow {
          * @param vertx        // Vertx instance for async operations
          * @return Future<Flow>
          */
-        public Future<Flow> enrich(GeoIPService geoIPService, DnsService dnsService, WhoisService whoisService,
-                        Vertx vertx) {
+        public Future<Flow> enrich(
+                GeoIPService geoIPService,
+                DnsService dnsService,
+                WhoisService whoisService,
+                Vertx vertx
+        ) {
                 Promise<Flow> promise = Promise.promise();
                 logger.debug("Enriching flow: srcIp={}, dstIp={}", srcIp, dstIp);
 
-                /*
-                 * CompositeFuture.all(
-                 * lookupGeo(geoIPService, vertx, srcIp),
-                 * lookupGeo(geoIPService, vertx, dstIp),
-                 * lookupDns(dnsService, vertx, srcIp),
-                 * lookupDns(dnsService, vertx, dstIp),
-                 * lookupWhois(whoisService, vertx, srcIp),
-                 * lookupWhois(whoisService, vertx, dstIp)).onSuccess(cf -> {
-                 * this.srcCountry = cf.resultAt(0);
-                 * this.dstCountry = cf.resultAt(1);
-                 * this.srcDomain = cf.resultAt(2);
-                 * this.dstDomain = cf.resultAt(3);
-                 * this.srcOrg = cf.resultAt(4);
-                 * this.dstOrg = cf.resultAt(5);
-                 * promise.complete(this);
-                 * }).onFailure(err -> promise.complete(this));
-                 */
+                CompositeFuture
+                        .all(
+                                lookupGeo(geoIPService, vertx, srcIp),
+                                lookupGeo(geoIPService, vertx, dstIp),
+                                lookupDns(dnsService, vertx, srcIp),
+                                lookupDns(dnsService, vertx, dstIp),
+                                lookupWhois(whoisService, vertx, srcIp),
+                                lookupWhois(whoisService, vertx, dstIp)
+                        )
+                        .onSuccess(cf -> {
+                                this.srcCountry = cf.resultAt(0);
+                                this.dstCountry = cf.resultAt(1);
+                                this.srcDomain = cf.resultAt(2);
+                                this.dstDomain = cf.resultAt(3);
+                                this.srcOrg = cf.resultAt(4);
+                                this.dstOrg = cf.resultAt(5);
+
+                                promise.complete(this);
+                        })
+                        .onFailure(err -> {
+                                logger.warn("Enrichment failed for flow {}: {}", key, err.getMessage());
+                                promise.complete(this); // fallback : compléter malgré erreur
+                        });
+
                 return promise.future();
         }
 

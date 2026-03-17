@@ -1103,83 +1103,61 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 total_published_flows_++;
 
-                // JSON du flow
-                JsonObject flowJson = f.getJsonObject();
+                // Enrich flow
+                f.enrich(geoIPService, dnsService, whoisService, vertx)
+                        .onSuccess(enrichedFlow -> {
 
-                try {
+                                JsonObject flowJson = enrichedFlow.getJsonObject();
 
-                        // conversion Json → Map pour le modèle PMML
-                        // if not arp
-                        if (!"ARP".equals(f.protocol)) {    
-                                Map<String, Object> features = FlowModelPredictor.filterFeatures(f.getJsonObject().getMap());
-                                String label = FlowModelPredictor.predict(features);
-                                flowJson.put("label", label);
-                        } else {
-                                flowJson.put("label", "ARP");
-                        }
+                                try {
+                                // Prediction ML si pas ARP
+                                if (!"ARP".equals(f.protocol)) {
+                                        Map<String, Object> features = FlowModelPredictor.filterFeatures(
+                                                f.getJsonObject().getMap()
+                                        );
+                                        String label = FlowModelPredictor.predict(features);
+                                        flowJson.put("label", label);
+                                } else {
+                                        flowJson.put("label", "ARP");
+                                }
 
-                } catch (Exception e) {
+                                } catch (Exception e) {
+                                logger.error("[ FLOWAGGREGATOR VERTICLE ] ML prediction failed for flow {} : {}",
+                                        f.key, e.getMessage());
+                                flowJson.put("label", "UNKNOWN"); // fallback
+                                }
 
-                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       ML prediction failed for flow {} : {}",
-                                f.key,
-                                e.getMessage());
+                                // Publication Kafka
+                                KafkaProducerRecord<String, String> record =
+                                        KafkaProducerRecord.create(OUT_TOPIC, f.key, flowJson.encode());
 
-                        flowJson.put("label", "UNKNOWN"); // fallback
-                }
+                                producer.write(record, ar -> {
+                                if (ar.failed()) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {} : {}",
+                                                f.key, ar.cause().getMessage());
+                                }
+                                });
+                        })
 
-                KafkaProducerRecord<String, String> record =
-                        KafkaProducerRecord.create(OUT_TOPIC, f.key, flowJson.encode());
+                        .onFailure(err -> {
+                                logger.info("[ FLOWAGGREGATOR VERTICLE ] Enrichment failed for flow {} : {}",
+                                        f.key, err.getMessage());
 
-                producer.write(record, ar -> {
-                        if (ar.failed()) {
-                        logger.error("[ FLOWAGGREGATOR VERTICLE ]       Failed to publish flow {}: {}",
-                                f.key,
-                                ar.cause().getMessage());
-                        }
-                });
-                // f.enrich(geoIPService, dnsService, whoisService, vertx)
-                // .onSuccess(enrichedFlow -> {
-                // JsonObject jo = enrichedFlow.getJsonObject();
-                // String value = jo.encode();
+                                // Publier quand même le flow non enrichi
+                                JsonObject flowJson = f.getJsonObject();
 
-                // // logger.debug("[ FLOWAGGREGATOR VERTICLE ] Published flow: key={}
-                // protocol={}
-                // // appProtocol={} riskLevel={} riskLabel={} riskSeverity={} bytes={}
-                // packets={}
-                // // durationMs={} srcCountry={} dstCountry={} srcDomain={} dstDomain={}
-                // srcOrg={}
-                // // dstOrg={}",
-                // // enrichedFlow.key, enrichedFlow.protocol,
-                // // enrichedFlow.appProtocol,
-                // // enrichedFlow.riskLevel, enrichedFlow.riskLabel,
-                // // enrichedFlow.riskSeverity,
-                // // enrichedFlow.bytes, enrichedFlow.packetCount,
-                // // (enrichedFlow.lastSeen - enrichedFlow.firstSeen),
-                // // enrichedFlow.srcCountry, enrichedFlow.dstCountry,
-                // // enrichedFlow.srcDomain, enrichedFlow.dstDomain,
-                // // enrichedFlow.srcOrg, enrichedFlow.dstOrg);
+                                KafkaProducerRecord<String, String> record =
+                                        KafkaProducerRecord.create(OUT_TOPIC, f.key, flowJson.encode());
 
-                // KafkaProducerRecord<String, String> record = KafkaProducerRecord
-                // .create(OUT_TOPIC, enrichedFlow.key, value);
-
-                // producer.write(record, ar -> {
-                // if (ar.failed()) {
-                // logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {}: {}",
-                // enrichedFlow.key,
-                // ar.cause().getMessage());
-                // }
-                // });
-                // })
-                // .onFailure(err -> {
-                // logger.warn("[ FLOWAGGREGATOR VERTICLE ] Enrichment failed for flow {}: {}",
-                // f.key, err.getMessage());
-                // // Publier quand même le flow non enrichi
-                // JsonObject jo = f.getJsonObject();
-                // producer.write(KafkaProducerRecord.create!= null ? prediction.toString() : null;(OUT_TOPIC, f.key,
-                // jo.encode()));
-                // });private void publishFlow(Flow f, String reasonOfFlowEnd) {
-
+                                producer.write(record, ar -> {
+                                if (ar.failed()) {
+                                        logger.error("[ FLOWAGGREGATOR VERTICLE ] Failed to publish flow {} : {}",
+                                                f.key, ar.cause().getMessage());
+                                        }
+                                });
+                        });
         }
+
 
         /**
          * Generate a unique packet ID based on source IP, destination IP, protocol, and
