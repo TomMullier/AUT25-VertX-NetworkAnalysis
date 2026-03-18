@@ -7,9 +7,9 @@
 
 ## Auteurs
 
-Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
-Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
-Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
+-Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
+-Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
+-Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
 
 
 ## Presentation
