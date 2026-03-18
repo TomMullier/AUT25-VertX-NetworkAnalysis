@@ -273,6 +273,9 @@ curl http://localhost:8080/api/settings
 
 - Si un topic Kafka pose probleme, relancer `./start.sh` pour reset propre.
 
+## Benevoles
+A venir.
+
 ## Licence
 
 A definir.
