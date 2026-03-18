@@ -5,9 +5,12 @@
 [![Maven](https://img.shields.io/badge/Maven-3.8%2B-orange.svg)](https://maven.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-required-2496ED.svg)](https://www.docker.com/)
 
-## Auteur
+## Auteurs
 
-Tom MULLIER
+Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
+Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
+Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
+
 
 ## Presentation
 
