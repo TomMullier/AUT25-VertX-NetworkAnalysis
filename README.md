@@ -1,4 +1,4 @@
-# AUT25 Vert.x Network Analysis
+# FlowVertex
 
 [![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://www.java.com/)
 [![Vert.x](https://img.shields.io/badge/Vert.x-4.5.9-green.svg)](https://vertx.io/)
