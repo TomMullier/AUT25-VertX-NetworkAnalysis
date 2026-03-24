@@ -11,11 +11,6 @@
 -   Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
 -   Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
 
-**Contributeurs**
--   Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
--   Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
--   Abdelillah Serghine (https://github.com/serghine-abdelillah), École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
-
 ## Etudiants (contributeurs) actuels
 - Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
 - Abdelillah Serghine (https://github.com/serghine-abdelillah), École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
