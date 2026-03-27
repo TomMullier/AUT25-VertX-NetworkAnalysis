@@ -284,6 +284,8 @@ curl http://localhost:8080/api/settings
 ## Benevoles
 A venir.
 
+## Remerciements
+Nous remercions Anes Abdennebi, doctorant a l'ÉTS pour nous avoir fourni le script (tester.py + README_tester_script.md) pour la génération d'attaques.
 ## Licence
 
 A definir.
