@@ -329,7 +329,7 @@ echo ""
 
 TOPIC_NAME="network-data"
 TOPIC_NAME2="network-flows"
-NUM_PARTITIONS=500
+NUM_PARTITIONS=100 # changed by me to 100 before it was 500
 
 echo -e "${BLUE}┃${NC}  Checking Kafka...${NC}"
 
@@ -378,7 +378,7 @@ echo ""
 
 BROKER="localhost:9092"
 DOCKER_CONTAINER="kafka"    # nom du conteneur
-NUM_PARTITIONS="${NUM_PARTITIONS:-500}"
+NUM_PARTITIONS="${NUM_PARTITIONS:-100}" # changed by me to 100 instead of 500
 TOPIC_NAME="${TOPIC_NAME:-network-data}"
 TOPIC_NAME2="${TOPIC_NAME2:-network-flows}"
 

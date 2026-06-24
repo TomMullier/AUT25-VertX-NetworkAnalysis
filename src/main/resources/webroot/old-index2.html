@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowVertex — Network Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════
+       SIDEBAR
+  ═══════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+
+    <!-- Brand -->
+    <div class="sidebar-brand">
+      <div class="brand-icon">FV</div>
+      <div>
+        <div class="brand-name">FlowVertex</div>
+        <div class="brand-sub">Network IDS</div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item nav-active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a href="mlops.html" class="nav-item">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        MLOps Monitor
+      </a>
+    </nav>
+
+    <!-- Status widget -->
+    <div class="sidebar-status">
+      <div class="status-header">WebSocket</div>
+      <div id="connectionStatus" class="status-value status-connecting">connecting...</div>
+    </div>
+
+    <!-- Severity pulse indicators — the signature element -->
+    <div class="severity-rail">
+      <div class="rail-title">live alerts</div>
+      <div class="rail-item" id="rail-emergency">
+        <div class="rail-dot dot-emergency"></div>
+        <span class="rail-label">Emergency</span>
+        <span class="rail-count" id="rail-count-Emergency">0</span>
+      </div>
+      <div class="rail-item" id="rail-critical">
+        <div class="rail-dot dot-critical"></div>
+        <span class="rail-label">Critical</span>
+        <span class="rail-count" id="rail-count-Critical">0</span>
+      </div>
+      <div class="rail-item" id="rail-high">
+        <div class="rail-dot dot-high"></div>
+        <span class="rail-label">High</span>
+        <span class="rail-count" id="rail-count-High">0</span>
+      </div>
+      <div class="rail-item" id="rail-severe">
+        <div class="rail-dot dot-severe"></div>
+        <span class="rail-label">Severe</span>
+        <span class="rail-count" id="rail-count-Severe">0</span>
+      </div>
+      <div class="rail-item" id="rail-medium">
+        <div class="rail-dot dot-medium"></div>
+        <span class="rail-label">Medium</span>
+        <span class="rail-count" id="rail-count-Medium">0</span>
+      </div>
+      <div class="rail-item" id="rail-low">
+        <div class="rail-dot dot-low"></div>
+        <span class="rail-label">Low</span>
+        <span class="rail-count" id="rail-count-Low">0</span>
+      </div>
+    </div>
+
+    <!-- Packet delay -->
+    <div class="sidebar-delay">
+      <div class="delay-label">avg treatment delay</div>
+      <div class="delay-value"><span id="averageDelayValue">0</span> <span class="delay-unit">ms</span></div>
+      <canvas id="treatmentDelaysChart" class="delay-chart"></canvas>
+    </div>
+
+    <!-- User -->
+    <div class="sidebar-user">
+      <div class="user-avatar">U</div>
+      <div>
+        <div class="user-name" id="username">user</div>
+        <div class="user-role">analyst</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════
+       MAIN
+  ═══════════════════════════════════════════════════ -->
+  <div class="main-wrap">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="topbar-title">Network Flow Analysis</h1>
+        <div id="resetMessage" class="topbar-reset-msg"></div>
+      </div>
+      <div class="topbar-right">
+        <div class="search-wrap">
+          <svg class="search-icon" width="15" height="15" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.545 15.467l-3.779-3.779a6.15 6.15 0 0 0 .898-3.21c0-3.417-2.961-6.377-6.378-6.377A6.185 6.185 0 0 0 2.1 8.287c0 3.416 2.961 6.377 6.377 6.377a6.15 6.15 0 0 0 3.115-.844l3.799 3.801a.953.953 0 0 0 1.346 0l.943-.943c.371-.371.236-.84-.135-1.211zM4.004 8.287a4.282 4.282 0 0 1 4.282-4.283c2.366 0 4.474 2.107 4.474 4.474a4.284 4.284 0 0 1-4.283 4.283c-2.366-.001-4.473-2.109-4.473-4.474z"/>
+          </svg>
+          <input type="text" id="searchInput" placeholder="search flows…" class="search-input">
+        </div>
+        <button id="resetButton" class="btn-reset" title="Clear all flows">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="5" x2="5" y2="19"/><line x1="5" y1="5" x2="19" y2="19"/></svg>
+          Clear
+        </button>
+      </div>
+    </header>
+
+    <!-- Scrollable content -->
+    <div class="content">
+
+      <!-- ── Settings ── -->
+      <section class="card collapsible-card" id="settings-card">
+        <div class="card-header collapsible-trigger" id="settingsToggle">
+          <div class="card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Configuration
+          </div>
+          <span id="settingsArrow" class="collapse-arrow">▶</span>
+        </div>
+
+        <form id="SettingsForm" class="settings-body" style="display:none">
+          <!-- Ingestion method -->
+          <fieldset class="settings-fieldset">
+            <legend class="settings-legend">Ingestion Method</legend>
+            <div class="radio-group">
+              <label class="radio-pill">
+                <input type="radio" id="pcap" name="ingestionMethod" value="pcap">
+                <span>PCAP Replay</span>
+              </label>
+              <label class="radio-pill">
+                <input type="radio" id="realtime" name="ingestionMethod" value="realtime">
+                <span>Real-time</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div id="pcapSelectContainer" class="settings-select-row" style="display:none">
+            <label class="settings-label">PCAP file</label>
+            <select id="pcapFile" class="settings-select"></select>
+          </div>
+          <div id="realtimeSelectContainer" class="settings-select-row" style="display:none">
+            <label class="settings-label">Network interface</label>
+            <select id="realtimeInterface" class="settings-select"></select>
+          </div>
+
+          <div class="settings-divider"></div>
+
+          <!-- Timeout grid -->
+          <div class="settings-grid">
+            <div class="settings-group">
+              <div class="settings-group-title">Inactivity Timeouts</div>
+              <div class="field-row">
+                <label class="field-label" for="tcpTimeout">TCP <span class="field-default">(default 5 000 ms)</span></label>
+                <input type="number" id="tcpTimeout" name="tcpTimeout" value="5000" class="field-input">
+              </div>
+              <div class="field-row">
+                <label class="field-label" for="udpTimeout">UDP <span class="field-default">(default 30 000 ms)</span></label>
+                <input type="number" id="udpTimeout" name="udpTimeout" value="30000" class="field-input">
+              </div>
+              <div class="field-row">
+                <label class="field-label" for="otherTimeout">Other <span class="field-default">(default 60 000 ms)</span></label>
+                <input type="number" id="otherTimeout" name="otherTimeout" value="60000" class="field-input">
+              </div>
+            </div>
+            <div class="settings-group">
+              <div class="settings-group-title">Maximum Flow Age</div>
+              <div class="field-row">
+                <label class="field-label" for="tcpMaxAge">TCP <span class="field-default">(default 300 000 ms)</span></label>
+                <input type="number" id="tcpMaxAge" name="tcpMaxAge" value="300000" class="field-input">
+              </div>
+              <div class="field-row">
+                <label class="field-label" for="udpMaxAge">UDP <span class="field-default">(default 120 000 ms)</span></label>
+                <input type="number" id="udpMaxAge" name="udpMaxAge" value="120000" class="field-input">
+              </div>
+              <div class="field-row">
+                <label class="field-label" for="otherMaxAge">Other <span class="field-default">(default 300 000 ms)</span></label>
+                <input type="number" id="otherMaxAge" name="otherMaxAge" value="300000" class="field-input">
+              </div>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button type="submit" class="btn-primary">Apply configuration</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ── Flow Tables ── -->
+      <section class="card" id="flows-card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Received Flows
+          </div>
+        </div>
+
+        <div id="flowTables" class="flow-tables-wrap">
+
+          <!-- Each severity block -->
+          <div class="sev-block" data-severity="Emergency" style="display:none">
+            <div class="sev-header sev-emergency">
+              <span>Emergency</span>
+              <span id="count-Emergency" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-Emergency"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="Critical" style="display:none">
+            <div class="sev-header sev-critical">
+              <span>Critical</span>
+              <span id="count-Critical" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-Critical"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="High" style="display:none">
+            <div class="sev-header sev-high">
+              <span>High</span>
+              <span id="count-High" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-High"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="Severe" style="display:none">
+            <div class="sev-header sev-severe">
+              <span>Severe</span>
+              <span id="count-Severe" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-Severe"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="Medium" style="display:none">
+            <div class="sev-header sev-medium">
+              <span>Medium</span>
+              <span id="count-Medium" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-Medium"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="Low" style="display:none">
+            <div class="sev-header sev-low">
+              <span>Low</span>
+              <span id="count-Low" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-Low"></tbody></table>
+            </div>
+          </div>
+
+          <div class="sev-block" data-severity="None" style="display:none">
+            <div class="sev-header sev-none">
+              <span>No Risk</span>
+              <span id="count-None" class="sev-count">0</span>
+            </div>
+            <div class="table-scroll">
+              <table class="flow-table"><thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th><th>Dst IP</th>
+                <th>Src Port</th><th>Dst Port</th><th>Src Country</th><th>Dst Country</th>
+                <th>Src Org</th><th>Dst Org</th><th>Protocol</th><th>Pkts</th>
+                <th>Bytes</th><th>Duration</th><th>Risk Label</th><th>Flow Key</th>
+              </tr></thead><tbody id="table-None"></tbody></table>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── Two-column: Current Flows + Malformed Packets ── -->
+      <div class="two-col">
+
+        <!-- Current flows -->
+        <section class="card collapsible-card" id="currentFlowContainer">
+          <div class="card-header collapsible-trigger" id="currentFlowTitle">
+            <div class="card-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Active Flows
+              <span id="count-CurrentFlow" class="card-count">0</span>
+            </div>
+            <span id="arrow-CurrentFlow" class="collapse-arrow">▼</span>
+          </div>
+          <div class="table-scroll table-scroll-sm">
+            <table class="flow-table">
+              <thead><tr>
+                <th>First Seen</th><th>Last Seen</th><th>Src IP</th>
+                <th>Dst IP</th><th>Src Port</th><th>Dst Port</th><th>Protocol</th>
+              </tr></thead>
+              <tbody id="currentFlowTable">
+                <tr><td colspan="7" class="empty-cell">No active flows</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Malformed packets -->
+        <section class="card collapsible-card" id="malformedPacketContainer">
+          <div class="card-header collapsible-trigger" id="malformedPacketTitle">
+            <div class="card-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Malformed Packets
+              <span id="count-MalformedPacket" class="card-count card-count-red">0</span>
+            </div>
+            <span id="arrow-MalformedPacket" class="collapse-arrow">▼</span>
+          </div>
+          <div class="table-scroll table-scroll-sm">
+            <table class="flow-table">
+              <thead><tr><th>Error</th><th>Raw Data</th></tr></thead>
+              <tbody id="malformedPacketTable">
+                <tr><td colspan="2" class="empty-cell">No malformed packets</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ── Visualizations ── -->
+      <section class="card" id="charts-card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Visualizations
+          </div>
+        </div>
+        <div class="charts-grid">
+          <div class="chart-cell">
+            <div class="chart-label">Severity Distribution</div>
+            <canvas id="severityChart"></canvas>
+          </div>
+          <div class="chart-cell chart-cell-wide">
+            <div class="chart-label">Risk Types</div>
+            <canvas id="riskChart"></canvas>
+          </div>
+          <div class="chart-cell">
+            <div class="chart-label">Protocol Mix</div>
+            <canvas id="protocolChart"></canvas>
+          </div>
+        </div>
+        <div class="map-wrap">
+          <div class="chart-label">Traffic Map</div>
+          <div id="trafficMap"></div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+
+    <!-- Footer -->
+    <footer class="footer">
+      © 2025 FlowVertex — Real-Time Network Intrusion Detection
+    </footer>
+
+  </div><!-- /main-wrap -->
+
+  <!-- ═══ Flow Detail Modal ═══ -->
+  <div id="flowModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle" class="modal-title">Flow Details</h3>
+        <button id="closeModal" class="modal-close">&times;</button>
+      </div>
+      <pre id="jsonContent" class="modal-json"></pre>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -39,6 +39,28 @@ import com.maxmind.geoip2.exception.AddressNotFoundException;
  */
 public class Flow {
 
+        // ============ added by me 
+        // Per-direction tracking (needed for NFStream feature mapping)
+        public CopyOnWriteArrayList<Integer> src2dstPacketSizes = new CopyOnWriteArrayList<>();
+        public CopyOnWriteArrayList<Integer> dst2srcPacketSizes = new CopyOnWriteArrayList<>();
+        public CopyOnWriteArrayList<Long> src2dstTimestamps = new CopyOnWriteArrayList<>();
+        public CopyOnWriteArrayList<Long> dst2srcTimestamps = new CopyOnWriteArrayList<>();
+
+        // Per-direction TCP flags (NFStream tracks these separately)
+        public long src2dstSynCount = 0, src2dstFinCount = 0, src2dstRstCount = 0;
+        public long src2dstAckCount = 0, src2dstPshCount = 0, src2dstUrgCount = 0;
+        public long dst2srcSynCount = 0, dst2srcFinCount = 0, dst2srcRstCount = 0;
+        public long dst2srcAckCount = 0, dst2srcPshCount = 0, dst2srcUrgCount = 0;
+
+        // Computed NFStream stats
+        public double src2dstMinPs = 0, src2dstMeanPs = 0, src2dstStdPs = 0, src2dstMaxPs = 0;
+        public double dst2srcMinPs = 0, dst2srcMeanPs = 0, dst2srcStdPs = 0, dst2srcMaxPs = 0;
+        public double src2dstMinPiatMs = 0, src2dstMeanPiatMs = 0, src2dstStdPiatMs = 0, src2dstMaxPiatMs = 0;
+        public double dst2srcMinPiatMs = 0, dst2srcMeanPiatMs = 0, dst2srcStdPiatMs = 0, dst2srcMaxPiatMs = 0;
+        public long src2dstPackets = 0, dst2srcPackets = 0;
+        public long src2dstBytes = 0, dst2srcBytes = 0;
+
+        // ==========================================================
         public boolean finFromSrc = false;
         public boolean finAckedByDst = false;
         public boolean finFromDst = false;
@@ -371,17 +393,54 @@ public class Flow {
 
                                 String srcAddr = ip.getHeader().getSrcAddr().getHostAddress();
                                 String dstAddr = ip.getHeader().getDstAddr().getHostAddress();
-
+                                // ==== old code : 
+                                // if (srcAddr.equals(this.srcIp)) {
+                                //         upstreamBytes += pktLength; // paquet entier
+                                //         upstreamPackets++;
+                                // } else if (dstAddr.equals(this.srcIp)) {
+                                //         downstreamBytes += pktLength; // paquet entier
+                                //         downstreamPackets++;
+                                // } else {
+                                //         logger.warn("Flow.calculateStats: Packet IPs do not match flow IPs (src: {}, dst: {})",
+                                //                         srcAddr, dstAddr);
+                                // }
+                                // ====================
+                                // added by me ======================
                                 if (srcAddr.equals(this.srcIp)) {
-                                        upstreamBytes += pktLength; // paquet entier
+                                        upstreamBytes += pktLength;
                                         upstreamPackets++;
-                                } else if (dstAddr.equals(this.srcIp)) {
-                                        downstreamBytes += pktLength; // paquet entier
+                                        src2dstPacketSizes.add(pktLength);
+                                        src2dstTimestamps.add(ts);
+
+                                        if (pkt.contains(TcpPacket.class)) {
+                                                TcpPacket tcp = pkt.get(TcpPacket.class);
+                                                TcpPacket.TcpHeader hdr = tcp.getHeader();
+                                                if (hdr.getSyn()) src2dstSynCount++;
+                                                if (hdr.getFin()) src2dstFinCount++;
+                                                if (hdr.getRst()) src2dstRstCount++;
+                                                if (hdr.getAck()) src2dstAckCount++;
+                                                if (hdr.getPsh()) src2dstPshCount++;
+                                                if (hdr.getUrg()) src2dstUrgCount++;
+                                        }
+                                        } else if (dstAddr.equals(this.srcIp)) {
+                                        downstreamBytes += pktLength;
                                         downstreamPackets++;
-                                } else {
-                                        logger.warn("Flow.calculateStats: Packet IPs do not match flow IPs (src: {}, dst: {})",
-                                                        srcAddr, dstAddr);
-                                }
+                                        dst2srcPacketSizes.add(pktLength);
+                                        dst2srcTimestamps.add(ts);
+
+                                        if (pkt.contains(TcpPacket.class)) {
+                                                TcpPacket tcp = pkt.get(TcpPacket.class);
+                                                TcpPacket.TcpHeader hdr = tcp.getHeader();
+                                                if (hdr.getSyn()) dst2srcSynCount++;
+                                                if (hdr.getFin()) dst2srcFinCount++;
+                                                if (hdr.getRst()) dst2srcRstCount++;
+                                                if (hdr.getAck()) dst2srcAckCount++;
+                                                if (hdr.getPsh()) dst2srcPshCount++;
+                                                if (hdr.getUrg()) dst2srcUrgCount++;
+                                        }
+                                        }
+                                        // =====================================
+
                         } else {
                                 // Paquet non-IP : on peut juste l'ignorer pour upstream/downstream
                                 logger.debug("Non-IP packet ignored for upstream/downstream calculation: length={}",
@@ -505,6 +564,62 @@ public class Flow {
 
                 /* ------------------- Additional stats can be added here ------------------- */
 
+                // ==================== added by me =========================
+                /* ----------- NFStream per-direction computed stats ----------- */
+                src2dstPackets = upstreamPackets;
+                dst2srcPackets = downstreamPackets;
+                src2dstBytes   = upstreamBytes;
+                dst2srcBytes   = downstreamBytes;
+
+                src2dstMinPs  = src2dstPacketSizes.stream().mapToInt(v->v).min().orElse(0);
+                src2dstMaxPs  = src2dstPacketSizes.stream().mapToInt(v->v).max().orElse(0);
+                src2dstMeanPs = src2dstPacketSizes.stream().mapToInt(v->v).average().orElse(0);
+                if (src2dstPacketSizes.size() > 1) {
+                double m = src2dstMeanPs;
+                src2dstStdPs = Math.sqrt(src2dstPacketSizes.stream()
+                        .mapToDouble(v -> Math.pow(v - m, 2)).sum() / (src2dstPacketSizes.size() - 1));
+                }
+
+                dst2srcMinPs  = dst2srcPacketSizes.stream().mapToInt(v->v).min().orElse(0);
+                dst2srcMaxPs  = dst2srcPacketSizes.stream().mapToInt(v->v).max().orElse(0);
+                dst2srcMeanPs = dst2srcPacketSizes.stream().mapToInt(v->v).average().orElse(0);
+                if (dst2srcPacketSizes.size() > 1) {
+                double m = dst2srcMeanPs;
+                dst2srcStdPs = Math.sqrt(dst2srcPacketSizes.stream()
+                        .mapToDouble(v -> Math.pow(v - m, 2)).sum() / (dst2srcPacketSizes.size() - 1));
+                }
+
+                // Per-direction inter-arrival times
+                List<Long> s2dPiats = new ArrayList<>();
+                for (int i = 1; i < src2dstTimestamps.size(); i++)
+                s2dPiats.add(src2dstTimestamps.get(i) - src2dstTimestamps.get(i-1));
+                if (!s2dPiats.isEmpty()) {
+                src2dstMinPiatMs  = s2dPiats.stream().mapToLong(v->v).min().orElse(0);
+                src2dstMaxPiatMs  = s2dPiats.stream().mapToLong(v->v).max().orElse(0);
+                src2dstMeanPiatMs = s2dPiats.stream().mapToLong(v->v).average().orElse(0);
+                if (s2dPiats.size() > 1) {
+                        double m = src2dstMeanPiatMs;
+                        src2dstStdPiatMs = Math.sqrt(s2dPiats.stream()
+                        .mapToDouble(v -> Math.pow(v - m, 2)).sum() / (s2dPiats.size() - 1));
+                }
+                }
+
+                List<Long> d2sPiats = new ArrayList<>();
+                for (int i = 1; i < dst2srcTimestamps.size(); i++)
+                d2sPiats.add(dst2srcTimestamps.get(i) - dst2srcTimestamps.get(i-1));
+                if (!d2sPiats.isEmpty()) {
+                dst2srcMinPiatMs  = d2sPiats.stream().mapToLong(v->v).min().orElse(0);
+                dst2srcMaxPiatMs  = d2sPiats.stream().mapToLong(v->v).max().orElse(0);
+                dst2srcMeanPiatMs = d2sPiats.stream().mapToLong(v->v).average().orElse(0);
+                if (d2sPiats.size() > 1) {
+                        double m = dst2srcMeanPiatMs;
+                        dst2srcStdPiatMs = Math.sqrt(d2sPiats.stream()
+                        .mapToDouble(v -> Math.pow(v - m, 2)).sum() / (d2sPiats.size() - 1));
+                }
+                }
+
+        
+        
         }
 
         private void resetStats() {
@@ -550,6 +665,15 @@ public class Flow {
                 this.tcpFraction = -1;
                 this.udpFraction = -1;
                 this.otherFraction = -1;
+
+                // ================= added by me =========================
+                this.src2dstSynCount = 0; this.src2dstFinCount = 0; this.src2dstRstCount = 0;
+                this.src2dstAckCount = 0; this.src2dstPshCount = 0; this.src2dstUrgCount = 0;
+                this.dst2srcSynCount = 0; this.dst2srcFinCount = 0; this.dst2srcRstCount = 0;
+                this.dst2srcAckCount = 0; this.dst2srcPshCount = 0; this.dst2srcUrgCount = 0;
+                this.src2dstPacketSizes.clear(); this.dst2srcPacketSizes.clear();
+                this.src2dstTimestamps.clear(); this.dst2srcTimestamps.clear();
+                // =================================================
 
         }
 

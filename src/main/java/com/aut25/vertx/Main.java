@@ -46,6 +46,10 @@ public class Main extends AbstractVerticle {
         logger.info(Colors.GREEN + "[ MAIN VERTICLE ]                 Starting MainVerticle..." + Colors.RESET);
         // Set workers to 40
 
+
+
+
+        // creating table 
         // Load configuration from JSON file
         config = new JsonObject(
                 new String(Files.readAllBytes(Paths.get("src/main/resources/config.json"))));
@@ -243,7 +247,7 @@ public class Main extends AbstractVerticle {
         }
         sharedData.getLocalMap("config").put("ndpi_initialized", false);
         int cpu = Runtime.getRuntime().availableProcessors();
-        int numAggregators = 500;
+        int numAggregators = 100; // changed by me : to 100 instead of 500
         for (int i = 0; i < numAggregators; i++) {
             FlowAggregatorVerticle verticle = new FlowAggregatorVerticle();
 

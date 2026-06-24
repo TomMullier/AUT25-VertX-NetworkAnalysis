@@ -389,14 +389,21 @@ public class IngestionVerticle extends AbstractVerticle {
                         ExecutorService workerPool = Executors.newFixedThreadPool(WORKER_COUNT);
 
                         for (int i = 0; i < WORKER_COUNT; i++) {
+                                
                                 workerPool.execute(() -> {
                                         while (running.get()) {
                                                 try {
                                                         Packet packet = captureQueue.take();
+                                                        long timestampNs = System.nanoTime(); // changed by me
+                                                        processPacket(packet, 0, timestampNs); // changed by me 
 
-                                                        long timestampNs = System.nanoTime();
-                                                        processPacket(packet,0, timestampNs);
-                                                        queueDepth.set(captureQueue.size());
+                                                        // ============== added by me =========================
+                                                        // ✅ Use real wall-clock time in milliseconds
+                                                        // long timestampMs = System.currentTimeMillis();
+                                                        // processPacket(packet, 0, timestampMs);
+                                                        // ==============
+                                                        
+                                                        queueDepth.set(captureQueue.size()); 
 
                                                 } catch (InterruptedException e) {
                                                         Thread.currentThread().interrupt();
@@ -406,6 +413,7 @@ public class IngestionVerticle extends AbstractVerticle {
                                                 }
                                         }
                                 });
+                                
                         }
 
                         // ===== MONITORING DES DROPS KERNEL =====

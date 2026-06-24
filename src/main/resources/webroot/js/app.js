@@ -53,6 +53,42 @@ const flowTableMediumCounter = document.getElementById("count-Medium");
 const flowTableLowCounter = document.getElementById("count-Low");
 const flowTableNoRiskCounter = document.getElementById("count-None");
 
+
+// const name = sessionStorage.getItem("name"); // changed by me
+
+// ============== added by me ==============
+
+const name = localStorage.getItem("name"); 
+
+// ✅ Auth guard — redirect to login if not authenticated
+if (!localStorage.getItem("loggedIn")) {
+    window.location.href = "/login.html";
+}
+
+if (name) {
+    document.getElementById("username").innerText = name;
+    // ✅ Also update the avatar initial
+    const avatarEl = document.querySelector(".user-avatar");
+    if (avatarEl) avatarEl.textContent = name.charAt(0).toUpperCase();
+}
+
+// ===================================
+
+
+// ✅ Logout — clear localStorage then redirect
+document.querySelector('a[href="/logout"]')?.addEventListener("click", (e) => {
+    e.preventDefault();
+    localStorage.removeItem("loggedIn");
+    localStorage.removeItem("name");
+    window.location.href = "/logout"; // still hits server logout endpoint
+});
+
+
+// if (name) { // changed by me
+//     document.getElementById("username").innerText = name;
+// }
+
+
 const tables = [
         flowTableBodyEmergency,
         flowTableBodyCritical,
@@ -111,7 +147,8 @@ ws.onmessage = (event) => {
                         });
 
                         // === Protocoles ===
-                        const protocolKey = data.appProtocol || data.protocol || "Unknown";
+                        const protocolKey = data.protocol || data.appProtocol ||  "Unknown"; // changed by me switch appProtocol with protocol
+                        // console.log("protocol:", data.protocol, "appProtocol:", data.appProtocol); // added by me
                         incrementCount(protocolCount, protocolKey);
 
 
@@ -207,7 +244,8 @@ function addFlowRow(flow) {
                 flow.dstCountry,
                 flow.srcOrg,
                 flow.dstOrg,
-                flow.appProtocol,
+                // flow.appProtocol, // old code - changed by me
+                flow.protocol, // added by me 
                 flow.packetCount,
                 flow.bytes,
                 flow.flowDurationMs,

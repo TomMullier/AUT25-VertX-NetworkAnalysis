@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Signup - FlowVertex Platform</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body class="auth-body">
+
+<div class="auth-container">
+
+    <h1>Create Account</h1>
+
+    <form id="signupForm">
+
+        <input type="text" id="signupName" placeholder="Full Name" required>
+
+        <input type="email" id="signupEmail" placeholder="Email" required>
+
+        <input type="password" id="signupPassword" placeholder="Password" required>
+
+        <button type="submit">Sign Up</button>
+        <!-- In your signup form, after the submit button -->
+<p id="signupError"   style="display:none; color:#e55; font-size:13px; margin-top:8px;"></p>
+<p id="signupSuccess" style="display:none; color:#22c55e; font-size:13px; margin-top:8px;"></p>
+
+    </form>
+
+    <p>
+        Already have an account?
+        <a href="login.html">Login</a>
+    </p>
+
+</div>
+
+<script src="./js/auth.js"></script>
+
+</body>
+</html>

@@ -28,6 +28,7 @@ import com.aut25.vertx.utils.Colors;
 import com.aut25.vertx.utils.Flow;
 import com.aut25.vertx.utils.NDPIWrapper;
 import com.aut25.vertx.utils.NdpiFlowWrapper;
+import com.aut25.vertx.utils.NfstreamFeatureMapper;
 import com.aut25.vertx.prediction.FlowModelPredictor;
 
 import static java.lang.Thread.sleep;
@@ -61,12 +62,13 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
         private static final String OUT_TOPIC = "network-flows";
         private static final String GROUP_ID = "flow-aggregator-group";
 
-        private long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 5_000; // 5 seconds
-        private long FLOW_MAX_AGE_MS_TCP = 300_000; // 5 minutes
-        private long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 5_000; // 5 seconds
-        private long FLOW_MAX_AGE_MS_UDP = 300_000; // 5 minutes
-        private long FLOW_INACTIVITY_TIMEOUT_MS_OTHER = 5_000; // 5 seconds
-        private long FLOW_MAX_AGE_MS_OTHER = 300_000; // 5 minutes
+        // changed by me ==========================
+        private long FLOW_INACTIVITY_TIMEOUT_MS_TCP = 30_000; // 5 seconds 30000 instead of 5000
+        private long FLOW_MAX_AGE_MS_TCP = 600_000; // 5 minutes 600_000 instead of 300_000
+        private long FLOW_INACTIVITY_TIMEOUT_MS_UDP = 30_000; // 5 seconds the same as before
+        private long FLOW_MAX_AGE_MS_UDP = 600_000; // 5 minutes the same as before 
+        private long FLOW_INACTIVITY_TIMEOUT_MS_OTHER = 30_000; // 5 seconds
+        private long FLOW_MAX_AGE_MS_OTHER = 600_000; // 5 minutes
 
         private static final long FLOW_CLEAN_PERIOD_MS = 100;
 
@@ -116,6 +118,9 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
          */
         @Override
         public void start() throws Exception {
+                // added by me ==========================
+                // running.set(true);
+                // =========================================
                 logger.debug(Colors.GREEN + "[ FLOWAGGREGATOR VERTICLE ]       Starting FlowAggregatorVerticle..."
                                 + Colors.RESET);
                 LocalMap<String, Object> map = vertx.sharedData().getLocalMap("config");
@@ -344,6 +349,14 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
 
                 vertx.eventBus().consumer("pcap.global.done", msg -> {
                         logger.warn("[FLOW {}] GLOBAL_PCAP_DONE received", deploymentID());
+
+                        // added by me ==============
+                        // flows.clear();
+                        // toFlush.clear();
+                        // currentFlows.clear();
+                        // lastOffsetPerPartition.clear();
+                        // lastTsPerPartitionFlow.clear();
+                        // ========================
 
                         flushRemainingFlowsSafely()
                                         .onSuccess(v -> commitAndShutdown())
@@ -1112,13 +1125,65 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 try {
                                 // Prediction ML si pas ARP
                                 if (!"ARP".equals(f.protocol)) {
-                                        Map<String, Object> features = FlowModelPredictor.filterFeatures(
-                                                f.getJsonObject().getMap()
-                                        );
+                                        // === added by me for debugging ==========================
+                                        // Map<String, Object> rawMap = f.getJsonObject().getMap();
+
+                                        Map<String, Object> rawMap = NfstreamFeatureMapper.toNfstreamMap(f);
+                                        // TEMPORARY DEBUG - remove once diagnosis is done
+                                        // FlowModelPredictor.debugFeatureAlignment(rawMap);
+                                        Map<String, Object> features = FlowModelPredictor.filterFeatures(rawMap);
                                         String label = FlowModelPredictor.predict(features);
-                                        flowJson.put("label", label);
+
+                                        // ===========================================
+                                        // Map<String, Object> features = FlowModelPredictor.filterFeatures(
+                                        //         f.getJsonObject().getMap()
+                                        // ); old code - changed by me
+
+                                        // ============ added by me for debugging============================
+                                        // Map<String, Object> original = f.getJsonObject().getMap();
+                                        // System.out.println("ORIGINAL FLOW MAP:");
+                                        // original.forEach((k,v) ->
+                                        // System.out.println(k + " = " + v)
+                                        // );
+                                        // ===========================================
+                                        // String label = FlowModelPredictor.predict(features); old code - changed by me
+                                        // flowJson.put("label", label); old code - changed by me
+                                        
+                                        // added by me ============================
+                                        // if ("MALICIOUS".equals(label)) {
+                                        //         flowJson.put("riskLabel", "Risk");
+                                        //         flowJson.put("riskSeverity", "High");
+                                        // } else {
+                                        //         flowJson.put("riskLabel", "No risk");
+                                        //         flowJson.put("riskSeverity", "No risk");
+                                        // }
+                                        // ======================================
+
+                                        // added by me ==========================
+                                        switch (label) {
+                                                case "DOS" -> {
+                                                        flowJson.put("riskLabel", "DoS Attack Detected");
+                                                        flowJson.put("riskSeverity", "Emergency");
+                                                }
+                                                case "BRUTEFORCE" -> {
+                                                        flowJson.put("riskLabel", "Brute Force Detected");
+                                                        flowJson.put("riskSeverity", "Critical");
+                                                }
+                                                case "SQLI" -> {
+                                                        flowJson.put("riskLabel", "SQL Injection Detected");
+                                                        flowJson.put("riskSeverity", "High");
+                                                }
+                                                default -> {
+                                                        flowJson.put("riskLabel", "No risk");
+                                                        flowJson.put("riskSeverity", "No risk");
+                                                }}
+                                                //     ======================================
                                 } else {
-                                        flowJson.put("label", "ARP");
+                                        // flowJson.put("riskLabel", "label"); // check github repo
+                                        // added by me ============================
+                                        flowJson.put("riskLabel", "Unknown (ARP)");
+                                        flowJson.put("riskSeverity", "Unknown (ARP)");
+                                        // =======================
                                 }
 
                                 } catch (Exception e) {
@@ -1146,6 +1211,10 @@ public class FlowAggregatorVerticle extends AbstractVerticle {
                                 // Publier quand même le flow non enrichi
                                 JsonObject flowJson = f.getJsonObject();
 
+                                // added by me =================
+                                flowJson.put("riskLabel", "UNKNOWN");
+                                flowJson.put("riskSeverity", "Unknown");    
+                                // ==========================
                                 KafkaProducerRecord<String, String> record =
                                         KafkaProducerRecord.create(OUT_TOPIC, f.key, flowJson.encode());
 
