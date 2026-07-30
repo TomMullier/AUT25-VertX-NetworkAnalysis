@@ -5,16 +5,6 @@
 [![Maven](https://img.shields.io/badge/Maven-3.8%2B-orange.svg)](https://maven.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-required-2496ED.svg)](https://www.docker.com/)
 
-## Auteurs et contributeurs
-**Auteurs principaux**
--   Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
--   Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
--   Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
-
-## Etudiants (contributeurs) actuels
-- Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
-- Abdelillah Serghine (https://github.com/serghine-abdelillah), École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
-
 ## Presentation
 
 Ce projet est une plateforme d'analyse reseau en temps reel construite avec Vert.x.
@@ -27,6 +17,7 @@ Le pipeline principal est le suivant:
 4. Publication des flux dans Kafka (`network-flows`).
 5. Persistance dans ClickHouse (`network_data`, `network_flows`, `metrics`).
 6. Exposition Web via API HTTP + WebSocket (UI dans `src/main/resources/webroot`).
+7. Fournit une classification en temps réel des flux réseau en évaluant les caractéristiques extraites à l'aide de modèles préalablement entraînés. Il s'appuie sur la bibliothèque JPMML-Evaluator pour interpréter les fichiers PMML, ce qui permet d'exécuter, au sein de la JVM, des modèles entraînés en Python (par exemple avec Scikit-learn ou XGBoost) sans engendrer le surcoût lié aux échanges entre différents langages de programmation.
 
 Le projet contient aussi des scripts de benchmark Python et shell pour comparer les resultats Vert.x avec tshark, Scapy et NFStream.
 
@@ -278,9 +269,10 @@ curl http://localhost:8080/api/settings
 - Si un topic Kafka pose probleme, relancer `./start.sh` pour reset propre.
 
 ## Contributors
-- École de technologie supérieure (ÉTS)
-- École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
+-   [Tom MULLIER](https://github.com/TomMullier), École de technologie supérieure (ÉTS)
+-   [Laaziz Lahlou](https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
+-   [Nadjia Kara](https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
 
 ## Licence and Aknowledgments
 FlowVertex is available under the [MIT License](https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE).
-We would like to thank [Anes Abdennebi](https://www.linkedin.com/in/abdennebi-anes/) for providing the script for generating attacks (tester.py + README_tester_script.md)
+We would like to thank [Anes Abdennebi](https://www.linkedin.com/in/abdennebi-anes/) for providing the script for generating attacks (tester.py + README_tester_script.md).
