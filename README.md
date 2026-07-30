@@ -284,7 +284,7 @@ curl http://localhost:8080/api/settings
 ## Benevoles
 A venir.
 
-## Remerciements
+## Licence and Aknowledgments
 Nous remercions Anes Abdennebi (https://www.linkedin.com/in/abdennebi-anes/), doctorant a l'ÉTS pour nous avoir fourni le script (tester.py + README_tester_script.md) pour la génération d'attaques.
 ## Licence
-MIT. Veuillez lire le fichier LICENSE.
+FlowVertex is available under the [https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE] MIT License.
