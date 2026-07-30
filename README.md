@@ -277,14 +277,10 @@ curl http://localhost:8080/api/settings
 
 - Si un topic Kafka pose probleme, relancer `./start.sh` pour reset propre.
 
-## Institutions contributrices
+## Contributors
 - École de technologie supérieure (ÉTS)
 - École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
 
-## Benevoles
-A venir.
-
 ## Licence and Aknowledgments
-Nous remercions Anes Abdennebi (https://www.linkedin.com/in/abdennebi-anes/), doctorant a l'ÉTS pour nous avoir fourni le script (tester.py + README_tester_script.md) pour la génération d'attaques.
-## Licence
-FlowVertex is available under the [https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE] MIT License.
+FlowVertex is available under the [MIT License] (https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE).
+We would like to thank [Anes Abdennebi] (https://www.linkedin.com/in/abdennebi-anes/) for providing the script for generating attacks (tester.py + README_tester_script.md)
