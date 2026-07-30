@@ -282,5 +282,5 @@ curl http://localhost:8080/api/settings
 - École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
 
 ## Licence and Aknowledgments
-FlowVertex is available under the [MIT License] (https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE).
-We would like to thank [Anes Abdennebi] (https://www.linkedin.com/in/abdennebi-anes/) for providing the script for generating attacks (tester.py + README_tester_script.md)
+FlowVertex is available under the [MIT License](https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/edit/main/LICENSE).
+We would like to thank [Anes Abdennebi](https://www.linkedin.com/in/abdennebi-anes/) for providing the script for generating attacks (tester.py + README_tester_script.md)
