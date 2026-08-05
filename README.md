@@ -5,13 +5,13 @@
 [![Maven](https://img.shields.io/badge/Maven-3.8%2B-orange.svg)](https://maven.apache.org/)
 [![Docker](https://img.shields.io/badge/Docker-required-2496ED.svg)](https://www.docker.com/)
 
-## Auteurs et contributeurs
-**Auteurs principaux**
+## Authors and contributors
+**Main authors**
 -   Tom MULLIER (https://github.com/TomMullier), École de technologie supérieure (ÉTS)
 -   Laaziz Lahlou (https://github.com/FlowVertex), École de technologie supérieure (ÉTS)
 -   Nadjia Kara (https://www.etsmtl.ca/en/labs/imagin-lab), École de technologie supérieure (ÉTS)
 
-## Contributeurs actuels
+## Current contributor(s)
 - Abdelillah Serghine (https://github.com/serghine-abdelillah), École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
 
 FlowVertex is a real-time network analysis platform built with Vert.x. It provides a robust pipeline for ingesting, processing, and analyzing network traffic.
