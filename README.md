@@ -14,13 +14,6 @@
 ## Contributeurs actuels
 - Abdelillah Serghine (https://github.com/serghine-abdelillah), École supérieure en informatique 08 Mai 1945 de Sidi Bel Abbès (ESI-SBA)
 
-# FlowVertex
-
-[![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://www.java.com/)
-[![Vert.x](https://img.shields.io/badge/Vert.x-4.5.9-green.svg)](https://vertx.io/)
-[![Maven](https://img.shields.io/badge/Maven-3.8%2B-orange.svg)](https://maven.apache.org/)
-[![Docker](https://img.shields.io/badge/Docker-required-2496ED.svg)](https://www.docker.com/)
-
 FlowVertex is a real-time network analysis platform built with Vert.x. It provides a robust pipeline for ingesting, processing, and analyzing network traffic.
 
 ## Core Pipeline
