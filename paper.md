@@ -122,7 +122,7 @@ The diagram in \autoref{fig:verticle_interaction} visualizes the primary data pr
 
 # User Interface
 
-An overview of the web interface of FlowVertex is shown in \autoref{fig:main_web_page}. As can be seen, in this figure, a dashboard displays details related to flows created in real-time by listening to a physical network interface card (e.g., received flows, risk alerts, active flows, malformed packets, etc.).
+An overview of the web interface of FlowVertex is shown in \autoref{fig:main_web_page}. As can be seen, in this figure, a dashboard displays details related to flows created in real-time by listening to a physical network interface card (e.g., received flows, risk alerts, active flows, malformed packets, etc.). Another figure as displayed in \autoref{fig:mlops_page} provides details related to the Machine Learning Operations (MLOps) monitoring dashboard with an XGBoost classifier model up and running.
 
 ![FlowVertex main dashboard.\label{fig:main_web_page}](src/main/resources/img/main_web_page.png)
 
