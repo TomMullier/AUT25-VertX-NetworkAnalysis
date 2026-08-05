@@ -32,7 +32,7 @@ FlowVertex is a real-time network analysis platform built with Vert.x. It provid
 - **High-Throughput Processing**: Built on Vert.x and Kafka for scalable event-driven architecture.
 - **Rich Enrichment**: Integrates with external data sources and nDPI for deep packet inspection.
 - **Observability**: Tracks system metrics (CPU, RAM) and processing rates in real-time.
-- **MLOps & Real-Time Prediction**: Built-in Machine Learning module (XGBoost via JPMML) for real-time flow intrusion detection, complete with an MLOps Monitor dashboard to track performance, predictions, and feature drift.
+- **MLOps & Real-Time Prediction**: Provides real-time classification of network flows by evaluating extracted features using pre-trained models. It relies on the JPMML-Evaluator library to interpret PMML files, which allows executing models trained in Python (e.g., with Scikit-learn or XGBoost) directly within the JVM, avoiding the overhead associated with cross-language communication. It also features a complete MLOps Monitor dashboard to track performance, predictions, and feature drift.
 - **Authentication**: Built-in user signup/login system backed by SQLite and BCrypt.
 
 ## Architecture & Verticles
