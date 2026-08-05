@@ -57,10 +57,11 @@ The application is built around the Vert.x actor model, using multiple distinct 
 
 ## Quick Start
 
-### 1. Clone the Repository \\ (use the branch https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/tree/abdelillahContribution)
+### 1. Clone the Repository 
 ```bash
 git clone https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis.git
 cd AUT25-VertX-NetworkAnalysis
+(use the branch https://github.com/TomMullier/AUT25-VertX-NetworkAnalysis/tree/abdelillahContribution)
 ```
 
 ### 2. Run the Full Setup
