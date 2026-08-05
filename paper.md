@@ -118,7 +118,7 @@ The system is driven by the Vert.x non-blocking Event Loop as its core engine, o
 
 The diagram in \autoref{fig:verticle_interaction} visualizes the primary data processing pipeline from raw packet ingestion to ClickHouse persistence.
 
-![FlowVertex Verticle Interaction Map: A tiered visualization of the decoupled architecture, separating high-throughput data streaming via Kafka from the asynchronous control and telemetry handled by the Vert.x EventBus.\label{fig:verticle_interaction}](src/main/resources/img/flow_diagram.jpg)
+![FlowVertex Verticle Interaction Map: A tiered visualization of the decoupled architecture, separating high-throughput data streaming via Kafka from the asynchronous control and telemetry handled by the Vert.x EventBus.\label{fig:verticle_interaction}](src/main/resources/img/flow_diagram_tikz.png)
 
 # User Interface
 
