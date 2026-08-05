@@ -10,7 +10,6 @@ tags:
   - artificial intelligence
 authors:
   - name: Laaziz Lahlou
-    orcid: 0000-0000-0000-0000
     corresponding: true
     equal-contrib: true
     affiliation: 1
@@ -20,7 +19,6 @@ authors:
   - name: Abdelillah Serghine
     affiliation: 3
   - name: Nadjia Kara
-    orcid: 0000-0000-0000-0000
     affiliation: 1
   - name: Farid Nait-Abdesselam
     affiliation: 2
