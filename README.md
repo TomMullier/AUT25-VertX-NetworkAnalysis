@@ -228,6 +228,7 @@ curl http://localhost:8080/api/settings
 
 
 ## Acknowledgement
-Nous remercions Anes Abdennebi (https://www.linkedin.com/in/abdennebi-anes/), doctorant a l'ÉTS pour nous avoir fourni le script (tester.py + README_tester_script.md) pour la génération d'attaques.
+We thank Anes Abdennebi (https://www.linkedin.com/in/abdennebi-anes/), PhD student a ÉTS for providing us tester.py + README_tester_script.md files for the generation of some cyberattacks.
+
 ## Licence
 MIT. Please read LICENSE file.
