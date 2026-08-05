@@ -10,7 +10,6 @@ tags:
   - artificial intelligence
 authors:
   - name: Laaziz Lahlou
-    orcid: 0000-0000-0000-0000
     corresponding: true
     equal-contrib: true
     affiliation: 1
@@ -20,7 +19,6 @@ authors:
   - name: Abdelillah Serghine
     affiliation: 3
   - name: Nadjia Kara
-    orcid: 0000-0000-0000-0000
     affiliation: 1
   - name: Farid Nait-Abdesselam
     affiliation: 2
@@ -118,15 +116,15 @@ The system is driven by the Vert.x non-blocking Event Loop as its core engine, o
 
 The diagram in \autoref{fig:verticle_interaction} visualizes the primary data processing pipeline from raw packet ingestion to ClickHouse persistence.
 
-![FlowVertex Verticle Interaction Map: A tiered visualization of the decoupled architecture, separating high-throughput data streaming via Kafka from the asynchronous control and telemetry handled by the Vert.x EventBus.\label{fig:verticle_interaction}](src/main/resources/img/flow_diagram.jpg)
+![FlowVertex Verticle Interaction Map: A tiered visualization of the decoupled architecture, separating high-throughput data streaming via Kafka from the asynchronous control and telemetry handled by the Vert.x EventBus.\label{fig:verticle_interaction}](src/main/resources/img/flow_diagram_tikz.png)
 
 # User Interface
 
-An overview of the web interface of FlowVertex is shown in \autoref{fig:main_web_page}. As can be seen, in this figure, a dashboard displays details related to flows created in real-time by listening to a physical network interface card (e.g., received flows, risk alerts, active flows, malformed packets, etc.).
+An overview of the web interface of FlowVertex is shown in \autoref{fig:main_web_page}. As can be seen, in this figure, a dashboard displays details related to flows created in real-time by listening to a physical network interface card (e.g., received flows, risk alerts, active flows, malformed packets, etc.). Another figure as displayed in \autoref{fig:mlops_page} provides details related to the Machine Learning Operations (MLOps) monitoring dashboard with an XGBoost classifier model up and running.
 
-![FlowVertex main dashboard.\label{fig:main_web_page}](main_web_page.png)
+![FlowVertex main dashboard.\label{fig:main_web_page}](src/main/resources/img/main_web_page.png)
 
-![Machine Learning Operations (MLOps) monitoring dashboard with an XGBoost classifier model up and running.\label{fig:mlops_page}](ML_Ops_Monitor.png)
+![Machine Learning Operations (MLOps) monitoring dashboard with an XGBoost classifier model up and running.\label{fig:mlops_page}](src/main/resources/img/ML_Ops_Monitor.png)
 
 # Research impact statement
 
