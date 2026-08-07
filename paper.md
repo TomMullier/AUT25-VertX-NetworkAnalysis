@@ -33,7 +33,7 @@ affiliations:
    index: 3
 date: 20 April 2026
 bibliography: paper.bib
-
+---
 # Summary
 
 FlowVertex is an end-to-end network telemetry and cybersecurity research platform built on the Eclipse Vert.x reactive toolkit. It bridges the gap between raw packet capture and actionable security intelligence by providing a unified pipeline for High-Throughput Ingestion, Stateful Flow Aggregation, and Columnar Analytical Storage. Designed for reproducibility, FlowVertex processes both offline PCAP traces and live network traffic through identical processing logic, ensuring that research prototypes can be deployed directly into operational environments. The framework features built-in Machine Learning (ML) inference (via Predictive Model Markup Language (PMML)), real-time enrichment services (GeoIP, DNS), and an interactive web-based monitoring dashboard, offering a lightweight yet scalable alternative to fragmented telemetry stacks.
